@@ -1,0 +1,173 @@
+import { NextResponse } from "next/server"
+import { createAdminClient } from "@/lib/supabase/admin"
+import { checkRateLimit, getClientIdentifier, RATE_LIMITS } from "@/lib/rate-limit"
+import { sendOrderConfirmation } from "@/lib/notifications"
+import { reduceOrderStock } from "@/lib/order-stock"
+
+/**
+ * Client-callable verification after redirect from Moolre (e.g. checkout success page).
+ * Confirms payment via Moolre embed/status API, then updates `payments` + `orders`.
+ */
+export async function POST(req: Request) {
+  try {
+    const clientId = getClientIdentifier(req)
+    const rateLimitResult = checkRateLimit(`verify:${clientId}`, RATE_LIMITS.payment)
+    if (!rateLimitResult.success) {
+      return NextResponse.json({ success: false, message: "Too many requests" }, { status: 429 })
+    }
+
+    const { orderNumber } = (await req.json()) as { orderNumber?: string }
+
+    if (!orderNumber || typeof orderNumber !== "string") {
+      return NextResponse.json({ success: false, message: "Missing or invalid orderNumber" }, { status: 400 })
+    }
+
+    if (!/^ORD-/i.test(orderNumber.trim())) {
+      return NextResponse.json({ success: false, message: "Invalid order number format" }, { status: 400 })
+    }
+
+    const supabase = createAdminClient()
+
+    const { data: order, error: fetchError } = await supabase
+      .from("orders")
+      .select("id, order_number, grand_total, guest_email, guest_phone, shipping_address, payments(status)")
+      .eq("order_number", orderNumber.trim())
+      .single()
+
+    if (fetchError || !order) {
+      return NextResponse.json({ success: false, message: "Order not found" }, { status: 404 })
+    }
+
+    const paid = (order.payments as { status: string }[] | null)?.some(
+      (p) => p.status === "paid" || p.status === "completed",
+    )
+    if (paid) {
+      return NextResponse.json({
+        success: true,
+        payment_status: "paid",
+        message: "Order already paid",
+      })
+    }
+
+    if (!process.env.MOOLRE_API_USER || !process.env.MOOLRE_API_PUBKEY) {
+      return NextResponse.json(
+        { success: false, message: "Payment verification unavailable" },
+        { status: 503 },
+      )
+    }
+
+    let moolreApiVerified = false
+    try {
+      const checkResponse = await fetch("https://api.moolre.com/embed/status", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-API-USER": process.env.MOOLRE_API_USER,
+          "X-API-PUBKEY": process.env.MOOLRE_API_PUBKEY,
+        },
+        body: JSON.stringify({ externalref: orderNumber.trim() }),
+      })
+
+      const checkResult = (await checkResponse.json()) as {
+        status?: number
+        data?: { status?: string; amount?: string }
+      }
+
+      const statusStr = String(checkResult.data?.status || "").toLowerCase()
+      moolreApiVerified =
+        checkResult.status === 1 &&
+        !!checkResult.data &&
+        (statusStr === "success" ||
+          statusStr === "successful" ||
+          statusStr === "completed" ||
+          statusStr === "paid")
+
+      if (moolreApiVerified && checkResult.data?.amount) {
+        const paidAmount = parseFloat(checkResult.data.amount)
+        const expected = Number(order.grand_total)
+        if (Math.abs(paidAmount - expected) > 0.01) {
+          moolreApiVerified = false
+        }
+      }
+    } catch (e) {
+      console.warn("[Moolre verify] API error:", e)
+    }
+
+    if (!moolreApiVerified) {
+      return NextResponse.json({
+        success: false,
+        message: "Payment not yet confirmed by payment provider",
+      })
+    }
+
+    const { data: existingPay } = await supabase
+      .from("payments")
+      .select("id")
+      .eq("order_id", order.id)
+      .eq("provider", "moolre")
+      .maybeSingle()
+
+    const payPayload = {
+      order_id: order.id,
+      provider: "moolre" as const,
+      provider_ref: `verify-${orderNumber}`,
+      amount: Number(order.grand_total),
+      currency: "GHS",
+      status: "paid" as const,
+      updated_at: new Date().toISOString(),
+    }
+
+    if (existingPay?.id) {
+      await supabase.from("payments").update(payPayload).eq("id", existingPay.id)
+    } else {
+      await supabase.from("payments").insert(payPayload)
+    }
+
+    await supabase
+      .from("orders")
+      .update({ status: "paid", updated_at: new Date().toISOString() })
+      .eq("id", order.id)
+
+    // Reduce stock for each item in the order (idempotent, non-fatal).
+    try {
+      const stockResult = await reduceOrderStock(supabase, order.id)
+      if (stockResult.skipped) {
+        console.log("[Moolre verify] Stock reduction skipped (already reduced) for", orderNumber)
+      } else {
+        console.log(
+          "[Moolre verify] Stock reduced for",
+          orderNumber,
+          "— items:",
+          JSON.stringify(stockResult.items),
+        )
+        if (stockResult.errors.length) {
+          console.error("[Moolre verify] Stock reduction errors:", stockResult.errors)
+        }
+      }
+    } catch (stockErr: unknown) {
+      console.error("[Moolre verify] Stock reduction crashed (non-fatal):", stockErr)
+    }
+
+    // Send notifications (best-effort; non-fatal if it fails)
+    try {
+      await sendOrderConfirmation({
+        ...order,
+        email: order.guest_email,
+        phone: order.guest_phone,
+        total: order.grand_total,
+        created_at: new Date().toISOString(),
+      })
+    } catch (notifyErr: unknown) {
+      console.error("[Moolre verify] Notification failed (non-fatal):", notifyErr)
+    }
+
+    return NextResponse.json({
+      success: true,
+      payment_status: "paid",
+      message: "Payment verified and order updated",
+    })
+  } catch (error: unknown) {
+    console.error("[Moolre verify] Error:", error)
+    return NextResponse.json({ success: false, message: "Internal error" }, { status: 500 })
+  }
+}

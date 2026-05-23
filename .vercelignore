@@ -1,0 +1,40 @@
+# Files Vercel CLI must NOT upload from local working tree.
+# Never deploy local secrets even if they are in the working directory.
+
+.env
+.env.*
+!.env.example
+
+# Local-only artifacts
+.vscode/
+.cursor/
+.idea/
+
+# Build / cache
+.next/
+node_modules/
+.turbo/
+.cache/
+
+# Tests / coverage
+coverage/
+
+# OS junk
+.DS_Store
+Thumbs.db
+
+# Git internals (Vercel doesn't need them)
+.git/
+.gitignore
+
+# Local data dumps that shouldn't ship
+*.sqlite
+*.sqlite-journal
+dump.rdb
+
+# Workspace / project artifacts
+agent-transcripts/
+terminals/
+
+# External submodule references not needed at runtime
+external/
