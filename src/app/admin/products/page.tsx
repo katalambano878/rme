@@ -6,7 +6,8 @@ import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { deleteProductAndDependencies } from '@/lib/admin-product-delete';
 import { buildDisplaySku } from '@/lib/sku-display';
-import { listPriceFromProduct, listSkuRaw, listStockFromProduct } from '@/lib/product-metrics';
+import { listSkuRaw, listStockFromProduct } from '@/lib/product-metrics';
+import { effectivePriceForProduct } from '@/lib/effective-price';
 
 export default function ProductsPage() {
   const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
@@ -45,21 +46,27 @@ export default function ProductsPage() {
   const fetchProducts = async () => {
     try {
       setLoading(true);
-      const [{ data, error }, { data: salesData }] = await Promise.all([
+      const [{ data, error }, { data: salesData }, { data: settingsRow }] = await Promise.all([
         supabase
           .from('products')
           .select(`
             *,
             categories(name),
-            variants(price, stock_quantity, sku),
+            variants(price, sale_price, compare_at_price, stock_quantity, sku),
             product_images(url, sort_order)
           `),
         supabase
           .from('order_items')
           .select('product_id, quantity'),
+        // We need the global toggle so the admin list shows the SAME effective
+        // price the customer sees (and that the server actually charges).
+        supabase.from('site_settings').select('feature_flags').eq('id', 1).maybeSingle(),
       ]);
 
       if (error) throw error;
+
+      const flags = (settingsRow?.feature_flags as Record<string, unknown> | null) ?? {};
+      const saleEnabled = flags.sale_promotion_enabled === true;
 
       // Build sales count map from order_items
       const salesMap = new Map<string, number>();
@@ -69,10 +76,9 @@ export default function ProductsPage() {
       }
 
       if (data) {
-        // Transform data for UI
         const transformedProducts = data.map((p: any) => {
           const variants = p.variants || [];
-          const computedPrice = listPriceFromProduct(p);
+          const pricing = effectivePriceForProduct(p, saleEnabled);
           const computedStock = listStockFromProduct(p);
           const rawSku = listSkuRaw(p);
 
@@ -87,7 +93,9 @@ export default function ProductsPage() {
             stock: computedStock,
             sku: rawSku || null,
             displaySku: buildDisplaySku(p.name, rawSku),
-            price: computedPrice,
+            price: pricing.effective,
+            originalPrice: pricing.original,
+            onSale: pricing.onSale,
             sales: salesMap.get(p.id) ?? 0,
             rating: p.rating_avg || 0,
           };
@@ -370,7 +378,16 @@ export default function ProductsPage() {
                         </td>
                     <td className="py-4 px-4 text-gray-700 text-sm font-mono" title={product.sku || ''}>{product.displaySku || '-'}</td>
                     <td className="py-4 px-4 text-gray-700 text-sm">{product.category}</td>
-                    <td className="py-4 px-4 font-semibold text-gray-900 whitespace-nowrap">GH₵ {product.price.toFixed(2)}</td>
+                    <td className="py-4 px-4 whitespace-nowrap">
+                      {product.onSale ? (
+                        <div className="flex items-baseline gap-2">
+                          <span className="font-semibold text-rose-700">GH₵ {product.price.toFixed(2)}</span>
+                          <span className="text-xs text-gray-400 line-through">GH₵ {product.originalPrice.toFixed(2)}</span>
+                        </div>
+                      ) : (
+                        <span className="font-semibold text-gray-900">GH₵ {product.price.toFixed(2)}</span>
+                      )}
+                    </td>
                     <td className="py-4 px-4 text-gray-700">
                       {product.stock}
                       {product.stock <= 5 && product.stock > 0 && (
@@ -427,7 +444,14 @@ export default function ProductsPage() {
                 <h3 className="font-semibold text-gray-900 mb-1 line-clamp-2">{product.name}</h3>
                 <p className="text-sm text-gray-600 mb-2">{product.category}</p>
                 <div className="flex items-center justify-between mb-3">
-                  <p className="text-lg font-bold text-gray-900">GH₵ {product.price}</p>
+                  {product.onSale ? (
+                    <div className="flex items-baseline gap-2">
+                      <p className="text-lg font-bold text-rose-700">GH₵ {product.price.toFixed(2)}</p>
+                      <p className="text-sm text-gray-400 line-through">GH₵ {product.originalPrice.toFixed(2)}</p>
+                    </div>
+                  ) : (
+                    <p className="text-lg font-bold text-gray-900">GH₵ {product.price.toFixed(2)}</p>
+                  )}
                 </div>
                 <div className="flex items-center justify-between text-sm text-gray-600 mb-3 pb-3 border-b border-gray-200">
                   <span>Stock: {product.stock}</span>

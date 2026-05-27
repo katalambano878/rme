@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { generateOrderNumber } from "@/lib/utils"
+import { effectivePriceForVariant } from "@/lib/effective-price"
 
 export async function POST(req: NextRequest) {
   try {
@@ -59,27 +60,56 @@ export async function POST(req: NextRequest) {
       new Set(items.map((i: any) => i.variantId).filter((id: any) => id != null && id !== "null")),
     ) as string[]
 
-    type DbProduct = { id: string; name: string; price: number | string; status: string }
-    type DbVariant = { id: string; product_id: string; price: number | string | null; sku: string | null; option_values: { name: string; value: string }[] | null }
+    type DbProduct = {
+      id: string
+      name: string
+      price: number | string
+      sale_price: number | string | null
+      compare_at_price: number | string | null
+      status: string
+    }
+    type DbVariant = {
+      id: string
+      product_id: string
+      price: number | string | null
+      sale_price: number | string | null
+      compare_at_price: number | string | null
+      sku: string | null
+      option_values: { name: string; value: string }[] | null
+    }
 
     // Fetch products + all variants for products that have selected options (for variant resolution)
     const productsNeedingVariants = Array.from(new Set(
       items.filter((i: any) => i.selectedSize || i.selectedColor).map((i: any) => i.productId).filter(Boolean)
     ))
 
-    const [productsRes, allVariantsRes] = await Promise.all([
+    // We need the global sale toggle so the server applies the SAME pricing
+    // rules the storefront UI showed the customer. If we don't honor the
+    // toggle, we'd charge the sale price even when the storefront is hiding
+    // sales — that's overcharging silently. (See lib/effective-price.ts.)
+    const [productsRes, allVariantsRes, siteSettingsRes] = await Promise.all([
       productIds.length
-        ? supabase.from("products").select("id, name, price, status").in("id", productIds)
+        ? supabase
+            .from("products")
+            .select("id, name, price, sale_price, compare_at_price, status")
+            .in("id", productIds)
         : Promise.resolve({ data: [] as DbProduct[], error: null }),
       productsNeedingVariants.length
-        ? supabase.from("variants").select("id, product_id, price, sku, option_values").in("product_id", productsNeedingVariants)
+        ? supabase
+            .from("variants")
+            .select("id, product_id, price, sale_price, compare_at_price, sku, option_values")
+            .in("product_id", productsNeedingVariants)
         : Promise.resolve({ data: [] as DbVariant[], error: null }),
+      supabase.from("site_settings").select("feature_flags").eq("id", 1).maybeSingle(),
     ])
 
     if (productsRes.error || allVariantsRes.error) {
       console.error("Order init: price lookup failed", productsRes.error || allVariantsRes.error)
       return NextResponse.json({ error: "Failed to verify cart" }, { status: 500 })
     }
+
+    const featureFlags = (siteSettingsRes.data?.feature_flags as Record<string, unknown> | null) ?? {}
+    const saleEnabled = featureFlags.sale_promotion_enabled === true
 
     const productMap = new Map<string, DbProduct>(
       ((productsRes.data as DbProduct[]) || []).map((p) => [p.id, p]),
@@ -125,13 +155,34 @@ export async function POST(req: NextRequest) {
         )
       }
 
-      // Try to resolve the exact variant by selected options
+      // Try to resolve the exact variant by selected options. When the
+      // customer didn't pick options (simple product) we still want variant
+      // pricing if the product has variants, because the sale_price/
+      // compare_at_price often lives on the cheapest variant.
+      const allVariants = variantsByProduct.get(product.id) ?? []
       const matchedVariant = (it.selectedSize || it.selectedColor)
         ? matchVariantByOptions(product.id, it.selectedSize, it.selectedColor)
-        : undefined
+        : allVariants.length > 0
+          ? [...allVariants].sort((a, b) => (Number(a.price) || 0) - (Number(b.price) || 0))[0]
+          : undefined
 
-      const unitPriceRaw = matchedVariant?.price ?? product.price
-      const unitPrice = Number(unitPriceRaw)
+      // Use the SAME effective-price logic the storefront uses to decide what
+      // to display in the cart. Without this, the cart shows GH₵ 8 (sale)
+      // but Paystack would charge GH₵ 10 (regular) — which is the deception
+      // bug we're fixing.
+      const pricing = matchedVariant
+        ? effectivePriceForVariant(matchedVariant, product, saleEnabled)
+        : effectivePriceForVariant(
+            {
+              price: product.price,
+              sale_price: product.sale_price,
+              compare_at_price: product.compare_at_price,
+            },
+            product,
+            saleEnabled,
+          )
+
+      const unitPrice = pricing.effective
       if (!Number.isFinite(unitPrice) || unitPrice <= 0) {
         return NextResponse.json({ error: "Invalid product price" }, { status: 400 })
       }

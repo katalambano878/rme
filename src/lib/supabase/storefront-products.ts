@@ -14,6 +14,7 @@ import type {
   ProductVariantRow,
   Variant,
 } from "@/types/product"
+import { effectivePriceForVariant } from "@/lib/effective-price"
 
 const PRODUCT_SELECT = `
   id,
@@ -159,30 +160,16 @@ function cardPricing(
   salePrice?: number
 } {
   if (variantRows.length === 0) return { price: 0 }
+  // Show the cheapest variant — and use the SHARED effective-price helper so
+  // the storefront UI agrees with what the payment server will actually
+  // charge. (Drift between these two used to cause customers to see GH₵ 8
+  // in the cart but get billed GH₵ 10 by Paystack/Moolre.)
   const sorted = [...variantRows].sort((a, b) => a.price - b.price)
   const v = sorted[0]
-
-  // Dedicated sale_price — gated by the global store-wide toggle.
-  // Variant-level sale_price takes priority over product-level.
-  if (saleEnabled) {
-    const variantSp = v.sale_price != null ? Number(v.sale_price) : NaN
-    if (Number.isFinite(variantSp) && variantSp > 0 && variantSp < v.price) {
-      return { price: v.price, salePrice: variantSp }
-    }
-    if (salePriceRaw != null) {
-      const sp = Number(salePriceRaw)
-      if (Number.isFinite(sp) && sp > 0 && sp < v.price) {
-        return { price: v.price, salePrice: sp }
-      }
-    }
-  }
-
-  // Regular compare-at logic (always active when compare_at > price)
-  const onSale =
-    v.compare_at_price != null && !Number.isNaN(v.compare_at_price) && v.compare_at_price > v.price
-  return onSale
-    ? { price: v.compare_at_price!, salePrice: v.price }
-    : { price: v.price }
+  const pricing = effectivePriceForVariant(v, { sale_price: salePriceRaw }, saleEnabled)
+  return pricing.onSale
+    ? { price: pricing.original, salePrice: pricing.effective }
+    : { price: pricing.effective }
 }
 
 function totalStock(variantRows: ProductVariantRow[]): number {

@@ -1,6 +1,7 @@
 import { createAdminClient } from "@/lib/supabase/admin"
-import { listPriceFromProduct, listStockFromProduct } from "@/lib/product-metrics"
+import { listStockFromProduct } from "@/lib/product-metrics"
 import { generateOrderNumber } from "@/lib/utils"
+import { effectivePriceForProduct, effectivePriceForVariant } from "@/lib/effective-price"
 import {
   BRAND_NAME,
   BRAND_TAGLINE,
@@ -69,22 +70,39 @@ export type ChatCustomerProfile = {
 }
 
 const PRODUCT_SELECT = `
-  id, name, slug, status, description, price, quantity,
-  variants(id, sku, price, stock_quantity),
+  id, name, slug, status, description, price, sale_price, compare_at_price, quantity,
+  variants(id, sku, price, sale_price, compare_at_price, stock_quantity),
   product_images(url, sort_order)
 `
 
-function aggregateProductPricing(p: any) {
+// Chat tool prices are read by anonymous users, so the global "sale promotion
+// enabled" toggle should apply here too — exactly like the storefront.
+async function fetchSaleEnabled(client: any): Promise<boolean> {
+  try {
+    const { data } = await client
+      .from("site_settings")
+      .select("feature_flags")
+      .eq("id", 1)
+      .maybeSingle()
+    const flags = (data?.feature_flags as Record<string, unknown> | null) ?? {}
+    return flags.sale_promotion_enabled === true
+  } catch {
+    return false
+  }
+}
+
+function aggregateProductPricing(p: any, saleEnabled: boolean) {
   const list = Array.isArray(p?.variants) ? p.variants : []
+  const pricing = effectivePriceForProduct(p, saleEnabled)
   return {
     stock: listStockFromProduct(p),
-    price: listPriceFromProduct(p),
+    price: pricing.effective,
     firstVariant: list[0] || null,
   }
 }
 
-function mapProduct(p: any): ChatProduct {
-  const { stock, price, firstVariant } = aggregateProductPricing(p)
+function mapProduct(p: any, saleEnabled: boolean): ChatProduct {
+  const { stock, price } = aggregateProductPricing(p, saleEnabled)
   const images = [...(p.product_images || [])].sort(
     (a: any, b: any) => (a.sort_order ?? 0) - (b.sort_order ?? 0),
   )
@@ -113,6 +131,8 @@ export async function searchProducts(supabase: any, query: string, limit = 4): P
   const term = (query || "").trim()
   if (!term) return []
 
+  const saleEnabled = await fetchSaleEnabled(supabase)
+
   // Try exact phrase match first
   const { data, error } = await supabase
     .from("products")
@@ -128,7 +148,7 @@ export async function searchProducts(supabase: any, query: string, limit = 4): P
   }
 
   if (data && data.length > 0) {
-    return data.map(mapProduct)
+    return data.map((p: any) => mapProduct(p, saleEnabled))
   }
 
   // No exact match — try individual keywords (e.g. "cerave moisturizer" → search "moisturizer")
@@ -142,7 +162,7 @@ export async function searchProducts(supabase: any, query: string, limit = 4): P
       .order("name")
       .limit(limit)
     if (wordData && wordData.length > 0) {
-      return wordData.map(mapProduct)
+      return wordData.map((p: any) => mapProduct(p, saleEnabled))
     }
   }
 
@@ -163,7 +183,7 @@ export async function searchProducts(supabase: any, query: string, limit = 4): P
       .order("name")
       .limit(limit)
     if (catProducts && catProducts.length > 0) {
-      return catProducts.map(mapProduct)
+      return catProducts.map((p: any) => mapProduct(p, saleEnabled))
     }
   }
 
@@ -180,7 +200,8 @@ export async function getProductForCart(supabase: any, slugOrId: string): Promis
   const q = supabase.from("products").select(PRODUCT_SELECT).eq("status", "active")
   const { data, error } = isId ? await q.eq("id", trimmed).single() : await q.eq("slug", trimmed).single()
   if (error || !data) return null
-  return mapProduct(data)
+  const saleEnabled = await fetchSaleEnabled(supabase)
+  return mapProduct(data, saleEnabled)
 }
 
 // ─── 3. Track Order ───────────────────────────────────────────────────────────
@@ -428,7 +449,8 @@ export async function getRecommendations(supabase: any, context?: string): Promi
   const { data, error } = await q.order("rating_avg", { ascending: false }).order("review_count", { ascending: false }).limit(8)
 
   if (error || !data) return []
-  const mapped = data.map(mapProduct).filter((p: ChatProduct) => p.inStock)
+  const saleEnabled = await fetchSaleEnabled(supabase)
+  const mapped = data.map((p: any) => mapProduct(p, saleEnabled)).filter((p: ChatProduct) => p.inStock)
   return mapped.slice(0, 4)
 }
 
@@ -629,10 +651,12 @@ export async function createChatOrder(
 
     const productMap = new Map<string, any>(products.map((p: any) => [p.id, p]))
 
+    const saleEnabled = await fetchSaleEnabled(admin)
+
     for (const item of items) {
       const p = productMap.get(item.productId)
       if (!p) return { success: false, message: `Product not found: ${item.productId}` }
-      const { stock } = aggregateProductPricing(p)
+      const { stock } = aggregateProductPricing(p, saleEnabled)
       if (stock < item.quantity) {
         return {
           success: false,
@@ -655,7 +679,13 @@ export async function createChatOrder(
       const sorted = [...vars].sort((a: any, b: any) => Number(a.price) - Number(b.price))
       const v = sorted[0]
       if (!v) return { success: false, message: `Product "${p.name}" has no purchasable variant.` }
-      const unit = Number(v.price) || 0
+      // Honor sale_price / compare_at_price the same way the storefront does,
+      // so the chat customer is charged what they saw — not the original.
+      const pricing = effectivePriceForVariant(v, p, saleEnabled)
+      const unit = pricing.effective
+      if (!Number.isFinite(unit) || unit <= 0) {
+        return { success: false, message: `Product "${p.name}" has no valid price.` }
+      }
       subtotal += unit * item.quantity
       lineDetails.push({ product: p, variant: v, qty: item.quantity, unit })
     }
