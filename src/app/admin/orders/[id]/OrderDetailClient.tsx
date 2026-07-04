@@ -263,12 +263,17 @@ export default function OrderDetailClient({ orderId }: OrderDetailClientProps) {
     }
   };
 
-  const statusOptions = ['pending', 'processing', 'shipped', 'delivered', 'cancelled'];
-  const statusLabel = (s: string) => s === 'shipped' ? 'Packaged' : s.charAt(0).toUpperCase() + s.slice(1);
+  const statusOptions = ['pending', 'processing', 'shipped', 'out_for_delivery', 'delivered', 'cancelled'];
+  const statusLabel = (s: string) => {
+    if (s === 'shipped') return 'Packaged';
+    if (s === 'out_for_delivery') return 'With Rider';
+    return s.charAt(0).toUpperCase() + s.slice(1);
+  };
   const statusColors: any = {
     'pending': 'bg-amber-100 text-amber-700 border-amber-200',
     'processing': 'bg-rose-100 text-rose-800 border-rose-200',
     'shipped': 'bg-purple-100 text-purple-700 border-purple-200',
+    'out_for_delivery': 'bg-blue-100 text-blue-700 border-blue-200',
     'delivered': 'bg-rose-100 text-rose-800 border-rose-200',
     'cancelled': 'bg-red-100 text-red-700 border-red-200',
     'awaiting_payment': 'bg-gray-100 text-gray-700 border-gray-200'
@@ -288,8 +293,9 @@ export default function OrderDetailClient({ orderId }: OrderDetailClientProps) {
   const timeline = [
     { status: 'Order Placed', date: new Date(order.created_at).toLocaleString(), completed: true },
     { status: 'Payment', date: order.payment_status, completed: order.payment_status === 'paid' },
-    { status: 'Processing', date: '', completed: ['processing', 'shipped', 'delivered'].includes(order.status) },
-    { status: 'Packaged', date: '', completed: ['shipped', 'delivered'].includes(order.status) },
+    { status: 'Processing', date: '', completed: ['processing', 'shipped', 'out_for_delivery', 'delivered'].includes(order.status) },
+    { status: 'Packaged', date: '', completed: ['shipped', 'out_for_delivery', 'delivered'].includes(order.status) },
+    { status: 'With Rider', date: '', completed: ['out_for_delivery', 'delivered'].includes(order.status) },
     { status: 'Delivered', date: '', completed: order.status === 'delivered' }
   ];
 

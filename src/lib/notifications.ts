@@ -304,6 +304,9 @@ export async function sendOrderStatusUpdate(order: any, newStatus: string) {
         smsMessage = trackingNumber
             ? `Good news ${name}! Order #${order_number || id} has been packaged. Tracking: ${trackingNumber}. Track: ${trackingUrl}`
             : `Good news ${name}! Order #${order_number || id} has been packaged. Track: ${trackingUrl}`;
+    } else if (newStatus === 'out_for_delivery') {
+        message = `Your order #${order_number || id} is with a rider and on its way to you!`;
+        smsMessage = `Hi ${name}, your order #${order_number || id} is with a rider and on its way to you! Track: ${trackingUrl}`;
     } else if (newStatus === 'delivered') {
         message = `Your order #${order_number || id} has been delivered. Enjoy!`;
         smsMessage = `Hi ${name}, your order #${order_number || id} has been delivered. Enjoy your purchase!`;
@@ -316,12 +319,19 @@ export async function sendOrderStatusUpdate(order: any, newStatus: string) {
     }
 
     const statusConfig: Record<string, { icon: string; color: string; bg: string }> = {
-        processing: { icon: '&#9881;', color: '#2563eb', bg: '#eff6ff' },
-        shipped:    { icon: '&#128666;', color: '#2563eb', bg: '#eff6ff' },
-        delivered:  { icon: '&#127881;', color: '#16a34a', bg: '#f0fdf4' },
-        cancelled:  { icon: '&#10060;', color: '#dc2626', bg: '#fef2f2' },
+        processing:       { icon: '&#9881;', color: '#2563eb', bg: '#eff6ff' },
+        shipped:          { icon: '&#128230;', color: '#7c3aed', bg: '#f5f3ff' },
+        out_for_delivery: { icon: '&#128757;', color: '#2563eb', bg: '#eff6ff' },
+        delivered:        { icon: '&#127881;', color: '#16a34a', bg: '#f0fdf4' },
+        cancelled:        { icon: '&#10060;', color: '#dc2626', bg: '#fef2f2' },
     };
     const sc = statusConfig[newStatus] || { icon: '&#128276;', color: '#6b7280', bg: '#f9fafb' };
+    // Customer-friendly status wording for emails/SMS (raw enum values like
+    // "out_for_delivery" should never reach the customer).
+    const statusDisplay =
+        newStatus === 'shipped' ? 'Packaged'
+        : newStatus === 'out_for_delivery' ? 'With Rider'
+        : newStatus.charAt(0).toUpperCase() + newStatus.slice(1);
 
     if (isDeliverableEmail(email)) {
         await sendEmail({
@@ -336,14 +346,14 @@ export async function sendOrderStatusUpdate(order: any, newStatus: string) {
 
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#f9fafb;border-radius:12px;overflow:hidden;margin:20px 0;">
   ${emailInfoRow('Order Number', `#${order_number || id}`)}
-  ${emailInfoRow('New Status', `<span style="display:inline-block;background-color:${sc.bg};color:${sc.color};padding:4px 12px;border-radius:20px;font-size:12px;font-weight:700;text-transform:uppercase;">${newStatus}</span>`)}
+  ${emailInfoRow('New Status', `<span style="display:inline-block;background-color:${sc.bg};color:${sc.color};padding:4px 12px;border-radius:20px;font-size:12px;font-weight:700;text-transform:uppercase;">${statusDisplay}</span>`)}
   ${trackingNumber ? emailInfoRow('Tracking Number', trackingNumber) : ''}
 </table>
 
 <p style="color:#374151;font-size:14px;line-height:1.6;margin:16px 0;">${message}</p>
 
 ${emailButton('Track Your Order', trackingUrl)}
-`, `Your order #${order_number} is now ${newStatus}`)
+`, `Your order #${order_number} is now ${statusDisplay}`)
         });
     }
 

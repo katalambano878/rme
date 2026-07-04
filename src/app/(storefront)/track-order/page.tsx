@@ -22,21 +22,22 @@ import { Label } from "@/components/ui/label"
 import { Card, CardContent } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
 import { cn } from "@/lib/utils"
-import { createClient } from "@/lib/supabase/client"
 
 const STATUS_STEPS = [
-  { key: "pending",    label: "Order Placed",  description: "Your order has been received.", icon: ClipboardCheck },
-  { key: "processing", label: "Processing",    description: "Items are being prepared and quality-checked.", icon: Box },
-  { key: "shipped",    label: "Shipped",       description: "Your order is on its way.", icon: Truck },
-  { key: "delivered",  label: "Delivered",     description: "Your order has been successfully delivered.", icon: CheckCircle2 },
+  { key: "pending",          label: "Order Placed", description: "Your order has been received.", icon: ClipboardCheck },
+  { key: "processing",       label: "Processing",   description: "Items are being prepared and quality-checked.", icon: Box },
+  { key: "shipped",          label: "Packaged",     description: "Your order has been packaged and is ready to go.", icon: Package },
+  { key: "out_for_delivery", label: "With Rider",   description: "Your package is with a rider and on its way to you.", icon: Truck },
+  { key: "delivered",        label: "Delivered",    description: "Your order has been successfully delivered.", icon: CheckCircle2 },
 ]
 
 const ORDER_STATUS_INDEX: Record<string, number> = {
   pending: 0,
+  paid: 1,
   processing: 1,
   shipped: 2,
-  delivered: 3,
-  paid: 1,
+  out_for_delivery: 3,
+  delivered: 4,
 }
 
 function TrackOrderContent() {
@@ -50,8 +51,11 @@ function TrackOrderContent() {
   const [error, setError]             = useState("")
   const [searched, setSearched]       = useState(false)
 
-  const supabase = createClient()
-
+  // Lookup goes through a server API route. Querying the orders table
+  // directly from the browser never worked for guests: RLS only lets the
+  // logged-in owner or staff read orders, so anonymous visitors always got
+  // "Order not found". The server route verifies the email and returns a
+  // safe subset of the order.
   const fetchOrder = useCallback(async (orderNum: string, emailVal: string) => {
     if (!emailVal.trim()) {
       setError("Please enter your email address to verify your identity.")
@@ -62,42 +66,20 @@ function TrackOrderContent() {
     setOrder(null)
 
     try {
-      const { data, error: fetchError } = await supabase
-        .from("orders")
-        .select(`
-          id,
-          order_number,
-          status,
-          grand_total,
-          guest_email,
-          guest_phone,
-          created_at,
-          shipping_address,
-          payments(status),
-          order_items (
-            id,
-            name_snapshot,
-            sku_snapshot,
-            quantity,
-            unit_price
-          )
-        `)
-        .eq("order_number", orderNum.trim())
-        .single()
+      const res = await fetch("/api/orders/track", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ orderNumber: orderNum.trim(), email: emailVal.trim() }),
+      })
+      const data = await res.json().catch(() => null)
 
-      if (fetchError || !data) {
-        setError("Order not found. Please check your order number and try again.")
+      if (!res.ok || !data?.order) {
+        setError(data?.error || "Order not found. Please check your order number and try again.")
         setSearched(true)
         return
       }
 
-      if (data.guest_email?.toLowerCase() !== emailVal.trim().toLowerCase()) {
-        setError("The email address does not match this order. Please use the email you placed the order with.")
-        setSearched(true)
-        return
-      }
-
-      setOrder(data)
+      setOrder(data.order)
       setSearched(true)
     } catch {
       setError("Something went wrong. Please try again.")
@@ -105,7 +87,7 @@ function TrackOrderContent() {
     } finally {
       setLoading(false)
     }
-  }, [supabase])
+  }, [])
 
   const handleTrack = () => {
     if (orderNumber.trim() && email.trim()) {
@@ -127,9 +109,7 @@ function TrackOrderContent() {
     ? (ORDER_STATUS_INDEX[order.status] ?? 0)
     : -1
 
-  const isPaid = (order?.payments as { status: string }[] | null)?.some(
-    (p) => p.status === "paid" || p.status === "completed"
-  )
+  const isPaid = Boolean(order?.is_paid)
 
   const trackingNumber = ""
 
@@ -288,7 +268,7 @@ function TrackOrderContent() {
               </Card>
 
               {/* Order Items */}
-              {order.order_items?.length > 0 && (
+              {order.items?.length > 0 && (
                 <motion.div
                   initial={{ opacity: 0, y: 16 }}
                   animate={{ opacity: 1, y: 0 }}
@@ -301,16 +281,16 @@ function TrackOrderContent() {
                         <h3 className="font-heading font-semibold text-navy">Items in Your Order</h3>
                       </div>
                       <div className="space-y-3">
-                        {order.order_items.map((item: any) => (
+                        {order.items.map((item: any) => (
                           <div key={item.id} className="flex items-center justify-between">
                             <div className="flex items-center gap-3">
                               <div className="flex size-10 items-center justify-center rounded-xl bg-gradient-to-br from-rose-100 to-pink-50">
                                 <Package className="size-4 text-rose-primary/50" />
                               </div>
                               <div>
-                                <p className="text-sm font-medium text-navy">{item.name_snapshot}</p>
-                                {item.sku_snapshot && (
-                                  <p className="text-xs text-muted-foreground">{item.sku_snapshot}</p>
+                                <p className="text-sm font-medium text-navy">{item.name}</p>
+                                {item.sku && (
+                                  <p className="text-xs text-muted-foreground">{item.sku}</p>
                                 )}
                               </div>
                             </div>

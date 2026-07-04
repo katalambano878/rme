@@ -153,7 +153,7 @@ const STATUS_LABELS: Record<string, string> = {
   pending: 'Pending',
   processing: 'Processing',
   shipped: 'Packaged',
-  dispatched_to_rider: 'Dispatched To Rider',
+  out_for_delivery: 'With Rider',
   delivered: 'Delivered',
   cancelled: 'Cancelled',
   refunded: 'Refunded',
@@ -170,7 +170,7 @@ const STATUS_COLORS: Record<string, string> = {
   pending: 'bg-amber-100 text-amber-700',
   processing: 'bg-blue-100 text-blue-700',
   shipped: 'bg-purple-100 text-purple-700',
-  dispatched_to_rider: 'bg-indigo-100 text-indigo-700',
+  out_for_delivery: 'bg-blue-100 text-blue-700',
   delivered: 'bg-rose-100 text-rose-800',
   cancelled: 'bg-red-100 text-red-700',
   open: 'bg-blue-100 text-blue-700',
@@ -971,7 +971,7 @@ function ProductCard({ product, onAddToCart }: { product: ChatProduct; onAddToCa
 // ─── Order Card ─────────────────────────────────────────────────────────────
 
 function OrderCard({ order }: { order: ChatOrder }) {
-  const statusSteps = ['pending', 'processing', 'shipped', 'dispatched_to_rider', 'delivered'];
+  const statusSteps = ['pending', 'processing', 'shipped', 'out_for_delivery', 'delivered'];
   const currentIdx = statusSteps.indexOf(order.status);
 
   return (
