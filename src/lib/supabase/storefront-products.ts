@@ -21,7 +21,8 @@ const PRODUCT_SELECT = `
   name,
   slug,
   description,
-  sale_price,
+  price,
+  compare_at_price,
   metadata,
   short_description,
   category_id,
@@ -38,7 +39,7 @@ const PRODUCT_SELECT = `
   created_at,
   categories ( id, name, slug ),
   product_images ( url, storage_path, sort_order, alt ),
-  variants ( id, sku, price, compare_at_price, sale_price, stock_quantity, option_values )
+  variants ( id, sku, price, compare_at_price, stock_quantity, option_values )
 `
 
 type ProductRow = {
@@ -46,7 +47,8 @@ type ProductRow = {
   name: string
   slug: string
   description: string | null
-  sale_price: number | string | null
+  price: number | string | null
+  compare_at_price: number | string | null
   metadata: Record<string, unknown> | null
   short_description: string | null
   category_id: string | null
@@ -67,7 +69,6 @@ type ProductRow = {
     sku: string
     price: number | string
     compare_at_price: number | string | null
-    sale_price: number | string | null
     stock_quantity: number | null
     option_values: { name: string; value: string }[] | null
   }[] | null
@@ -98,6 +99,23 @@ function imageUrlsFromRows(images: DbProductImageRow[] | null | undefined): stri
 
 function normalizeVariantRows(row: ProductRow): ProductVariantRow[] {
   const list = row.variants ?? []
+  if (list.length === 0 && row.price != null && row.price !== "") {
+    // Some products only have price on the product row (no variants).
+    return [
+      {
+        id: row.id,
+        sku: "",
+        price: Number(row.price) || 0,
+        compare_at_price:
+          row.compare_at_price != null && row.compare_at_price !== ""
+            ? Number(row.compare_at_price)
+            : null,
+        sale_price: null,
+        stock_quantity: 0,
+        option_values: [],
+      },
+    ]
+  }
   return list.map((v) => ({
     id: v.id,
     sku: v.sku ?? "",
@@ -106,10 +124,7 @@ function normalizeVariantRows(row: ProductRow): ProductVariantRow[] {
       v.compare_at_price != null && v.compare_at_price !== ""
         ? Number(v.compare_at_price)
         : null,
-    sale_price:
-      v.sale_price != null && v.sale_price !== ""
-        ? Number(v.sale_price)
-        : null,
+    sale_price: null,
     stock_quantity: v.stock_quantity ?? 0,
     option_values: Array.isArray(v.option_values) ? v.option_values : [],
   }))
@@ -178,7 +193,15 @@ function totalStock(variantRows: ProductVariantRow[]): number {
 
 export function mapProductRowToProduct(row: ProductRow, saleEnabled = false): Product {
   const variantRows = normalizeVariantRows(row)
-  const { price, salePrice } = cardPricing(variantRows, row.sale_price, saleEnabled)
+  // Schema uses price/compare_at_price (no products.sale_price column).
+  const productSalePrice =
+    row.compare_at_price != null &&
+    row.compare_at_price !== "" &&
+    row.price != null &&
+    Number(row.compare_at_price) > Number(row.price)
+      ? row.price
+      : null
+  const { price, salePrice } = cardPricing(variantRows, productSalePrice, saleEnabled)
   const cat = row.categories
 
   return {
