@@ -1,21 +1,36 @@
-import { createAdminClient } from "@/lib/supabase/admin"
-import type { SupabaseClient } from "@supabase/supabase-js"
+import { createClient as createSupabaseJsClient } from '@supabase/supabase-js';
+import { isPlainPostgres } from './db/mode';
+import { createClient as createPgClient } from './db/supabase-compat';
 
-// Compatibility admin client used by imported auth utilities.
-//
-// Lazy-initialized via a Proxy: this lets routes import `supabaseAdmin` at
-// the top of their files without triggering `createAdminClient()` at module
-// load time. Eager init blew up `next build` page-data collection when env
-// vars weren't injected into the worker (and would also break local dev /
-// any test environment without a service-role key configured).
-let _client: SupabaseClient | null = null
-function getClient(): SupabaseClient {
-  if (!_client) _client = createAdminClient()
-  return _client
+/**
+ * Server-side admin client.
+ * - Plain Postgres (DATABASE_URL set): in-process pg compat + auth/storage shims
+ * - Otherwise: hosted Supabase service-role client
+ *
+ * ONLY use in API routes / server actions — never in client components.
+ */
+
+function createAdminClient() {
+  if (isPlainPostgres()) {
+    return createPgClient();
+  }
+
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+  const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  if (!supabaseUrl) {
+    throw new Error('Missing NEXT_PUBLIC_SUPABASE_URL');
+  }
+  if (!supabaseServiceKey) {
+    console.error('CRITICAL: Missing SUPABASE_SERVICE_ROLE_KEY — admin operations will fail');
+  }
+
+  return createSupabaseJsClient(supabaseUrl, supabaseServiceKey || '', {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false,
+    },
+  });
 }
 
-export const supabaseAdmin = new Proxy({} as SupabaseClient, {
-  get(_target, prop) {
-    return Reflect.get(getClient(), prop)
-  },
-})
+export const supabaseAdmin: any = createAdminClient();
