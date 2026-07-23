@@ -69,3 +69,9 @@ env/
 *.tar
 *.tar.gz
 *.7z
+
+migration-artifacts/dumps/
+
+migration-artifacts/storage/
+
+.env.staging
