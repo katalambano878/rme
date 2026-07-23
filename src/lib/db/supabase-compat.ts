@@ -928,6 +928,17 @@ function createAuthApi() {
     async signOut() {
       return { error: null };
     },
+    /**
+     * Supabase Auth PKCE/code exchange. Plain-PG has no GoTrue; OAuth magic-link
+     * codes are not minted here. Stub keeps the createClient() union type-checkable
+     * so Next.js builds succeed on Coolify.
+     */
+    async exchangeCodeForSession(_code: string) {
+      return {
+        data: { user: null, session: null },
+        error: { message: "exchangeCodeForSession is not supported in plain-Postgres mode" },
+      };
+    },
     async updateUser(_attrs: { password?: string; data?: Record<string, unknown> }) {
       return {
         data: { user: null },
