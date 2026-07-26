@@ -1,5 +1,6 @@
-/* eslint-disable react-hooks/exhaustive-deps */
 'use client';
+
+/* eslint-disable react-hooks/exhaustive-deps */
 
 import { useState, useEffect, useMemo } from 'react';
 import { supabase } from '@/lib/supabase';
