@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { supabaseAdmin } from '@/lib/supabase-admin';
 import {
   searchProducts,
   getProductForCart,
@@ -34,7 +35,6 @@ import {
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const groqKey = process.env.GROQ_API_KEY;
 
 // ─── Types ──────────────────────────────────────────────────────────────────
@@ -514,9 +514,7 @@ export async function POST(request: Request) {
     // run with the ANON key so RLS protects other customers' data. Persistence
     // and any write-only paths use a separate service-role client below.
     const supabase = createClient(supabaseUrl, supabaseKey);
-    const supabaseWriter = supabaseServiceKey
-      ? createClient(supabaseUrl, supabaseServiceKey)
-      : supabase;
+    const supabaseWriter = supabaseAdmin;
 
     let profile: ChatCustomerProfile | null = null;
     if (userId) {

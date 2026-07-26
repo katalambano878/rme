@@ -7,6 +7,7 @@ import { useRouter } from 'next/navigation';
 import { SITE_DOMAIN, BRAND_NAME } from '@/lib/brand';
 import { SUPABASE_STORAGE_BUCKET } from '@/lib/supabase-storage';
 import { sortCategoriesForDisplay, categoryOptionLabel } from '@/lib/category-tree';
+import { money } from '@/lib/format-money';
 
 /** URL-safe slug from product title (keeps admin slug in sync until the user edits it). */
 function slugifyProductName(name: string): string {
@@ -759,7 +760,7 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
                                 parseFloat(salePrice) > 0 &&
                                 parseFloat(regularPrice) > parseFloat(salePrice) ? (
                                     <p className="text-rose-900">
-                                        vs Sales: GH₵ {(parseFloat(regularPrice) - parseFloat(salePrice)).toFixed(2)} off
+                                        vs Sales: GH₵ {money(parseFloat(regularPrice) - parseFloat(salePrice))} off
                                         <span className="ml-2">
                                             (
                                             {(
@@ -774,7 +775,7 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
                                   parseFloat(compareAtOptional) > parseFloat(regularPrice) ? (
                                     <p className="text-rose-900">
                                         Savings vs compare-at: GH₵{' '}
-                                        {(parseFloat(compareAtOptional) - parseFloat(regularPrice)).toFixed(2)}
+                                        {money(parseFloat(compareAtOptional) - parseFloat(regularPrice))}
                                         <span className="ml-2">
                                             (
                                             {(

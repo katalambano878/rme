@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { createServiceRoleClient } from '@/lib/supabase/admin-server';
+import { supabaseAdmin } from '@/lib/supabase-admin';
 import { canManageStaffRoles } from '@/lib/admin-role-access';
 import { defaultStaffPermissions, sanitizeStaffPermissions } from '@/lib/staff-permissions';
 
@@ -82,7 +82,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Select at least one area the staff member can access.' }, { status: 400 });
     }
 
-    const admin = createServiceRoleClient();
+    const admin = supabaseAdmin;
 
     const { data: created, error: createErr } = await admin.auth.admin.createUser({
       email,
@@ -147,7 +147,7 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: 'userId is required' }, { status: 400 });
     }
 
-    const admin = createServiceRoleClient();
+    const admin = supabaseAdmin;
 
     const { data: target } = await admin.from('profiles').select('role').eq('id', userId).maybeSingle();
     if (target?.role === 'superadmin') {
@@ -191,7 +191,7 @@ export async function PATCH(request: NextRequest) {
 
     const permissions = sanitizeStaffPermissions(body.permissions ?? {});
 
-    const admin = createServiceRoleClient();
+    const admin = supabaseAdmin;
     const { data: target } = await admin.from('profiles').select('role').eq('id', userId).maybeSingle();
     if (target?.role === 'staff' && !Object.values(permissions).some(Boolean)) {
       return NextResponse.json({ error: 'Select at least one area.' }, { status: 400 });
