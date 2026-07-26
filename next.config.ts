@@ -6,6 +6,10 @@ const nextConfig: NextConfig = {
     unoptimized: true,
   },
 
+  async rewrites() {
+    return [{ source: '/service-worker.js', destination: '/api/service-worker' }]
+  },
+
   async headers() {
     // SECURITY: Vercel preview / branch deploys must never be indexed.
     const isPreview = process.env.VERCEL_ENV && process.env.VERCEL_ENV !== "production"
