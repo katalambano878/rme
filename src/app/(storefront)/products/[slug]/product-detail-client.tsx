@@ -25,6 +25,7 @@ import { Price } from "@/components/shared/price"
 import { useCartStore } from "@/lib/store/cart-store"
 import { getProductGalleryImages } from "@/lib/product-image"
 import { buildDisplaySku } from "@/lib/sku-display"
+import { displayPricingForVariant } from "@/lib/effective-price"
 import {
   Accordion,
   AccordionItem,
@@ -117,42 +118,16 @@ function buildCartProductSnapshot(
 ): Product {
   if (!row) return product
 
-  // 1. Variant-level sale_price takes priority — the customer is buying
-  // this specific variant, so its own sale wins.
-  if (row.sale_price != null && row.sale_price > 0 && row.sale_price < row.price) {
-    return { ...product, price: row.price, salePrice: row.sale_price, sku: row.sku, stock: row.stock_quantity }
-  }
+  const { price, salePrice } = displayPricingForVariant(
+    row,
+    product.catalogSalePrice ?? null,
+    product.salePromotionEnabled ?? false,
+  )
 
-  // 2. Variant-level compare-at-price sale ("was X, now Y").
-  const variantCompareAtSale =
-    row.compare_at_price != null &&
-    !Number.isNaN(row.compare_at_price) &&
-    row.compare_at_price > row.price
-  if (variantCompareAtSale) {
-    return {
-      ...product,
-      price: row.compare_at_price!,
-      salePrice: row.price,
-      sku: row.sku,
-      stock: row.stock_quantity,
-    }
-  }
-
-  // 3. No variant-level sale. Inherit the product-level salePrice that the
-  // server already computed (it honors products.sale_price + the global
-  // sale toggle via the shared effective-price helper). Without this,
-  // bulk-discounted simple products would display GH₵ 200 instead of the
-  // GH₵ 180 sale price the admin set — even though the "SALE" badge and
-  // "-10%" badge still show, because they read from product.salePrice
-  // directly. We only inherit when the selected variant's price matches
-  // the product's "from" price (i.e. this IS the variant the sale applies
-  // to); otherwise we show the variant's plain price.
-  const inheritProductSale =
-    product.salePrice !== undefined && row.price === product.price
   return {
     ...product,
-    price: row.price,
-    salePrice: inheritProductSale ? product.salePrice : undefined,
+    price,
+    salePrice,
     sku: row.sku,
     stock: row.stock_quantity,
   }

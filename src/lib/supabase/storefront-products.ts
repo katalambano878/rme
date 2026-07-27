@@ -14,7 +14,7 @@ import type {
   ProductVariantRow,
   Variant,
 } from "@/types/product"
-import { effectivePriceForVariant } from "@/lib/effective-price"
+import { displayPricingForProductCard } from "@/lib/effective-price"
 
 const PRODUCT_SELECT = `
   id,
@@ -160,25 +160,25 @@ function cardPricing(
   salePrice?: number
 } {
   if (variantRows.length === 0) return { price: 0 }
-  // Show the cheapest variant — and use the SHARED effective-price helper so
-  // the storefront UI agrees with what the payment server will actually
-  // charge. (Drift between these two used to cause customers to see GH₵ 8
-  // in the cart but get billed GH₵ 10 by Paystack/Moolre.)
-  const sorted = [...variantRows].sort((a, b) => a.price - b.price)
-  const v = sorted[0]
-  const pricing = effectivePriceForVariant(v, { sale_price: salePriceRaw }, saleEnabled)
-  return pricing.onSale
-    ? { price: pricing.original, salePrice: pricing.effective }
-    : { price: pricing.effective }
+  return displayPricingForProductCard(variantRows, salePriceRaw, saleEnabled)
 }
 
 function totalStock(variantRows: ProductVariantRow[]): number {
   return variantRows.reduce((s, v) => s + (v.stock_quantity ?? 0), 0)
 }
 
+function normalizeCatalogSalePrice(
+  raw: number | string | null | undefined,
+): number | null {
+  if (raw == null || raw === "") return null
+  const n = Number(raw)
+  return Number.isFinite(n) ? n : null
+}
+
 export function mapProductRowToProduct(row: ProductRow, saleEnabled = false): Product {
   const variantRows = normalizeVariantRows(row)
-  const { price, salePrice } = cardPricing(variantRows, row.sale_price, saleEnabled)
+  const catalogSalePrice = normalizeCatalogSalePrice(row.sale_price)
+  const { price, salePrice } = cardPricing(variantRows, catalogSalePrice, saleEnabled)
   const cat = row.categories
 
   return {
@@ -192,6 +192,8 @@ export function mapProductRowToProduct(row: ProductRow, saleEnabled = false): Pr
     categorySlug: (cat?.slug ?? "").toLowerCase(),
     price,
     salePrice,
+    catalogSalePrice,
+    salePromotionEnabled: saleEnabled,
     images: imageUrlsFromRows(row.product_images ?? undefined),
     badges: (() => {
       const b = normalizeBadges(row.badges)

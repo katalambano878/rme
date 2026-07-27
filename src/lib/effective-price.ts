@@ -85,6 +85,38 @@ export function effectivePriceForVariant(
   return { effective: variantPrice, original: variantPrice, onSale: false }
 }
 
+/** Storefront UI: strikethrough original + optional sale line item. */
+export function displayPricingFromEffective(pricing: EffectivePrice): {
+  price: number
+  salePrice?: number
+} {
+  return pricing.onSale
+    ? { price: pricing.original, salePrice: pricing.effective }
+    : { price: pricing.effective }
+}
+
+export function displayPricingForVariant(
+  variant: VariantLike,
+  catalogSalePrice: number | string | null | undefined,
+  saleEnabled: boolean,
+): { price: number; salePrice?: number } {
+  return displayPricingFromEffective(
+    effectivePriceForVariant(variant, { sale_price: catalogSalePrice }, saleEnabled),
+  )
+}
+
+export function displayPricingForProductCard(
+  variants: VariantLike[],
+  catalogSalePrice: number | string | null | undefined,
+  saleEnabled: boolean,
+): { price: number; salePrice?: number } {
+  const pricing = effectivePriceForProduct(
+    { sale_price: catalogSalePrice, variants },
+    saleEnabled,
+  )
+  return displayPricingFromEffective(pricing)
+}
+
 /**
  * Compute the effective price for a product when no specific variant has been
  * selected yet (e.g. on a product card). Picks the cheapest variant.
