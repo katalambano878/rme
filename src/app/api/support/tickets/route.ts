@@ -36,13 +36,22 @@ export async function POST(req: NextRequest) {
   if (!auth.authenticated) return NextResponse.json({ error: auth.error }, { status: 401 });
   const body = await req.json();
 
-  const { data: ticketNum } = await supabaseAdmin.rpc('generate_ticket_number');
+  const { data: ticketNum, error: ticketNumErr } = await supabaseAdmin.rpc('generate_ticket_number');
+  if (ticketNumErr) {
+    console.error('[support/tickets] generate_ticket_number failed:', ticketNumErr.message);
+  }
+  const email = (body.customer_email || body.email || '').trim();
+  if (!email || !body.subject) {
+    return NextResponse.json({ error: 'subject and customer_email are required' }, { status: 400 });
+  }
   const ticket = {
-    ticket_number: ticketNum || `TKT-${Date.now()}`,
+    // Schema: ticket_number is integer; email is NOT NULL.
+    ticket_number: typeof ticketNum === 'number' ? ticketNum : Number(ticketNum) || Date.now() % 2_000_000_000,
     subject: body.subject,
     description: body.description || '',
-    customer_id: body.customer_id || null,
-    customer_email: body.customer_email || '',
+    user_id: body.customer_id || body.user_id || null,
+    email,
+    customer_email: email,
     customer_name: body.customer_name || '',
     conversation_id: body.conversation_id || null,
     status: body.status || 'open',
@@ -67,11 +76,11 @@ export async function POST(req: NextRequest) {
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   if (body.initial_message) {
-    await supabaseAdmin.from('support_ticket_messages').insert({
+    await supabaseAdmin.from('support_messages').insert({
       ticket_id: data.id,
-      sender_type: body.message_sender_type || 'system',
-      sender_name: body.message_sender_name || 'System',
-      content: body.initial_message,
+      message: body.initial_message,
+      is_internal: body.message_sender_type === 'staff' || body.message_sender_type === 'system',
+      user_id: auth.user?.id || null,
     });
   }
 

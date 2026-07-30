@@ -1,11 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { canManageStaffRoles } from '@/lib/admin-role-access';
 import { defaultStaffPermissions, sanitizeStaffPermissions } from '@/lib/staff-permissions';
-
-const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 
 type CallerOk = { ok: true; role: string };
 type CallerErr = { ok: false; message: string; status: number };
@@ -15,18 +11,17 @@ async function requireManageStaff(request: NextRequest): Promise<CallerOk | Call
   const token = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null;
   if (!token) return { ok: false, message: 'Unauthorized', status: 401 };
 
-  const userClient = createClient(url, anonKey, {
-    global: { headers: { Authorization: `Bearer ${token}` } },
-    auth: { autoRefreshToken: false, persistSession: false },
-  });
-
   const {
     data: { user },
     error: userErr,
-  } = await userClient.auth.getUser(token);
+  } = await supabaseAdmin.auth.getUser(token);
   if (userErr || !user) return { ok: false, message: 'Unauthorized', status: 401 };
 
-  const { data: profile, error: profErr } = await userClient.from('profiles').select('role').eq('id', user.id).maybeSingle();
+  const { data: profile, error: profErr } = await supabaseAdmin
+    .from('profiles')
+    .select('role')
+    .eq('id', user.id)
+    .maybeSingle();
   if (profErr || !profile?.role) return { ok: false, message: 'Unauthorized', status: 401 };
   if (!canManageStaffRoles(profile.role)) return { ok: false, message: 'Forbidden', status: 403 };
 

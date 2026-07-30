@@ -527,12 +527,15 @@ export async function POST(request: Request) {
     let aiMemories: any[] = [];
     if (userId || userEmail) {
       try {
-        const { data: memData } = await supabaseWriter.rpc('get_ai_memories', {
+        const { data: memData, error: memErr } = await supabaseWriter.rpc('get_ai_memories', {
           p_customer_id: userId || null,
           p_customer_email: userEmail || null,
         });
+        if (memErr) console.warn('[Chat API] get_ai_memories:', memErr.message);
         aiMemories = Array.isArray(memData) ? memData : [];
-      } catch {}
+      } catch (e) {
+        console.warn('[Chat API] get_ai_memories failed', e);
+      }
     }
 
     // Fetch relevant KB articles from Supabase for AI context
@@ -578,12 +581,15 @@ export async function POST(request: Request) {
     // Update customer insights asynchronously (writer client — RLS would block anon)
     if (userId) {
       try {
-        await supabaseWriter.rpc('upsert_customer_insight', {
+        const { error: insightErr } = await supabaseWriter.rpc('upsert_customer_insight', {
           p_customer_id: userId,
           p_customer_email: userEmail,
           p_customer_name: profile?.name || null,
         });
-      } catch {}
+        if (insightErr) console.warn('[Chat API] upsert_customer_insight:', insightErr.message);
+      } catch (e) {
+        console.warn('[Chat API] upsert_customer_insight failed', e);
+      }
     }
 
     return NextResponse.json(result);

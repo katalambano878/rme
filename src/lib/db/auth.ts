@@ -272,6 +272,40 @@ export async function updateUserPassword(
   return { user, error: null };
 }
 
+/** Admin: create a confirmed user (replaces supabase.auth.admin.createUser). */
+export async function adminCreateUser(opts: {
+  email: string;
+  password: string;
+  emailConfirm?: boolean;
+  userMetadata?: Record<string, unknown>;
+}): Promise<{ user: AuthUser | null; error: string | null }> {
+  const result = await signUpWithPassword({
+    email: opts.email,
+    password: opts.password,
+    data: opts.userMetadata,
+  });
+  if (result.error || !result.user) {
+    return { user: null, error: result.error || "Could not create user" };
+  }
+  return { user: result.user, error: null };
+}
+
+/** Admin: soft-delete a user (replaces supabase.auth.admin.deleteUser). */
+export async function adminDeleteUser(
+  userId: string
+): Promise<{ error: string | null }> {
+  if (!userId) return { error: "userId required" };
+  try {
+    await query(
+      `UPDATE auth.users SET deleted_at = now(), updated_at = now() WHERE id = $1 AND deleted_at IS NULL`,
+      [userId]
+    );
+    return { error: null };
+  } catch (e: any) {
+    return { error: e?.message || "Delete failed" };
+  }
+}
+
 export async function updateUserMetadata(
   userId: string,
   data: Record<string, unknown>

@@ -1,6 +1,7 @@
 /**
- * Plain-Postgres mode is active when DATABASE_URL is set.
- * Production keeps using hosted Supabase until cutover.
+ * Plain-Postgres mode is active when a direct Postgres URL is configured.
+ * Pair with NEXT_PUBLIC_USE_PLAIN_PG=true so Edge/middleware and the browser
+ * SDK (self-hosted URL) stay aligned with the in-process data plane.
  */
 export function isPlainPostgres(): boolean {
   return !!(process.env.DATABASE_URL || process.env.POSTGRES_URL);

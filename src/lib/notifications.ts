@@ -132,18 +132,26 @@ export async function sendSMS({ to, message }: { to: string; message: string }) 
 
     try {
         console.log(`[SMS] Sending to ${maskPhone(recipient)}`);
-        const response = await fetch('https://api.moolre.com/open/sms/send', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-API-VASKEY': smsVasKey
-            },
-            body: JSON.stringify({
-                type: 1,
-                senderid: process.env.MOOLRE_SMS_SENDER_ID || 'RonnyandMe',
-                messages: [{ recipient, message }]
-            })
-        });
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 15_000);
+        let response: Response;
+        try {
+            response = await fetch('https://api.moolre.com/open/sms/send', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-API-VASKEY': smsVasKey
+                },
+                body: JSON.stringify({
+                    type: 1,
+                    senderid: process.env.MOOLRE_SMS_SENDER_ID || 'RonnyandMe',
+                    messages: [{ recipient, message }]
+                }),
+                signal: controller.signal,
+            });
+        } finally {
+            clearTimeout(timeout);
+        }
 
         const contentType = response.headers.get('content-type') || '';
         if (!contentType.includes('application/json')) {
@@ -155,7 +163,7 @@ export async function sendSMS({ to, message }: { to: string; message: string }) 
         const result = await response.json();
         console.log('[SMS] Result:', result.status === 1 ? 'Success' : 'Failed', '| Code:', result.code);
         if (result.status !== 1) {
-            console.log('[SMS] Full Response:', JSON.stringify(result, null, 2));
+            console.warn('[SMS] Provider rejected send:', result.code || result.message || 'unknown');
         }
         return result;
     } catch (error: any) {

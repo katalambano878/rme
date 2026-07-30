@@ -335,14 +335,21 @@ export default function POSPage() {
                     );
                 }
 
-                // Reduce stock via the RPC. Non-fatal: the order is recorded
-                // and paid even if stock adjustment fails; the admin can
-                // reconcile inventory afterwards.
+                // Mark paid via RPC (order/payment status) then reduce stock in TS.
                 try {
                     await supabase.rpc('mark_order_paid', {
                         order_ref: orderNumber,
                         moolre_ref: paymentRef,
                     });
+                } catch (markErr) {
+                    console.error('mark_order_paid error (non-fatal):', markErr);
+                }
+                try {
+                    const { reduceOrderStock } = await import('@/lib/order-stock');
+                    const stockResult = await reduceOrderStock(supabase as any, order.id);
+                    if (stockResult.errors.length) {
+                        console.error('POS stock reduction errors:', stockResult.errors);
+                    }
                 } catch (stockErr) {
                     console.error('Stock reduction error (non-fatal):', stockErr);
                 }

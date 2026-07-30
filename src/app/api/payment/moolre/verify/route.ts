@@ -56,37 +56,72 @@ export async function POST(req: Request) {
       )
     }
 
+    // Initiation stores provider_ref as `${orderNumber}-R{timestamp}`.
+    // Probe that first, then fall back to bare order number for legacy rows.
+    const { data: pendingPay } = await supabase
+      .from("payments")
+      .select("id, provider_ref")
+      .eq("order_id", order.id)
+      .eq("provider", "moolre")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle()
+
+    const refsToTry = Array.from(
+      new Set(
+        [pendingPay?.provider_ref, orderNumber.trim()].filter(
+          (r): r is string => typeof r === "string" && r.length > 0,
+        ),
+      ),
+    )
+
     let moolreApiVerified = false
+    let verifiedExternalRef: string | null = null
     try {
-      const checkResponse = await fetch("https://api.moolre.com/embed/status", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-API-USER": process.env.MOOLRE_API_USER,
-          "X-API-PUBKEY": process.env.MOOLRE_API_PUBKEY,
-        },
-        body: JSON.stringify({ externalref: orderNumber.trim() }),
-      })
+      for (const externalref of refsToTry) {
+        const controller = new AbortController()
+        const timeout = setTimeout(() => controller.abort(), 15_000)
+        let checkResult: {
+          status?: number
+          data?: { status?: string; amount?: string }
+        }
+        try {
+          const checkResponse = await fetch("https://api.moolre.com/embed/status", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "X-API-USER": process.env.MOOLRE_API_USER!,
+              "X-API-PUBKEY": process.env.MOOLRE_API_PUBKEY!,
+            },
+            body: JSON.stringify({ externalref }),
+            signal: controller.signal,
+          })
+          checkResult = await checkResponse.json()
+        } finally {
+          clearTimeout(timeout)
+        }
 
-      const checkResult = (await checkResponse.json()) as {
-        status?: number
-        data?: { status?: string; amount?: string }
-      }
+        const statusStr = String(checkResult.data?.status || "").toLowerCase()
+        let ok =
+          checkResult.status === 1 &&
+          !!checkResult.data &&
+          (statusStr === "success" ||
+            statusStr === "successful" ||
+            statusStr === "completed" ||
+            statusStr === "paid")
 
-      const statusStr = String(checkResult.data?.status || "").toLowerCase()
-      moolreApiVerified =
-        checkResult.status === 1 &&
-        !!checkResult.data &&
-        (statusStr === "success" ||
-          statusStr === "successful" ||
-          statusStr === "completed" ||
-          statusStr === "paid")
+        if (ok && checkResult.data?.amount) {
+          const paidAmount = parseFloat(checkResult.data.amount)
+          const expected = Number(order.grand_total)
+          if (Math.abs(paidAmount - expected) > 0.01) {
+            ok = false
+          }
+        }
 
-      if (moolreApiVerified && checkResult.data?.amount) {
-        const paidAmount = parseFloat(checkResult.data.amount)
-        const expected = Number(order.grand_total)
-        if (Math.abs(paidAmount - expected) > 0.01) {
-          moolreApiVerified = false
+        if (ok) {
+          moolreApiVerified = true
+          verifiedExternalRef = externalref
+          break
         }
       }
     } catch (e) {
@@ -100,25 +135,18 @@ export async function POST(req: Request) {
       })
     }
 
-    const { data: existingPay } = await supabase
-      .from("payments")
-      .select("id")
-      .eq("order_id", order.id)
-      .eq("provider", "moolre")
-      .maybeSingle()
-
     const payPayload = {
       order_id: order.id,
       provider: "moolre" as const,
-      provider_ref: `verify-${orderNumber}`,
+      provider_ref: verifiedExternalRef || pendingPay?.provider_ref || `verify-${orderNumber}`,
       amount: Number(order.grand_total),
       currency: "GHS",
       status: "paid" as const,
       updated_at: new Date().toISOString(),
     }
 
-    if (existingPay?.id) {
-      await supabase.from("payments").update(payPayload).eq("id", existingPay.id)
+    if (pendingPay?.id) {
+      await supabase.from("payments").update(payPayload).eq("id", pendingPay.id)
     } else {
       await supabase.from("payments").insert(payPayload)
     }

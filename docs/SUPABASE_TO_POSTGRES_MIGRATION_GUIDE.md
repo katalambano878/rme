@@ -3,7 +3,7 @@
 **Shape:** A — shimmed `@supabase/supabase-js` → plain PG  
 **Coolify staging:** `rme-staging` (`x1m0wkekcedagfdbwhn5zq76`)  
 **Staging URL:** https://rme-staging.169-58-8-203.sslip.io  
-**DB:** `fleet-postgres` / `store_rme` (confirm name in Coolify env)
+**DB:** `fleet-postgres` / `rme_staging`
 
 ## Env cutover trio
 
@@ -19,7 +19,12 @@
 - [x] Phase B: `images.unoptimized`; CSP `img-src` / `connect-src` no longer allow Supabase or via.placeholder
 - [x] `src/components/*` money via `money()` from `@/lib/format-money`
 - [x] Chat writer + admin staff service paths → `@/lib/supabase-admin` (support/payment/notifications already on admin client)
+- [x] Payment routes use mode-aware `createAdminClient` (in-process PG)
+- [x] Missing RPCs applied via `20260730090000_plain_pg_rpc_compat.sql`
+- [x] Single `src/middleware.ts` (plain-PG JWT + `sb-access-token`); removed root duplicate + legacy `app/` shadow
 - [ ] Account order tab still uses mock data (no coming-soon alerts to replace)
+
+See also root docs: `FULL_SYSTEM_AUDIT.md`, `PAYMENT_AND_CALLBACK_AUDIT.md`, `REPAIR_CHANGELOG.md`.
 
 ## Verify
 

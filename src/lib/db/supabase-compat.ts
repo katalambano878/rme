@@ -922,6 +922,32 @@ function createAuthApi() {
       }
       return { data: { user }, error: null };
     },
+    admin: {
+      async createUser(attrs: {
+        email: string;
+        password: string;
+        email_confirm?: boolean;
+        user_metadata?: Record<string, unknown>;
+      }) {
+        const auth = await loadAuth();
+        const { user, error } = await auth.adminCreateUser({
+          email: attrs.email,
+          password: attrs.password,
+          emailConfirm: attrs.email_confirm,
+          userMetadata: attrs.user_metadata,
+        });
+        if (error || !user) {
+          return { data: { user: null }, error: { message: error || "Create failed" } };
+        }
+        return { data: { user }, error: null };
+      },
+      async deleteUser(userId: string) {
+        const auth = await loadAuth();
+        const { error } = await auth.adminDeleteUser(userId);
+        if (error) return { data: null, error: { message: error } };
+        return { data: {}, error: null };
+      },
+    },
     async getSession() {
       return { data: { session: null }, error: null };
     },

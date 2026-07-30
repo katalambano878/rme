@@ -211,7 +211,26 @@ export async function POST(req: NextRequest) {
       })
     }
 
-    const shippingCost = Math.max(0, Number(shippingCostRaw) || 0)
+    // Never trust client shipping blindly — clamp to configured delivery fee
+    // (or 0 for explicit pickup / free methods).
+    const configuredFee =
+      typeof featureFlags.delivery_fee === "number" ? featureFlags.delivery_fee : 25
+    const method = String(shippingMethod || "").toLowerCase()
+    const isPickup =
+      method.includes("pickup") || method.includes("collect") || method === "none"
+    const clientShip = Math.max(0, Number(shippingCostRaw) || 0)
+    let shippingCost = isPickup ? 0 : configuredFee
+    // Allow free shipping only when the configured fee is 0 or client sends 0
+    // for a recognized free method; otherwise force server fee.
+    if (!isPickup && clientShip === 0 && configuredFee > 0 && method.includes("free")) {
+      shippingCost = 0
+    } else if (!isPickup) {
+      shippingCost = configuredFee
+    }
+    // Reject attempts to underpay via a lower client-supplied fee.
+    if (!isPickup && clientShip > 0 && clientShip < configuredFee - 0.01) {
+      return NextResponse.json({ error: "Invalid shipping cost" }, { status: 400 })
+    }
     const computedTotal = Number((computedSubtotal + shippingCost).toFixed(2))
 
     if (computedTotal <= 0) {

@@ -93,23 +93,63 @@ export async function POST(req: Request) {
       payload.secret = process.env.MOOLRE_CALLBACK_SECRET
     }
 
-    const response = await fetch("https://api.moolre.com/embed/link", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-API-USER": process.env.MOOLRE_API_USER,
-        "X-API-PUBKEY": process.env.MOOLRE_API_PUBKEY,
-      },
-      body: JSON.stringify(payload),
-    })
-
-    const result = await response.json()
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), 20_000)
+    let result: {
+      status?: number
+      message?: string
+      data?: { authorization_url?: string; reference?: string }
+    }
+    try {
+      const response = await fetch("https://api.moolre.com/embed/link", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-API-USER": process.env.MOOLRE_API_USER,
+          "X-API-PUBKEY": process.env.MOOLRE_API_PUBKEY,
+        },
+        body: JSON.stringify(payload),
+        signal: controller.signal,
+      })
+      result = await response.json()
+    } finally {
+      clearTimeout(timeout)
+    }
 
     if (result.status === 1 && result.data?.authorization_url) {
+      // Persist the exact externalref used with Moolre so verify/callback can match.
+      const { data: existingPay } = await supabase
+        .from("payments")
+        .select("id")
+        .eq("order_id", order.id)
+        .eq("provider", "moolre")
+        .maybeSingle()
+
+      const payRow = {
+        order_id: order.id,
+        provider: "moolre" as const,
+        provider_ref: uniqueRef,
+        amount,
+        currency: "GHS",
+        status: "pending" as const,
+        updated_at: new Date().toISOString(),
+        raw_payload: {
+          moolre_reference: result.data.reference || null,
+          externalref: uniqueRef,
+        },
+      }
+
+      if (existingPay?.id) {
+        await supabase.from("payments").update(payRow).eq("id", existingPay.id)
+      } else {
+        await supabase.from("payments").insert(payRow)
+      }
+
       return NextResponse.json({
         success: true,
         url: result.data.authorization_url,
-        reference: result.data.reference,
+        reference: result.data.reference || uniqueRef,
+        externalref: uniqueRef,
       })
     }
 
