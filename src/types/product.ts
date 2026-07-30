@@ -18,6 +18,10 @@ export type Product = {
   categorySlug: string
   price: number
   salePrice?: number
+  /** Raw `products.sale_price` — used with variant rows for consistent sale pricing. */
+  catalogSalePrice?: number | null
+  /** Whether global sale promotion was enabled when this product was loaded. */
+  salePromotionEnabled?: boolean
   images: string[]
   badges: ProductBadge[]
   variants: Variant[]
