@@ -22,7 +22,10 @@ import { Section } from "@/components/shared/section"
 import { Heading } from "@/components/shared/heading"
 import { useCartStore } from "@/lib/store/cart-store"
 import { useWishlistStore } from "@/lib/store/wishlist-store"
-import { getProductPrimaryImageUrl } from "@/lib/product-image"
+import {
+  getProductPrimaryImageUrl,
+  optimizedImageUrl,
+} from "@/lib/product-image"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent } from "@/components/ui/card"
@@ -180,7 +183,7 @@ export default function CartPageClient({
                         >
                           <div className="size-[76px] overflow-hidden rounded-xl bg-rose-light sm:size-[84px]">
                             <img
-                              src={getProductPrimaryImageUrl(item.product)}
+                              src={optimizedImageUrl(getProductPrimaryImageUrl(item.product), 160)}
                               alt=""
                               className="size-full object-cover"
                             />
@@ -423,7 +426,7 @@ function ShopStyleRecommendationCard({ product }: { product: Product }) {
       <Link href={`/products/${product.slug}`} className="block">
         <div className="relative h-[330px] overflow-hidden bg-[#E9E7E3]">
           <img
-            src={getProductPrimaryImageUrl(product)}
+            src={optimizedImageUrl(getProductPrimaryImageUrl(product), 320)}
             alt={product.name}
             className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-[1.03]"
             loading="lazy"

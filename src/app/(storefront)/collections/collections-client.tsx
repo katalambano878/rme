@@ -6,7 +6,7 @@ import { ArrowRight, Store } from "lucide-react"
 import { Container } from "@/components/shared/container"
 import { Heading } from "@/components/shared/heading"
 import type { StorefrontCategory } from "@/lib/supabase/storefront-products"
-import { MOCK_PRODUCT_IMAGE } from "@/lib/product-image"
+import { MOCK_PRODUCT_IMAGE, optimizedImageUrl } from "@/lib/product-image"
 
 export type CollectionsPageClientProps = {
   categories: StorefrontCategory[]
@@ -48,10 +48,14 @@ export default function CollectionsPageClient({
               >
                 <div className="relative h-[320px] overflow-hidden bg-[#ECECEC]">
                   <img
-                    src={category.image_url?.trim() || MOCK_PRODUCT_IMAGE}
+                    src={optimizedImageUrl(
+                      category.image_url?.trim() || MOCK_PRODUCT_IMAGE,
+                      640,
+                    )}
                     alt={category.displayName}
                     className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-[1.04]"
                     loading="lazy"
+                    decoding="async"
                   />
                 </div>
 

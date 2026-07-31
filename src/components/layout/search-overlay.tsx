@@ -6,6 +6,7 @@ import { Search, X, Loader2 } from "lucide-react"
 import { AnimatePresence, motion } from "framer-motion"
 import { useDebouncedValue } from "@/lib/hooks/use-debounced-value"
 import { formatPrice } from "@/lib/utils"
+import { optimizedImageUrl } from "@/lib/product-image"
 import type { ProductSearchResult } from "@/types/product-search"
 
 const popularSearches = [
@@ -157,9 +158,10 @@ export function SearchOverlay({ open, onClose }: SearchOverlayProps) {
                         >
                           <div className="size-14 shrink-0 overflow-hidden rounded-xl bg-rose-light">
                             <img
-                              src={p.imageUrl}
+                              src={optimizedImageUrl(p.imageUrl, 112)}
                               alt=""
                               className="size-full object-cover"
+                              decoding="async"
                             />
                           </div>
                           <div className="min-w-0 flex-1">

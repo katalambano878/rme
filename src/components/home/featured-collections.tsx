@@ -7,7 +7,10 @@ import { Heart, ShoppingBag, Eye } from "lucide-react"
 import { Heading } from "@/components/shared/heading"
 import type { Product } from "@/types/product"
 import { cn, formatPrice } from "@/lib/utils"
-import { getProductPrimaryImageUrl } from "@/lib/product-image"
+import {
+  getProductPrimaryImageUrl,
+  optimizedImageUrl,
+} from "@/lib/product-image"
 
 const tabs = [
   { id: "new-arrivals", label: "Featured Products" },
@@ -98,7 +101,7 @@ export function FeaturedCollections({
 
 function FeaturedProductCard({ product }: { product: Product }) {
   const category = product.categoryName?.trim() || "Cleanser"
-  const image = getProductPrimaryImageUrl(product)
+  const image = optimizedImageUrl(getProductPrimaryImageUrl(product), 640)
   const amount = product.salePrice ?? product.price
 
   return (
@@ -112,6 +115,7 @@ function FeaturedProductCard({ product }: { product: Product }) {
           alt={product.name}
           className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-[1.03]"
           loading="lazy"
+          decoding="async"
         />
 
         <div className="absolute right-2 top-2 z-10 flex size-8 items-center justify-center rounded-full bg-white/90 text-navy shadow-sm sm:right-3 sm:top-3 sm:size-9">

@@ -10,7 +10,10 @@ import { Container } from "@/components/shared/container"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
-import { getProductPrimaryImageUrl } from "@/lib/product-image"
+import {
+  getProductPrimaryImageUrl,
+  optimizedImageUrl,
+} from "@/lib/product-image"
 
 type OrderData = {
   orderNumber: string
@@ -250,7 +253,7 @@ function CheckoutSuccessContent() {
                         >
                           <div className="size-12 shrink-0 overflow-hidden rounded-lg bg-rose-light">
                             <img
-                              src={getProductPrimaryImageUrl(item.product)}
+                              src={optimizedImageUrl(getProductPrimaryImageUrl(item.product), 96)}
                               alt=""
                               className="size-full object-cover"
                             />

@@ -24,7 +24,10 @@ import {
 } from "@/lib/utils"
 import { Container } from "@/components/shared/container"
 import { useCartStore } from "@/lib/store/cart-store"
-import { getProductPrimaryImageUrl } from "@/lib/product-image"
+import {
+  getProductPrimaryImageUrl,
+  optimizedImageUrl,
+} from "@/lib/product-image"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -879,7 +882,7 @@ export default function CheckoutPage() {
                             >
                               <div className="size-14 shrink-0 overflow-hidden rounded-xl bg-rose-light">
                                 <img
-                                  src={getProductPrimaryImageUrl(item.product)}
+                                  src={optimizedImageUrl(getProductPrimaryImageUrl(item.product), 160)}
                                   alt=""
                                   className="size-full object-cover"
                                 />
@@ -1156,7 +1159,7 @@ function OrderSummaryContent({
             >
               <div className="relative size-12 shrink-0 overflow-hidden rounded-lg bg-white/80">
                 <img
-                  src={getProductPrimaryImageUrl(item.product)}
+                  src={optimizedImageUrl(getProductPrimaryImageUrl(item.product), 160)}
                   alt=""
                   className="size-full object-cover"
                 />

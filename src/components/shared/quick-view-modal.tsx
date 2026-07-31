@@ -6,7 +6,10 @@ import { cn } from "@/lib/utils"
 import { formatPrice } from "@/lib/utils"
 import { useCartStore } from "@/lib/store/cart-store"
 import type { Product } from "@/types/product"
-import { getProductPrimaryImageUrl } from "@/lib/product-image"
+import {
+  getProductPrimaryImageUrl,
+  optimizedImageUrl,
+} from "@/lib/product-image"
 import {
   Dialog,
   DialogContent,
@@ -64,9 +67,10 @@ export function QuickViewModal({ open, onClose, product }: QuickViewModalProps) 
         <div className="grid grid-cols-1 sm:grid-cols-2">
           <div className="relative flex aspect-square overflow-hidden bg-rose-light sm:aspect-auto sm:min-h-[420px]">
             <img
-              src={getProductPrimaryImageUrl(product)}
+              src={optimizedImageUrl(getProductPrimaryImageUrl(product), 800)}
               alt=""
               className="h-full w-full object-cover"
+              decoding="async"
             />
           </div>
 
