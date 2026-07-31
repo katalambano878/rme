@@ -1,11 +1,35 @@
 /** Single mock asset used when a product has no images (and for category fallbacks). */
 export const MOCK_PRODUCT_IMAGE = "/mock-product.png"
 
+/** Rewrite legacy hosted Supabase public URLs to same-origin storage paths. */
+export function normalizePublicImageSrc(src: string): string {
+  const trimmed = src.trim()
+  if (!trimmed) return trimmed
+  try {
+    if (trimmed.startsWith("/")) return trimmed
+    const u = new URL(trimmed)
+    if (
+      u.hostname.endsWith(".supabase.co") &&
+      u.pathname.startsWith("/storage/v1/object/public/")
+    ) {
+      return u.pathname + u.search
+    }
+  } catch {
+    /* keep as-is */
+  }
+  return trimmed
+}
+
+export function optimizedImageUrl(src: string, width?: number): string {
+  const normalized = normalizePublicImageSrc(src)
+  return `/api/img?src=${encodeURIComponent(normalized)}&w=${width || 640}`
+}
+
 export function getProductGalleryImages(product: {
   images?: string[] | null
 }): string[] {
   const list = (product.images ?? [])
-    .map((s) => (typeof s === "string" ? s.trim() : ""))
+    .map((s) => (typeof s === "string" ? normalizePublicImageSrc(s.trim()) : ""))
     .filter(Boolean)
   return list.length > 0 ? list : [MOCK_PRODUCT_IMAGE]
 }

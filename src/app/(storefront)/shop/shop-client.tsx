@@ -36,7 +36,10 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet"
-import { getProductPrimaryImageUrl } from "@/lib/product-image"
+import {
+  getProductPrimaryImageUrl,
+  optimizedImageUrl,
+} from "@/lib/product-image"
 import { useCartStore } from "@/lib/store/cart-store"
 import { useWishlistStore } from "@/lib/store/wishlist-store"
 
@@ -536,10 +539,11 @@ function ShopProductCard({
       <Link href={`/products/${product.slug}`} className="block">
         <div className="relative h-[330px] overflow-hidden bg-[#E9E7E3]">
           <img
-            src={getProductPrimaryImageUrl(product)}
+            src={optimizedImageUrl(getProductPrimaryImageUrl(product), 480)}
             alt={product.name}
             className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-[1.03]"
             loading="lazy"
+            decoding="async"
           />
 
           <button

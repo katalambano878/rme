@@ -23,7 +23,10 @@ import { QuickViewModal } from "@/components/shared/quick-view-modal"
 import { BadgeSet } from "@/components/shared/badge-set"
 import { Price } from "@/components/shared/price"
 import { useCartStore } from "@/lib/store/cart-store"
-import { getProductGalleryImages } from "@/lib/product-image"
+import {
+  getProductGalleryImages,
+  optimizedImageUrl,
+} from "@/lib/product-image"
 import { buildDisplaySku } from "@/lib/sku-display"
 import { displayPricingForVariant } from "@/lib/effective-price"
 import {
@@ -314,16 +317,18 @@ function ProductDetailInner({
             <div className="space-y-4">
               <div className="relative aspect-[3/4] overflow-hidden rounded-2xl bg-rose-light">
                 <img
-                  src={
+                  src={optimizedImageUrl(
                     galleryImages[
                       Math.min(
                         selectedImage,
                         Math.max(0, galleryImages.length - 1),
                       )
-                    ] ?? galleryImages[0]
-                  }
+                    ] ?? galleryImages[0],
+                    1200,
+                  )}
                   alt={product.name}
                   className="h-full w-full object-cover"
+                  decoding="async"
                 />
 
                 {product.badges.length > 0 && (
@@ -355,9 +360,10 @@ function ProductDetailInner({
                       )}
                     >
                       <img
-                        src={src}
+                        src={optimizedImageUrl(src, 200)}
                         alt=""
                         className="h-full w-full object-cover"
+                        decoding="async"
                       />
                     </button>
                   ))}

@@ -8,7 +8,10 @@ import { cn } from "@/lib/utils"
 import { useCartStore } from "@/lib/store/cart-store"
 import { useWishlistStore } from "@/lib/store/wishlist-store"
 import type { Product } from "@/types/product"
-import { getProductPrimaryImageUrl } from "@/lib/product-image"
+import {
+  getProductPrimaryImageUrl,
+  optimizedImageUrl,
+} from "@/lib/product-image"
 import { BadgeSet } from "./badge-set"
 import { Price } from "./price"
 
@@ -35,10 +38,11 @@ export function ProductCard({ product, className, onQuickView }: ProductCardProp
       <Link href={`/products/${product.slug}`} className="block">
         <div className="relative aspect-[3/4] overflow-hidden rounded-2xl bg-rose-light">
           <img
-            src={getProductPrimaryImageUrl(product)}
+            src={optimizedImageUrl(getProductPrimaryImageUrl(product), 480)}
             alt=""
             className="absolute inset-0 h-full w-full object-cover"
             loading="lazy"
+            decoding="async"
           />
 
           {product.badges.length > 0 && (

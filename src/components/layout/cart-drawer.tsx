@@ -17,15 +17,19 @@ import {
   SheetDescription,
 } from "@/components/ui/sheet"
 import type { Product } from "@/types/product"
-import { getProductPrimaryImageUrl } from "@/lib/product-image"
+import {
+  getProductPrimaryImageUrl,
+  optimizedImageUrl,
+} from "@/lib/product-image"
 
 function ProductThumbnail({ product }: { product: Product }) {
   return (
     <div className="size-16 shrink-0 overflow-hidden rounded-xl bg-rose-light">
       <img
-        src={getProductPrimaryImageUrl(product)}
+        src={optimizedImageUrl(getProductPrimaryImageUrl(product), 160)}
         alt=""
         className="size-full object-cover"
+        decoding="async"
       />
     </div>
   )

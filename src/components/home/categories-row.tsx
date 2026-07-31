@@ -3,7 +3,7 @@ import { ArrowRight, ArrowUpRight } from "lucide-react"
 import { Container } from "@/components/shared/container"
 import { Section } from "@/components/shared/section"
 import type { StorefrontCategory } from "@/lib/supabase/storefront-products"
-import { MOCK_PRODUCT_IMAGE } from "@/lib/product-image"
+import { MOCK_PRODUCT_IMAGE, optimizedImageUrl } from "@/lib/product-image"
 
 export type CategoriesRowProps = {
   categories: StorefrontCategory[]
@@ -41,7 +41,9 @@ export function CategoriesRow({ categories }: CategoriesRowProps) {
         ) : (
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-2 sm:gap-7 lg:grid-cols-4 lg:gap-6">
             {categories.map((category) => {
-              const imageSrc = category.image_url?.trim() || MOCK_PRODUCT_IMAGE
+              const rawImageSrc =
+                category.image_url?.trim() || MOCK_PRODUCT_IMAGE
+              const imageSrc = optimizedImageUrl(rawImageSrc, 400)
               return (
                 <Link
                   key={category.id}
