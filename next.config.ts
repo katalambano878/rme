@@ -91,7 +91,8 @@ const nextConfig: NextConfig = {
               "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com",
               "font-src 'self' https://fonts.gstatic.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com",
               "img-src 'self' data: blob: https://*.supabase.co https://lh3.googleusercontent.com",
-              "connect-src 'self' https://api.groq.com https://api.moolre.com https://api.paystack.co",
+              // Allow apex↔www auth calls, Google reCAPTCHA, and payment APIs
+              "connect-src 'self' https://ronnyandme.com https://www.ronnyandme.com https://www.google.com https://www.gstatic.com https://api.groq.com https://api.moolre.com https://api.paystack.co",
               "frame-src https://www.google.com/recaptcha/ https://recaptcha.google.com https://js.paystack.co",
               "media-src 'self'",
               "object-src 'none'",
