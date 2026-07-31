@@ -17,7 +17,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
           .select(`
             *,
             categories(id, name),
-            variants(id, sku, price, compare_at_price, stock_quantity, option_values),
+            variants(id, sku, price, compare_at_price, sale_price, stock_quantity, option_values),
             product_images(id, url, sort_order, alt)
           `)
           .eq('id', resolvedParams.id)

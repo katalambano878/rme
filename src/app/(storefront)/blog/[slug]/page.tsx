@@ -27,7 +27,7 @@ type BlogPost = {
   excerpt: string
   category: string
   cover_image_url: string | null
-  content: string | null
+  body: string | null
   published_at: string | null
   created_at: string
 }
@@ -45,7 +45,7 @@ export default function BlogPostPage({
     const supabase = createClient()
     supabase
       .from("blog_posts")
-      .select("id, title, slug, excerpt, category, cover_image_url, content, published_at, created_at")
+      .select("id, title, slug, excerpt, category, cover_image_url, body, published_at, created_at")
       .eq("slug", slug)
       .eq("published", true)
       .maybeSingle()
@@ -139,8 +139,8 @@ export default function BlogPostPage({
                 </span>
                 <span className="flex items-center gap-1.5">
                   <Clock className="size-4" />
-                  {post.content
-                    ? `${Math.max(1, Math.ceil(post.content.split(/\s+/).length / 200))} min read`
+                  {post.body
+                    ? `${Math.max(1, Math.ceil(post.body.split(/\s+/).length / 200))} min read`
                     : "4 min read"}
                 </span>
               </div>
@@ -184,8 +184,8 @@ export default function BlogPostPage({
             className="mx-auto max-w-3xl"
           >
             <div className="prose prose-lg max-w-none text-muted-foreground leading-[1.8]">
-              {post.content ? (
-                post.content.trim().split("\n\n").map((para, i) => (
+              {post.body ? (
+                post.body.trim().split("\n\n").map((para, i) => (
                   <p key={i} className="mb-4">{para}</p>
                 ))
               ) : (

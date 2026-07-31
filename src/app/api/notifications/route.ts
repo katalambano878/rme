@@ -98,17 +98,24 @@ export async function POST(request: Request) {
 
             const { data: fullOrder } = await supabaseAdmin
                 .from('orders')
-                .select('id, order_number, email, phone, shipping_address, metadata')
+                .select('id, order_number, guest_email, guest_phone, shipping_address, notes')
                 .eq('order_number', orderNumber)
                 .single();
 
-            const orderData = fullOrder || {
-                order_number: orderNumber,
-                email,
-                phone,
-                shipping_address: { firstName: name, phone },
-                metadata: { tracking_number: trackingNumber }
-            };
+            const orderData = fullOrder
+                ? {
+                    ...fullOrder,
+                    email: fullOrder.guest_email || email,
+                    phone: fullOrder.guest_phone || phone,
+                    metadata: { tracking_number: trackingNumber },
+                  }
+                : {
+                    order_number: orderNumber,
+                    email,
+                    phone,
+                    shipping_address: { firstName: name, phone },
+                    metadata: { tracking_number: trackingNumber },
+                  };
 
             if (!orderData.phone && phone) orderData.phone = phone;
 
