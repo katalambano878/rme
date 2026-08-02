@@ -14,7 +14,7 @@
  *
  * Idempotency: writes one row per item to inventory_movements with
  *   (reference_type='order', reference_id=orderId). Before reducing, we check
- *   for existing movement rows for that order and skip if any are found.
+ *   whether movement rows cover all resolvable items for that order.
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js"
@@ -35,25 +35,38 @@ export interface StockReductionResult {
   errors: string[]
 }
 
+type OrderItemRow = {
+  id: string
+  quantity: number
+  variant_id: string | null
+  product_id: string | null
+  name_snapshot: string
+  products: {
+    id: string
+    quantity: number | null
+    variants: Array<{ id: string; price: number; stock_quantity: number }> | null
+  } | null
+}
+
+function isUniqueViolation(err: { code?: string; message?: string }): boolean {
+  return err.code === "23505" || /duplicate|unique/i.test(err.message || "")
+}
+
+function countResolvableItems(orderItems: OrderItemRow[]): number {
+  let count = 0
+  for (const it of orderItems) {
+    const productVariants = it.products?.variants || []
+    if (it.variant_id || productVariants.length > 0) count++
+  }
+  return count
+}
+
 export async function reduceOrderStock(
   supabase: SupabaseClient,
   orderId: string,
 ): Promise<StockReductionResult> {
   const errors: string[] = []
   const items: NonNullable<StockReductionResult["items"]> = []
-
-  const { data: existing, error: existingErr } = await supabase
-    .from("inventory_movements")
-    .select("id")
-    .eq("reference_type", "order")
-    .eq("reference_id", orderId)
-    .limit(1)
-  if (existingErr) {
-    errors.push(`inventory_movements lookup failed: ${existingErr.message}`)
-  }
-  if (existing && existing.length > 0) {
-    return { skipped: true, reason: "already_reduced", errors }
-  }
 
   const { data: orderItems, error: itemsErr } = await supabase
     .from("order_items")
@@ -78,18 +91,27 @@ export async function reduceOrderStock(
     return { errors }
   }
 
-  for (const it of orderItems as unknown as Array<{
-    id: string
-    quantity: number
-    variant_id: string | null
-    product_id: string | null
-    name_snapshot: string
-    products: {
-      id: string
-      quantity: number | null
-      variants: Array<{ id: string; price: number; stock_quantity: number }> | null
-    } | null
-  }>) {
+  const typedItems = orderItems as unknown as OrderItemRow[]
+  const resolvableCount = countResolvableItems(typedItems)
+
+  const { data: existingMovements, error: existingErr } = await supabase
+    .from("inventory_movements")
+    .select("id, variant_id")
+    .eq("reference_type", "order")
+    .eq("reference_id", orderId)
+  if (existingErr) {
+    errors.push(`inventory_movements lookup failed: ${existingErr.message}`)
+  }
+  const existingVariantIds = new Set(
+    (existingMovements || [])
+      .map((m) => m.variant_id)
+      .filter((id): id is string => Boolean(id)),
+  )
+  if (resolvableCount > 0 && (existingMovements?.length ?? 0) >= resolvableCount) {
+    return { skipped: true, reason: "already_reduced", errors }
+  }
+
+  for (const it of typedItems) {
     const qty = Number(it.quantity) || 0
     if (qty <= 0) {
       items.push({ name: it.name_snapshot, target: "none", quantity: qty })
@@ -106,6 +128,16 @@ export async function reduceOrderStock(
     }
 
     if (variantId) {
+      if (existingVariantIds.has(variantId)) {
+        items.push({
+          name: it.name_snapshot,
+          target: "variant",
+          variantId,
+          quantity: qty,
+        })
+        continue
+      }
+
       const matched =
         productVariants.find((v) => v.id === variantId) ||
         // Fallback fetch in case the embedded variants don't include it.
@@ -160,7 +192,15 @@ export async function reduceOrderStock(
         reference_type: "order",
         reference_id: orderId,
       })
-      if (mErr) errors.push(`inventory_movements insert failed: ${mErr.message}`)
+      if (mErr) {
+        if (isUniqueViolation(mErr)) {
+          existingVariantIds.add(variantId)
+        } else {
+          errors.push(`inventory_movements insert failed: ${mErr.message}`)
+        }
+      } else {
+        existingVariantIds.add(variantId)
+      }
 
       items.push({
         name: it.name_snapshot,
@@ -174,6 +214,18 @@ export async function reduceOrderStock(
     }
 
     if (it.product_id) {
+      const movementVariantId = productVariants.length > 0 ? productVariants[0].id : null
+      if (movementVariantId && existingVariantIds.has(movementVariantId)) {
+        items.push({
+          name: it.name_snapshot,
+          target: "product",
+          productId: it.product_id,
+          variantId: movementVariantId,
+          quantity: qty,
+        })
+        continue
+      }
+
       const before = Number(it.products?.quantity) || 0
       const after = Math.max(0, before - qty)
       const { error: pErr } = await supabase
@@ -192,10 +244,43 @@ export async function reduceOrderStock(
         })
         continue
       }
+
+      // Movement tracks order fulfillment for idempotency (stock taken from products.quantity).
+      if (movementVariantId) {
+        const { error: mErr } = await supabase.from("inventory_movements").insert({
+          variant_id: movementVariantId,
+          quantity_delta: -qty,
+          reason: "order_paid",
+          reference_type: "order",
+          reference_id: orderId,
+        })
+        if (mErr) {
+          if (isUniqueViolation(mErr)) {
+            existingVariantIds.add(movementVariantId)
+          } else {
+            errors.push(`inventory_movements insert failed: ${mErr.message}`)
+          }
+        } else {
+          existingVariantIds.add(movementVariantId)
+        }
+      } else {
+        const { error: mErr } = await supabase.from("inventory_movements").insert({
+          variant_id: null,
+          quantity_delta: -qty,
+          reason: "order_paid",
+          reference_type: "order",
+          reference_id: orderId,
+        })
+        if (mErr) {
+          errors.push(`inventory_movements insert failed (product-only, no variant): ${mErr.message}`)
+        }
+      }
+
       items.push({
         name: it.name_snapshot,
         target: "product",
         productId: it.product_id,
+        variantId: movementVariantId ?? undefined,
         quantity: qty,
         before,
         after,

@@ -1,6 +1,19 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createHmac } from "crypto"
 import { createAdminClient } from "@/lib/supabase/admin"
+import { reduceOrderStock } from "@/lib/order-stock"
+
+const PAID_FULFILLMENT_STATUSES = [
+  "paid",
+  "processing",
+  "shipped",
+  "out_for_delivery",
+  "delivered",
+] as const
+
+function isPaidFulfillment(status: string): boolean {
+  return (PAID_FULFILLMENT_STATUSES as readonly string[]).includes(status)
+}
 
 export async function POST(req: NextRequest) {
   const secretKey = process.env.PAYSTACK_SECRET_KEY
@@ -36,22 +49,60 @@ export async function POST(req: NextRequest) {
       const tx = event.data
       const reference = tx.reference as string
 
-      await supabase
-        .from("payments")
-        .update({
-          status: "paid",
-          raw_payload: tx,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("provider_ref", reference)
-
-      await supabase
+      const { data: order } = await supabase
         .from("orders")
-        .update({
-          status: "paid",
-          updated_at: new Date().toISOString(),
-        })
+        .select("id, order_number, grand_total, status")
         .eq("order_number", reference)
+        .maybeSingle()
+
+      const { data: payment } = await supabase
+        .from("payments")
+        .select("id, status")
+        .eq("provider_ref", reference)
+        .maybeSingle()
+
+      const alreadyProcessed =
+        (order && isPaidFulfillment(order.status)) || payment?.status === "paid"
+
+      if (!alreadyProcessed && order) {
+        const paystackAmount = tx.amount / 100
+        const expectedAmount = Number(order.grand_total)
+        if (Math.abs(paystackAmount - expectedAmount) > 0.01) {
+          console.error("Paystack webhook: AMOUNT MISMATCH", {
+            reference,
+            expected: expectedAmount,
+            got: paystackAmount,
+          })
+        } else {
+          await supabase
+            .from("payments")
+            .update({
+              status: "paid",
+              raw_payload: tx,
+              updated_at: new Date().toISOString(),
+            })
+            .eq("provider_ref", reference)
+            .neq("status", "paid")
+
+          await supabase
+            .from("orders")
+            .update({
+              status: "paid",
+              updated_at: new Date().toISOString(),
+            })
+            .eq("order_number", reference)
+            .eq("status", "pending")
+
+          try {
+            const stockResult = await reduceOrderStock(supabase, order.id)
+            if (stockResult.errors.length) {
+              console.error("Paystack webhook stock reduction errors:", stockResult.errors)
+            }
+          } catch (stockErr) {
+            console.error("Paystack webhook stock reduction crashed (non-fatal):", stockErr)
+          }
+        }
+      }
 
       await supabase.from("webhook_logs").insert({
         provider: "paystack",

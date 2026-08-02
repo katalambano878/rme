@@ -4,11 +4,83 @@ import {
   applyPostgrestParams,
 } from "@/lib/db/supabase-compat";
 import { isPlainPostgres } from "@/lib/db/mode";
+import { verifyAccessToken } from "@/lib/db/auth";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 const PG_IDENT = /^[a-z_][a-z0-9_]*$/i;
+
+/** Catalog/content tables safe for anonymous storefront reads (RLS replacement). */
+const PUBLIC_READ_TABLES = new Set([
+  "products",
+  "product_images",
+  "variants",
+  "categories",
+  "collections",
+  "collection_products",
+  "blog_posts",
+  "home_content",
+  "site_settings",
+  "storefront_settings",
+  "reviews",
+  "testimonials",
+  "occasions",
+  "discounts",
+  "attributes",
+  "attribute_values",
+]);
+
+type RestAuth =
+  | { ok: true; role: string | null; service: boolean }
+  | { ok: false; status: number; message: string };
+
+async function authorizeRest(
+  req: NextRequest,
+  opts: { write: boolean; table: string },
+): Promise<RestAuth> {
+  const authHeader = req.headers.get("authorization") || "";
+  const bearer = authHeader.match(/^Bearer\s+(.+)$/i)?.[1]?.trim() || "";
+  const apikey = req.headers.get("apikey")?.trim() || "";
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
+
+  if (serviceKey && (bearer === serviceKey || apikey === serviceKey)) {
+    return { ok: true, role: "service", service: true };
+  }
+
+  if (bearer) {
+    const verified = await verifyAccessToken(bearer);
+    if (!verified) {
+      return { ok: false, status: 401, message: "Invalid or expired JWT" };
+    }
+    const role =
+      (verified.payload.app_metadata as { role?: string } | undefined)?.role ||
+      null;
+    const staff = role === "admin" || role === "staff" || role === "superadmin";
+    if (opts.write && !staff) {
+      return { ok: false, status: 403, message: "Staff role required for writes" };
+    }
+    if (!opts.write && !PUBLIC_READ_TABLES.has(opts.table) && !staff) {
+      // Authenticated customers may read non-public tables only if staff for now
+      // (customer order history uses dedicated API routes, not open REST).
+      return { ok: false, status: 403, message: "Not allowed for this table" };
+    }
+    return { ok: true, role, service: false };
+  }
+
+  // Anonymous storefront reads for catalog/content tables only
+  if (!opts.write && PUBLIC_READ_TABLES.has(opts.table)) {
+    return { ok: true, role: null, service: false };
+  }
+
+  return {
+    ok: false,
+    status: 401,
+    message: opts.write
+      ? "Authorization required for writes"
+      : "Authorization required for this table",
+  };
+}
 
 function corsHeaders(): HeadersInit {
   return {
@@ -55,6 +127,9 @@ export async function GET(
   const { table } = await ctx.params;
   if (!PG_IDENT.test(table)) return jsonError("Invalid table");
 
+  const authz = await authorizeRest(req, { write: false, table });
+  if (!authz.ok) return jsonError(authz.message, authz.status);
+
   const client = createClient();
   const qb = client.from(table);
   const select = req.nextUrl.searchParams.get("select") || "*";
@@ -100,6 +175,9 @@ export async function POST(
   const { table } = await ctx.params;
   if (!PG_IDENT.test(table)) return jsonError("Invalid table");
 
+  const authz = await authorizeRest(req, { write: true, table });
+  if (!authz.ok) return jsonError(authz.message, authz.status);
+
   const body = await req.json().catch(() => null);
   if (body == null) return jsonError("Invalid JSON body");
 
@@ -129,6 +207,9 @@ export async function PATCH(
   const { table } = await ctx.params;
   if (!PG_IDENT.test(table)) return jsonError("Invalid table");
 
+  const authz = await authorizeRest(req, { write: true, table });
+  if (!authz.ok) return jsonError(authz.message, authz.status);
+
   const body = await req.json().catch(() => null);
   if (body == null || typeof body !== "object") return jsonError("Invalid JSON body");
 
@@ -155,6 +236,9 @@ export async function DELETE(
   }
   const { table } = await ctx.params;
   if (!PG_IDENT.test(table)) return jsonError("Invalid table");
+
+  const authz = await authorizeRest(req, { write: true, table });
+  if (!authz.ok) return jsonError(authz.message, authz.status);
 
   const client = createClient();
   let qb = client.from(table).delete();

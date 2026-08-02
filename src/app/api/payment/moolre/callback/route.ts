@@ -269,13 +269,48 @@ export async function POST(req: Request) {
             // Payment failed
             console.log(`[Callback] Payment FAILED for ${merchantOrderRef} | Status: ${apiStatus} | TX: ${txStatus}`);
 
-            await supabaseAdmin
+            const paidFulfillmentStatuses = [
+                'paid', 'processing', 'shipped', 'out_for_delivery', 'delivered',
+            ] as const;
+
+            const { data: failedOrder } = await supabaseAdmin
                 .from('orders')
-                .update({
-                    status: 'pending',
-                    updated_at: new Date().toISOString(),
-                })
-                .eq('order_number', merchantOrderRef);
+                .select('id, status')
+                .eq('order_number', merchantOrderRef)
+                .maybeSingle();
+
+            if (
+                failedOrder &&
+                paidFulfillmentStatuses.includes(
+                    failedOrder.status as (typeof paidFulfillmentStatuses)[number],
+                )
+            ) {
+                console.log(
+                    '[Callback] Order already in paid fulfillment status, skipping downgrade:',
+                    merchantOrderRef,
+                );
+                return NextResponse.json({ success: false, message: 'Payment not successful' });
+            }
+
+            if (failedOrder) {
+                await supabaseAdmin
+                    .from('orders')
+                    .update({
+                        status: 'pending',
+                        updated_at: new Date().toISOString(),
+                    })
+                    .eq('order_number', merchantOrderRef);
+
+                await supabaseAdmin
+                    .from('payments')
+                    .update({
+                        status: 'failed',
+                        updated_at: new Date().toISOString(),
+                        raw_payload: body,
+                    })
+                    .eq('order_id', failedOrder.id)
+                    .neq('status', 'paid');
+            }
 
             return NextResponse.json({ success: false, message: 'Payment not successful' });
         }
