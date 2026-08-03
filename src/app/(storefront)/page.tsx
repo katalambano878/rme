@@ -61,10 +61,10 @@ export default async function HomePage() {
       <CategoriesRow categories={categories} />
 
       {featuredProducts.length > 0 && (
-        <TrendingCarousel products={featuredProducts} />
+        <TrendingCarousel products={featuredProducts} className="pt-0 sm:pt-4" />
       )}
 
-      <Section className="bg-rose-light">
+      <Section className="bg-rose-light pt-12 sm:pt-16">
         <Container>
           <FeaturedCollections
             newArrivals={newArrivals}

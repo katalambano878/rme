@@ -11,7 +11,7 @@ export type CategoriesRowProps = {
 
 export function CategoriesRow({ categories }: CategoriesRowProps) {
   return (
-    <Section className="bg-white pb-24 pt-20 sm:pb-32 sm:pt-28">
+    <Section className="bg-white pb-10 pt-20 sm:pb-14 sm:pt-28">
       <Container>
         <div className="mb-14 flex flex-col gap-6 sm:mb-16 sm:flex-row sm:items-end sm:justify-between sm:gap-8">
           <div className="min-w-0 max-w-3xl">

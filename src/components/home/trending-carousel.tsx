@@ -8,12 +8,14 @@ import { Section } from "@/components/shared/section"
 import { Heading } from "@/components/shared/heading"
 import { ProductCard } from "@/components/shared/product-card"
 import type { Product } from "@/types/product"
+import { cn } from "@/lib/utils"
 
 export type TrendingCarouselProps = {
   products: Product[]
+  className?: string
 }
 
-export function TrendingCarousel({ products }: TrendingCarouselProps) {
+export function TrendingCarousel({ products, className }: TrendingCarouselProps) {
   const scrollRef = useRef<HTMLDivElement>(null)
   const trending = products.slice(0, 6)
 
@@ -28,9 +30,9 @@ export function TrendingCarousel({ products }: TrendingCarouselProps) {
   if (trending.length === 0) return null
 
   return (
-    <Section className="overflow-hidden">
+    <Section className={cn("overflow-hidden", className)}>
       <Container>
-        <div className="mb-10 flex items-end justify-between">
+        <div className="mb-8 flex items-end justify-between sm:mb-10">
           <Heading as="h2" subtitle="What's hot right now" className="mb-0">
             Trending Now
           </Heading>
