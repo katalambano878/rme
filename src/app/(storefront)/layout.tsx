@@ -4,6 +4,9 @@ import { Footer } from "@/components/layout/footer"
 import { CartDrawer } from "@/components/layout/cart-drawer"
 import { fetchStorefrontAnnouncement } from "@/lib/storefront-content"
 
+/** Storefront reads live Postgres — never statically prerender against build-time DB. */
+export const dynamic = "force-dynamic"
+
 export default async function StorefrontLayout({
   children,
 }: {

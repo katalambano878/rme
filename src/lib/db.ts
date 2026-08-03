@@ -24,14 +24,26 @@ function createPool() {
       ? { rejectUnauthorized: process.env.DATABASE_SSL_REJECT_UNAUTHORIZED !== "false" }
       : undefined
 
-  return new Pool({
+  // Do not pass statement_timeout as a libpq startup option — PgBouncer rejects it
+  // ("unsupported startup parameter: statement_timeout"). Set per-session after connect.
+  const pool = new Pool({
     connectionString,
     max: Number(process.env.DATABASE_POOL_MAX || 20),
     idleTimeoutMillis: Number(process.env.DATABASE_IDLE_TIMEOUT_MS || 30_000),
     connectionTimeoutMillis: Number(process.env.DATABASE_CONNECT_TIMEOUT_MS || 10_000),
-    statement_timeout: Number(process.env.DATABASE_STATEMENT_TIMEOUT_MS || 30_000),
     ssl,
   })
+
+  const statementTimeoutMs = Number(process.env.DATABASE_STATEMENT_TIMEOUT_MS || 30_000)
+  if (Number.isFinite(statementTimeoutMs) && statementTimeoutMs > 0) {
+    pool.on("connect", (client) => {
+      void client.query(`SET statement_timeout TO ${Math.floor(statementTimeoutMs)}`).catch(() => {
+        /* pgbouncer/session may ignore — non-fatal */
+      })
+    })
+  }
+
+  return pool
 }
 
 export function getPool(): Pool {

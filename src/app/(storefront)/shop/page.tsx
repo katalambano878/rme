@@ -18,10 +18,16 @@ export default async function ShopPage({
       ? sp.category.trim().toLowerCase()
       : undefined
 
-  const [products, categories] = await Promise.all([
-    fetchActiveProducts(),
-    fetchStorefrontCategoriesWithCounts(),
-  ])
+  let products: Awaited<ReturnType<typeof fetchActiveProducts>> = []
+  let categories: Awaited<ReturnType<typeof fetchStorefrontCategoriesWithCounts>> = []
+  try {
+    ;[products, categories] = await Promise.all([
+      fetchActiveProducts(),
+      fetchStorefrontCategoriesWithCounts(),
+    ])
+  } catch (err) {
+    console.error("[shop] catalog failed:", err)
+  }
 
   const maxPay = products.length
     ? Math.max(...products.map((p) => p.salePrice ?? p.price))
