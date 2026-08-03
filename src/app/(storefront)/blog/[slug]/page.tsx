@@ -230,8 +230,8 @@ export default function BlogPostPage({
                   Editorial
                 </p>
                 <p className="mt-0.5 text-sm text-muted-foreground">
-                  Beauty insights and skincare guidance from our curation team,
-                  written for everyday routines and real results.
+                  Tips and updates from the Trust Ecom team to help you shop
+                  with confidence.
                 </p>
               </div>
             </div>

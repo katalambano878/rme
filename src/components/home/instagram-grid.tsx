@@ -26,15 +26,23 @@ const pop = {
 }
 
 export function InstagramGrid() {
+  if (!INSTAGRAM_URL && !INSTAGRAM_HANDLE) {
+    return null
+  }
+
+  const heading = INSTAGRAM_HANDLE
+    ? `Follow ${INSTAGRAM_HANDLE}`
+    : "Follow Us"
+
   return (
     <Section>
       <Container>
         <Heading
           as="h2"
-          subtitle="Join our community of confident women"
+          subtitle="Join our community and stay up to date"
           align="center"
         >
-          Follow {INSTAGRAM_HANDLE}
+          {heading}
         </Heading>
 
         <motion.div
@@ -43,24 +51,46 @@ export function InstagramGrid() {
           viewport={{ once: true, margin: "-50px" }}
           className="grid grid-cols-3 gap-3 sm:gap-4 lg:grid-cols-6"
         >
-          {tiles.map((gradient, i) => (
-            <motion.a
-              key={i}
-              variants={pop}
-              href={INSTAGRAM_URL}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="group relative aspect-square overflow-hidden rounded-xl"
-            >
-              <div className={cn("absolute inset-0 bg-gradient-to-br", gradient)} />
-              <div className="absolute inset-0 flex flex-col items-center justify-center bg-navy/0 transition-colors duration-300 group-hover:bg-navy/30">
-                <Camera className="size-6 text-white opacity-0 transition-all duration-300 group-hover:opacity-100" />
-                <span className="mt-1 text-xs font-medium text-white opacity-0 transition-all duration-300 group-hover:opacity-100">
-                  View Post
-                </span>
-              </div>
-            </motion.a>
-          ))}
+          {tiles.map((gradient, i) => {
+            const inner = (
+              <>
+                <div className={cn("absolute inset-0 bg-gradient-to-br", gradient)} />
+                {INSTAGRAM_URL ? (
+                  <div className="absolute inset-0 flex flex-col items-center justify-center bg-navy/0 transition-colors duration-300 group-hover:bg-navy/30">
+                    <Camera className="size-6 text-white opacity-0 transition-all duration-300 group-hover:opacity-100" />
+                    <span className="mt-1 text-xs font-medium text-white opacity-0 transition-all duration-300 group-hover:opacity-100">
+                      View Post
+                    </span>
+                  </div>
+                ) : null}
+              </>
+            )
+
+            if (INSTAGRAM_URL) {
+              return (
+                <motion.a
+                  key={i}
+                  variants={pop}
+                  href={INSTAGRAM_URL}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="group relative aspect-square overflow-hidden rounded-xl"
+                >
+                  {inner}
+                </motion.a>
+              )
+            }
+
+            return (
+              <motion.div
+                key={i}
+                variants={pop}
+                className="relative aspect-square overflow-hidden rounded-xl"
+              >
+                {inner}
+              </motion.div>
+            )
+          })}
         </motion.div>
       </Container>
     </Section>

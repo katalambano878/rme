@@ -5,7 +5,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname, useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
-import { BRAND_LOGO_ALT, BRAND_LOGO_SRC } from '@/lib/brand';
+import { BRAND_LOGO_ALT, BRAND_LOGO_SRC, BRAND_NAME } from '@/lib/brand';
 import { canAccessAdminPanel, canManageStaffRoles } from '@/lib/admin-role-access';
 import { firstAccessibleAdminPath, staffCanAccessPath } from '@/lib/staff-permissions';
 
@@ -166,7 +166,7 @@ export default function AdminLayout({
   };
 
   if (isLoading) {
-    return <div className="min-h-screen flex items-center justify-center bg-gray-50 text-gray-500">Loading Admin...</div>;
+    return <div className="min-h-screen flex items-center justify-center bg-gray-50 text-gray-500">Loading {BRAND_NAME} Admin...</div>;
   }
 
   const menuItems: {
@@ -333,7 +333,7 @@ export default function AdminLayout({
         <div className="h-full px-3 py-5 overflow-y-auto text-[13px] leading-snug">
           <Link href="/admin" className="flex items-center gap-2 mb-6 px-2 cursor-pointer">
             <Image src={BRAND_LOGO_SRC} alt={BRAND_LOGO_ALT} width={56} height={18} className="h-5 w-auto object-contain" style={{ width: 'auto', height: 'auto' }} />
-            <span className="text-[10px] font-semibold text-gray-500 tracking-wide">ADMIN</span>
+            <span className="text-[10px] font-semibold text-gray-500 tracking-wide truncate">{BRAND_NAME} Admin</span>
           </Link>
 
           <nav className="space-y-0.5">

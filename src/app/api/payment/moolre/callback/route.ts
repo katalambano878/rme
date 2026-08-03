@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase-admin';
-import { sendOrderConfirmation } from '@/lib/notifications';
 import { checkRateLimit, getClientIdentifier, RATE_LIMITS } from '@/lib/rate-limit';
-import { reduceOrderStock } from '@/lib/order-stock';
+import { fulfillPaidOrder } from '@/lib/payments/fulfill-paid-order';
+import { normalizeMoolreStatus } from '@/lib/payments/status';
 
 /**
  * Moolre Callback Payload Structure (actual API response):
@@ -80,21 +80,18 @@ export async function POST(req: Request) {
         } catch { /* non-fatal */ }
 
         // ============================================================
-        // SECURITY: Callback secret — always required
-        // MOOLRE_CALLBACK_SECRET must be set in env AND must match payload.
-        // Reject the request if either side is missing or mismatched.
+        // SECURITY: Callback secret — always required on both sides.
+        // Never accept callbacks when MOOLRE_CALLBACK_SECRET is unset,
+        // or when the payload secret is missing/mismatched.
         // ============================================================
-        const expectedSecret = process.env.MOOLRE_CALLBACK_SECRET;
-        if (body.secret && expectedSecret && body.secret !== expectedSecret) {
-            // Secret was sent but doesn't match — reject as potential spoofing attempt
-            console.error('[Callback] SECRET MISMATCH — received:', String(body.secret).substring(0, 8) + '...');
-            return NextResponse.json({ error: 'Invalid callback secret' }, { status: 403 });
+        const expectedSecret = process.env.MOOLRE_CALLBACK_SECRET?.trim();
+        if (!expectedSecret) {
+            console.error('[Callback] MOOLRE_CALLBACK_SECRET is not configured — rejecting all callbacks');
+            return NextResponse.json({ error: 'Callback verification not configured' }, { status: 503 });
         }
-        if (!body.secret) {
-            // Moolre does not always include the secret in callback payloads — allow through
-            console.warn('[Callback] No secret in payload — proceeding without secret verification');
-        } else {
-            console.log('[Callback] Secret verified OK');
+        if (!body.secret || String(body.secret) !== expectedSecret) {
+            console.error('[Callback] SECRET MISSING OR MISMATCH');
+            return NextResponse.json({ error: 'Invalid callback secret' }, { status: 403 });
         }
 
         // ============================================================
@@ -125,7 +122,6 @@ export async function POST(req: Request) {
         // data.txstatus === 1 → transaction was successful (actual Moolre field name)
         const apiStatus = body.status;
         const txStatus  = data.txstatus ?? data.txtstatus;
-        const messageStr = String(body.message || '').toLowerCase();
 
         console.log('[Callback] Order ref:', merchantOrderRef,
             '| API status:', apiStatus,
@@ -138,14 +134,16 @@ export async function POST(req: Request) {
             return NextResponse.json({ success: false, message: 'Missing order reference' }, { status: 400 });
         }
 
-        const apiOk = (apiStatus === 1 || apiStatus === '1');
-        const txOk  = (txStatus  === 1 || txStatus  === '1');
-        const isSuccess = (apiOk || txOk) && !messageStr.includes('fail') && !messageStr.includes('error');
+        const internal = normalizeMoolreStatus({
+            apiStatus,
+            txStatus,
+            message: body.message,
+        });
+        const isSuccess = internal === 'successful';
 
         if (isSuccess) {
             console.log(`[Callback] Payment SUCCESS for Order ${merchantOrderRef}`);
 
-            // Only select columns that exist in the schema
             const { data: existingOrder, error: fetchError } = await supabaseAdmin
                 .from('orders')
                 .select('id, order_number, grand_total, guest_email, guest_phone, shipping_address, payments(status)')
@@ -157,19 +155,6 @@ export async function POST(req: Request) {
                 return NextResponse.json({ success: false, message: 'Order not found' }, { status: 404 });
             }
 
-            // Idempotency — skip if already paid
-            const alreadyPaid = (existingOrder.payments as { status: string }[] | null)?.some(
-                (p) => p.status === 'paid' || p.status === 'completed'
-            );
-            if (alreadyPaid) {
-                console.log('[Callback] Order already paid, skipping:', merchantOrderRef);
-                return NextResponse.json({ success: true, message: 'Order already processed' });
-            }
-
-            // ============================================================
-            // SECURITY: Verify amount — always required, always checked
-            // Reject if amount is missing from callback payload or mismatches.
-            // ============================================================
             const rawAmount = data.amount ?? body.amount ?? null;
             if (rawAmount === null || rawAmount === undefined || rawAmount === '') {
                 console.error('[Callback] AMOUNT MISSING — REJECTING! Order:', merchantOrderRef);
@@ -179,91 +164,31 @@ export async function POST(req: Request) {
                 }, { status: 400 });
             }
             const callbackAmount = parseFloat(String(rawAmount));
-            const expectedAmount = Number(existingOrder.grand_total);
-            if (isNaN(callbackAmount) || Math.abs(callbackAmount - expectedAmount) > 0.01) {
-                console.error('[Callback] AMOUNT MISMATCH — REJECTING! Expected:', expectedAmount, 'Got:', callbackAmount, 'Order:', merchantOrderRef);
-                return NextResponse.json({
-                    success: false,
-                    message: 'Payment amount does not match order total'
-                }, { status: 400 });
+
+            const result = await fulfillPaidOrder(supabaseAdmin, {
+                orderId: existingOrder.id,
+                orderNumber: existingOrder.order_number,
+                provider: 'moolre',
+                providerRef: String(moolreReference),
+                expectedAmount: Number(existingOrder.grand_total),
+                paidAmount: callbackAmount,
+                guestEmail: existingOrder.guest_email,
+                guestPhone: existingOrder.guest_phone,
+                shippingAddress: existingOrder.shipping_address,
+                rawPayload: body,
+            });
+
+            if (!result.ok) {
+                return NextResponse.json(
+                    { success: false, message: result.error || 'Fulfillment failed' },
+                    { status: result.statusCode || 500 },
+                );
             }
 
-            // Upsert payments record
-            const { data: existingPay } = await supabaseAdmin
-                .from('payments')
-                .select('id')
-                .eq('order_id', existingOrder.id)
-                .eq('provider', 'moolre')
-                .maybeSingle();
-
-            const payPayload = {
-                order_id:     existingOrder.id,
-                provider:     'moolre' as const,
-                provider_ref: String(moolreReference),
-                amount:       Number(existingOrder.grand_total),
-                currency:     'GHS',
-                status:       'paid' as const,
-                updated_at:   new Date().toISOString(),
-                raw_payload:  body,
-            };
-
-            if (existingPay?.id) {
-                const { error: updatePayErr } = await supabaseAdmin
-                    .from('payments').update(payPayload).eq('id', existingPay.id);
-                if (updatePayErr) console.error('[Callback] Payment update error:', updatePayErr.message);
-            } else {
-                const { error: insertPayErr } = await supabaseAdmin
-                    .from('payments').insert(payPayload);
-                if (insertPayErr) console.error('[Callback] Payment insert error:', insertPayErr.message);
-            }
-
-            const { error: orderUpdateErr } = await supabaseAdmin
-                .from('orders')
-                .update({ status: 'paid', updated_at: new Date().toISOString() })
-                .eq('id', existingOrder.id);
-            if (orderUpdateErr) console.error('[Callback] Order status update error:', orderUpdateErr.message);
-
-            // Reduce stock for each item in the order (idempotent, non-fatal).
-            // The previous rpc('reduce_order_stock') wrapped in try/catch was a no-op:
-            // supabase.rpc returns { data, error } and never throws, so all errors
-            // were silently swallowed. The helper below logs every step explicitly.
-            try {
-                const stockResult = await reduceOrderStock(supabaseAdmin, existingOrder.id);
-                if (stockResult.skipped) {
-                    console.log('[Callback] Stock reduction skipped (already reduced) for', merchantOrderRef);
-                } else {
-                    console.log(
-                        '[Callback] Stock reduced for', merchantOrderRef,
-                        '— items:', JSON.stringify(stockResult.items),
-                    );
-                    if (stockResult.errors.length) {
-                        console.error('[Callback] Stock reduction errors:', stockResult.errors);
-                    }
-                }
-            } catch (stockErr: any) {
-                console.error('[Callback] Stock reduction crashed (non-fatal):', stockErr?.message);
-            }
-
-            console.log('[Callback] Order marked paid:', merchantOrderRef);
-
-            // Send email + SMS notifications
-            try {
-                const orderForNotification = {
-                    ...existingOrder,
-                    // Map guest_email/guest_phone → email/phone for sendOrderConfirmation
-                    email: existingOrder.guest_email,
-                    phone: existingOrder.guest_phone,
-                    total: existingOrder.grand_total,
-                    created_at: new Date().toISOString(),
-                };
-                console.log('[Callback] Sending notifications for:', merchantOrderRef);
-                await sendOrderConfirmation(orderForNotification);
-                console.log('[Callback] Notifications sent!');
-            } catch (notifyError: any) {
-                console.error('[Callback] Notification failed (non-fatal):', notifyError.message);
-            }
-
-            return NextResponse.json({ success: true, message: 'Payment verified and Order Updated' });
+            return NextResponse.json({
+                success: true,
+                message: result.alreadyPaid ? 'Order already processed' : 'Payment verified and Order Updated',
+            });
 
         } else {
             // Payment failed

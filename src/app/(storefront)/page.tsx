@@ -5,24 +5,21 @@ import { HeroSection } from "@/components/home/hero-section"
 const siteUrl = `https://${SITE_DOMAIN}`
 
 export const metadata: Metadata = {
-  title: `${BRAND_NAME} — Beauty & Skincare Essentials`,
-  description: `Shop ${BRAND_LEGAL_NAME} — premium skincare, lip care, body care, makeup, hair products, and baby essentials in Ghana. Fast delivery across Accra and beyond. ${BRAND_TAGLINE}`,
+  title: `${BRAND_NAME} — Online Store`,
+  description: `Shop ${BRAND_LEGAL_NAME} — quality products, secure checkout, and reliable delivery. ${BRAND_TAGLINE}`,
   keywords: [
     `${BRAND_NAME} online store`,
-    "buy beauty products Ghana",
-    "skincare Ghana",
-    "lip gloss Ghana",
-    "body lotion Ghana",
-    "makeup Ghana",
-    "beauty store Accra",
-    "online cosmetics Ghana",
+    "ecommerce",
+    "online shopping",
+    "shop online",
+    "Trust Ecom",
   ],
   alternates: {
     canonical: siteUrl,
   },
   openGraph: {
-    title: `${BRAND_NAME} — Beauty & Skincare Essentials`,
-    description: `Shop ${BRAND_LEGAL_NAME} — premium beauty products delivered in Ghana. Skincare, lip care, makeup & more. ${BRAND_TAGLINE}`,
+    title: `${BRAND_NAME} — Online Store`,
+    description: `Shop ${BRAND_LEGAL_NAME} — quality products and secure checkout. ${BRAND_TAGLINE}`,
     url: siteUrl,
     type: "website",
     images: [{ url: "/opengraph-image.png", alt: `${BRAND_NAME} homepage` }],

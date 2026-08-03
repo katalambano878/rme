@@ -12,21 +12,26 @@ import {
   AccordionContent,
 } from "@/components/ui/accordion"
 import { formatFreeShippingMinimumLabel } from "@/lib/utils"
+import { BRAND_NAME, CONTACT_EMAIL, PHONE_DISPLAY_PRIMARY } from "@/lib/brand"
+
+const trackingContact = PHONE_DISPLAY_PRIMARY
+  ? `If your tracking hasn't updated in over 48 hours, please contact us at ${PHONE_DISPLAY_PRIMARY}.`
+  : `If your tracking hasn't updated in over 48 hours, please contact us at ${CONTACT_EMAIL}.`
 
 const sections = [
   {
     value: "delivery-areas",
     icon: MapPin,
     title: "Delivery Areas",
-    content: `RonnyandMe currently delivers across all regions of Ghana. Our primary delivery zones include:
+    content: `${BRAND_NAME} delivers nationwide. Delivery times vary by location and are confirmed at checkout.
 
-**Greater Accra** — Standard delivery within 1–2 business days. Same-day delivery available for orders placed before 12:00 PM within Accra Metropolitan Area.
+**Urban areas** — Standard delivery within 1–3 business days.
 
-**Kumasi, Takoradi & Cape Coast** — Delivery within 2–3 business days via our trusted courier partners.
+**Regional areas** — Delivery within 3–5 business days via trusted courier partners.
 
-**All Other Regions** — Delivery within 3–5 business days, including Tamale, Ho, Sunyani, Koforidua, and surrounding areas.
+**Remote areas** — Delivery times may be longer depending on location and courier availability.
 
-We also deliver to university campuses, office complexes, and gated communities. A valid phone number is required for all deliveries.`,
+A valid phone number is required for all deliveries.`,
   },
   {
     value: "shipping-rates",
@@ -34,15 +39,13 @@ We also deliver to university campuses, office complexes, and gated communities.
     title: "Shipping Rates",
     content: `We offer competitive, transparent shipping rates:
 
-**Free Shipping** — All orders over ${formatFreeShippingMinimumLabel()} qualify for free standard delivery nationwide.
+**Free Shipping** — All orders over ${formatFreeShippingMinimumLabel()} qualify for free standard delivery where available.
 
-**Standard Delivery (Accra)** — GH₵ 25
+**Standard Delivery** — Rates are calculated at checkout based on your delivery address and order weight.
 
-**Standard Delivery (Other Regions)** — GH₵ 40 – GH₵ 60, depending on location.
+**Express Delivery** — Available in select areas. Rates and availability are shown at checkout.
 
-**Express Delivery (Accra Only)** — GH₵ 50 for same-day or next-day delivery.
-
-Shipping rates are calculated at checkout based on your delivery address and order weight. Gift-wrapped orders may incur a small additional fee for premium packaging.`,
+Shipping rates are calculated at checkout based on your delivery address and order weight.`,
   },
   {
     value: "processing-time",
@@ -52,9 +55,9 @@ Shipping rates are calculated at checkout based on your delivery address and ord
 
 **Standard Processing** — Orders placed before 2:00 PM on weekdays are processed the same day. Orders placed after 2:00 PM or on weekends are processed the next business day.
 
-**Pre-Order & Limited Items** — Some limited-edition or pre-order items may have extended processing times of 3–7 business days. This will be clearly noted on the product page.
+**Pre-Order Items** — Some items may have extended processing times. This will be clearly noted on the product page.
 
-**Peak Periods** — During holidays (Christmas, Valentine's Day, Mother's Day), processing may take an additional 1–2 business days due to high demand. We recommend ordering early during these periods.`,
+**Peak Periods** — During holidays, processing may take an additional 1–2 business days due to high demand.`,
   },
   {
     value: "tracking",
@@ -62,7 +65,7 @@ Shipping rates are calculated at checkout based on your delivery address and ord
     title: "Order Tracking",
     content: `Stay informed every step of the way:
 
-Once your order is dispatched, you'll receive an SMS and email notification with your tracking details.
+Once your order is dispatched, you'll receive an SMS and email notification with your tracking details when available.
 
 You can track your order anytime by visiting our **Track Your Order** page and entering your order number and the email or phone number used at checkout.
 
@@ -72,24 +75,20 @@ Our tracking statuses include:
 — **Shipped** – Your order is en route with our courier partner.
 — **Delivered** – Your order has been successfully delivered.
 
-If your tracking hasn't updated in over 48 hours, please contact us via WhatsApp at +233 59 270 7791.`,
+${trackingContact}`,
   },
   {
     value: "international",
     icon: Globe,
     title: "International Shipping",
-    content: `We're expanding our reach beyond Ghana. International shipping is currently available to select countries in West Africa and the United Kingdom.
-
-**West Africa (Nigeria, Côte d'Ivoire, Togo)** — Delivery within 5–7 business days. Rates start from GH₵ 120.
-
-**United Kingdom** — Delivery within 7–14 business days. Rates start from GH₵ 250.
+    content: `International shipping may be available to select destinations. Contact us for availability and rates.
 
 **Important Notes:**
 — International orders may be subject to customs duties and import taxes, which are the responsibility of the recipient.
-— All international shipments include a tracking number.
+— All international shipments include a tracking number when available.
 — For bulk or corporate international orders, please contact us directly for a custom quote.
 
-We're working to expand to more countries soon. Join our newsletter to be the first to know when we ship to your region.`,
+Join our newsletter to be the first to know when we expand to new regions.`,
   },
 ]
 
@@ -157,10 +156,10 @@ export default function ShippingPolicyPage() {
           >
             Last updated: March 2026. For any shipping inquiries, contact us at{" "}
             <a
-              href="mailto:hello@ronnyandme.com"
+              href={`mailto:${CONTACT_EMAIL}`}
               className="font-medium text-rose-primary hover:underline"
             >
-              hello@ronnyandme.com
+              {CONTACT_EMAIL}
             </a>
           </motion.p>
         </motion.div>

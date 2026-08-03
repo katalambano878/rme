@@ -6,7 +6,7 @@ import {
   fetchRelatedProducts,
 } from "@/lib/supabase/storefront-products"
 import { ProductDetailClient } from "./product-detail-client"
-import { BRAND_NAME, SITE_DOMAIN } from "@/lib/brand"
+import { BRAND_NAME, BRAND_LOGO_SRC, SITE_DOMAIN } from "@/lib/brand"
 
 const getProductDetail = cache(async (slug: string) => {
   return fetchStorefrontProductBySlug(slug)
@@ -50,7 +50,7 @@ export async function generateMetadata({
       `buy ${product.name}`,
       `${product.categoryName} Ghana`,
       BRAND_NAME,
-      "Ghana beauty",
+      "online store",
     ],
     alternates: {
       canonical: productUrl,
@@ -118,7 +118,7 @@ export default async function ProductPage({
       product.shortDescription ||
       `${product.name} — available at ${BRAND_NAME}`,
     sku: product.sku,
-    image: product.images?.length ? product.images : [`${siteUrl}/brand/ronnyandme-logo.png`],
+    image: product.images?.length ? product.images : [`${siteUrl}${BRAND_LOGO_SRC}`],
     url: `${siteUrl}/products/${product.slug}`,
     brand: {
       "@type": "Brand",

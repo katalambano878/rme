@@ -105,7 +105,7 @@ export function SearchOverlay({ open, onClose }: SearchOverlayProps) {
               <input
                 ref={inputRef}
                 type="text"
-                placeholder="Search skincare, lipglosses, makeup..."
+                placeholder="Search products..."
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 className="h-12 w-full rounded-2xl border border-rose-border bg-rose-light/30 pl-12 pr-12 font-sans text-base text-navy placeholder:text-navy/30 transition-all focus:border-rose-primary focus:outline-none focus:ring-2 focus:ring-rose-primary/20"

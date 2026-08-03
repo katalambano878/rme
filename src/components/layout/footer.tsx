@@ -18,11 +18,10 @@ import {
 } from "@/lib/brand"
 
 const shopLinks = [
-  { href: "/shop?category=baby-products", label: "Baby Products" },
-  { href: "/shop?category=hair-appliances", label: "Hair Appliances" },
-  { href: "/shop?category=hair-products", label: "Hair Products" },
-  { href: "/shop?category=makeup", label: "Makeup" },
-  { href: "/admin/login", label: "RME" },
+  { href: "/shop", label: "Shop All" },
+  { href: "/collections", label: "Collections" },
+  { href: "/blog", label: "Blog" },
+  { href: "/track-order", label: "Track Order" },
 ]
 
 const careLinks = [
@@ -36,7 +35,7 @@ const careLinks = [
 
 const aboutLinks = [
   { href: "/about", label: "Our Story" },
-  { href: "/blog", label: "Beauty Journal" },
+  { href: "/blog", label: "Blog" },
   { href: "/collections", label: "Categories" },
   { href: "/shop", label: "Shop" },
   { href: "/account", label: "My Account" },
@@ -71,7 +70,7 @@ const socials = [
       </svg>
     ),
   },
-] as const
+].filter((social) => social.href)
 
 const payments: { label: string; icon: React.ReactNode }[] = [
   {
@@ -145,7 +144,7 @@ export function Footer() {
             </h3>
             <p className="mb-4 text-sm text-white/60">
               Be the first to know about new arrivals, exclusive offers, and
-              beauty tips.
+              product tips.
             </p>
             <form
               onSubmit={(e) => {
@@ -160,11 +159,11 @@ export function Footer() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
-                className="h-9 border-white/20 bg-white/10 text-white placeholder:text-white/40 focus-visible:border-rose-300 focus-visible:ring-rose-200/40"
+                className="h-9 border-white/20 bg-white/10 text-white placeholder:text-white/40 focus-visible:border-teal-200 focus-visible:ring-teal-100/40"
               />
               <Button
                 type="submit"
-                className="h-9 w-9 shrink-0 rounded-full bg-rose-100 p-0 text-navy hover:bg-rose-200"
+                className="h-9 w-9 shrink-0 rounded-full bg-white p-0 text-navy hover:bg-teal-100"
               >
                 <Send className="size-4" />
               </Button>
@@ -214,20 +213,22 @@ export function Footer() {
             </span>
           </div>
 
-          <div className="flex items-center justify-center gap-1.5 sm:justify-end">
-            {socials.map((social) => (
-              <a
-                key={social.label}
-                href={social.href}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex size-7 items-center justify-center rounded-full bg-white/10 text-white/80 transition-colors hover:bg-white/20 hover:text-white"
-                aria-label={social.label}
-              >
-                {social.icon}
-              </a>
-            ))}
-          </div>
+          {socials.length > 0 ? (
+            <div className="flex items-center justify-center gap-1.5 sm:justify-end">
+              {socials.map((social) => (
+                <a
+                  key={social.label}
+                  href={social.href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex size-7 items-center justify-center rounded-full bg-white/10 text-white/80 transition-colors hover:bg-white/20 hover:text-white"
+                  aria-label={social.label}
+                >
+                  {social.icon}
+                </a>
+              ))}
+            </div>
+          ) : null}
         </div>
       </div>
     </footer>

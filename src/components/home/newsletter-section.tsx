@@ -30,7 +30,7 @@ export function NewsletterSection() {
             Stay in the Loop
           </h2>
           <p className="mt-4 text-base leading-relaxed text-muted-foreground sm:text-lg">
-            Be the first to know about new arrivals, exclusive offers, and style tips.
+            Be the first to know about new arrivals, exclusive offers, and product tips.
           </p>
 
           {submitted ? (
@@ -51,11 +51,11 @@ export function NewsletterSection() {
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="Enter your email address"
                 required
-                className="min-w-0 flex-1 rounded-full border border-rose-border bg-white px-5 py-3.5 text-sm text-navy placeholder:text-muted-foreground/60 transition-all focus:border-rose-300 focus:outline-none focus:ring-2 focus:ring-rose-200/40"
+                className="min-w-0 flex-1 rounded-full border border-rose-border bg-white px-5 py-3.5 text-sm text-navy placeholder:text-muted-foreground/60 transition-all focus:border-teal-300 focus:outline-none focus:ring-2 focus:ring-teal-200/40"
               />
               <button
                 type="submit"
-                className="inline-flex shrink-0 items-center gap-2 rounded-full bg-rose-100 px-6 py-3.5 text-sm font-semibold text-navy transition-all duration-300 hover:bg-rose-200 hover:shadow-md hover:shadow-rose-200/40 active:scale-[0.98]"
+                className="inline-flex shrink-0 items-center gap-2 rounded-full bg-white px-6 py-3.5 text-sm font-semibold text-navy transition-all duration-300 hover:bg-teal-100 hover:shadow-md active:scale-[0.98]"
               >
                 <Send className="size-4" />
                 <span className="hidden sm:inline">Subscribe</span>
@@ -63,18 +63,20 @@ export function NewsletterSection() {
             </form>
           )}
 
-          <div className="mt-6 flex items-center justify-center gap-1.5 text-sm text-muted-foreground">
-            <span>Or chat with us on</span>
-            <a
-              href={WHATSAPP_URL}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1 font-semibold text-emerald-600 transition-colors hover:text-emerald-500"
-            >
-              <MessageCircle className="size-4" />
-              WhatsApp
-            </a>
-          </div>
+          {WHATSAPP_URL ? (
+            <div className="mt-6 flex items-center justify-center gap-1.5 text-sm text-muted-foreground">
+              <span>Or chat with us on</span>
+              <a
+                href={WHATSAPP_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 font-semibold text-emerald-600 transition-colors hover:text-emerald-500"
+              >
+                <MessageCircle className="size-4" />
+                WhatsApp
+              </a>
+            </div>
+          ) : null}
         </motion.div>
       </Container>
     </Section>

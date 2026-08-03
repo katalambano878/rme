@@ -5,12 +5,22 @@ import { Container } from "@/components/shared/container"
 import { Section } from "@/components/shared/section"
 import { Heading } from "@/components/shared/heading"
 import { Separator } from "@/components/ui/separator"
+import {
+  BRAND_LEGAL_NAME,
+  BRAND_NAME,
+  CONTACT_EMAIL,
+  PHONE_DISPLAY_PRIMARY,
+} from "@/lib/brand"
+
+const contactLine = PHONE_DISPLAY_PRIMARY
+  ? `For privacy-related questions or requests, contact us at ${CONTACT_EMAIL} or ${PHONE_DISPLAY_PRIMARY}.`
+  : `For privacy-related questions or requests, contact us at ${CONTACT_EMAIL}.`
 
 const sections = [
   {
     title: "1. Information We Collect",
     paragraphs: [
-      "At RONNY&ME, we value your privacy and are committed to protecting your personal information. This Privacy Policy explains how we collect, use, and safeguard your data when you visit our website or make a purchase.",
+      `At ${BRAND_LEGAL_NAME}, we value your privacy and are committed to protecting your personal information. This Privacy Policy explains how we collect, use, and safeguard your data when you visit our website or make a purchase.`,
       "We may collect details such as your name, email, phone number, delivery address, billing details, order history, and records of your communication with us.",
       "We also collect technical information like IP address, browser type, device type, and on-site activity to help secure and improve the website.",
     ],
@@ -36,7 +46,7 @@ const sections = [
     paragraphs: [
       "We do not sell your personal information. We may share limited data with trusted providers that help us run the store, including payment processors, delivery partners, analytics providers, and communication tools.",
       "These providers only receive data needed to perform their services and are expected to handle your information securely.",
-      "We may also disclose information where required by law, court order, or to protect the rights, safety, and operations of RONNY&ME.",
+      `We may also disclose information where required by law, court order, or to protect the rights, safety, and operations of ${BRAND_LEGAL_NAME}.`,
     ],
   },
   {
@@ -51,7 +61,7 @@ const sections = [
     title: "6. Your Rights & Contact",
     paragraphs: [
       "You may contact us to request access, correction, or deletion of your personal data, subject to applicable legal requirements.",
-      "For privacy-related questions or requests, contact us at ronnyandme25@gmail.com or +233 59 270 7791.",
+      contactLine,
       "We may update this Privacy Policy from time to time, and changes will be posted on this page with an updated date.",
     ],
   },
@@ -79,7 +89,7 @@ export default function PrivacyPolicyPage() {
           <Heading
             as="h1"
             align="center"
-            subtitle="At RONNY&ME, we value your privacy and are committed to protecting your personal information."
+            subtitle={`At ${BRAND_NAME}, we value your privacy and are committed to protecting your personal information.`}
           >
             Privacy Policy
           </Heading>
@@ -131,10 +141,10 @@ export default function PrivacyPolicyPage() {
             <p className="text-sm text-muted-foreground">
               If you have questions about this Privacy Policy, contact us at{" "}
               <a
-                href="mailto:ronnyandme25@gmail.com"
+                href={`mailto:${CONTACT_EMAIL}`}
                 className="font-medium text-rose-primary hover:underline"
               >
-                ronnyandme25@gmail.com
+                {CONTACT_EMAIL}
               </a>
             </p>
           </motion.div>

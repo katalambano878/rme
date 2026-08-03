@@ -5,13 +5,11 @@ const siteUrl = `https://${SITE_DOMAIN}`
 
 export const metadata: Metadata = {
   title: "All Collections",
-  description: `Explore all beauty collections at ${BRAND_NAME} — Skincare, Lip Care, Body Care, Makeup, Hair Products, Baby Products, and more. Shop by category to find what works for you.`,
+  description: `Explore all product collections at ${BRAND_NAME}. Shop by category to find what you need.`,
   keywords: [
-    "beauty collections Ghana",
-    "skincare collection",
-    "lip care collection",
-    "body care Ghana",
-    "makeup collection Ghana",
+    "product collections",
+    "shop by category",
+    "online store",
     `${BRAND_NAME} collections`,
   ],
   alternates: {
@@ -19,7 +17,7 @@ export const metadata: Metadata = {
   },
   openGraph: {
     title: `Collections | ${BRAND_NAME}`,
-    description: `Browse all ${BRAND_NAME} beauty collections — curated skincare, lip care, makeup, body care, and more.`,
+    description: `Browse all ${BRAND_NAME} product collections — organized by category for easy shopping.`,
     url: `${siteUrl}/collections`,
     type: "website",
   },

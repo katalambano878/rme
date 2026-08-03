@@ -93,6 +93,33 @@ export async function POST(req: Request) {
       payload.secret = process.env.MOOLRE_CALLBACK_SECRET
     }
 
+    // Persist pending payment with the exact externalref used for later verify/status
+    const { data: existingPay } = await supabase
+      .from("payments")
+      .select("id")
+      .eq("order_id", order.id)
+      .eq("provider", "moolre")
+      .maybeSingle()
+
+    const pendingPayload = {
+      order_id: order.id,
+      provider: "moolre" as const,
+      provider_ref: uniqueRef,
+      amount,
+      currency: "GHS",
+      status: "pending" as const,
+      updated_at: new Date().toISOString(),
+      raw_payload: { externalref: uniqueRef, original_order_number: orderRef },
+    }
+
+    if (existingPay?.id) {
+      await supabase.from("payments").update(pendingPayload).eq("id", existingPay.id).neq("status", "paid")
+    } else {
+      await supabase.from("payments").insert(pendingPayload)
+    }
+
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), 15_000)
     const response = await fetch("https://api.moolre.com/embed/link", {
       method: "POST",
       headers: {
@@ -101,7 +128,9 @@ export async function POST(req: Request) {
         "X-API-PUBKEY": process.env.MOOLRE_API_PUBKEY,
       },
       body: JSON.stringify(payload),
+      signal: controller.signal,
     })
+    clearTimeout(timer)
 
     const result = await response.json()
 
@@ -109,7 +138,8 @@ export async function POST(req: Request) {
       return NextResponse.json({
         success: true,
         url: result.data.authorization_url,
-        reference: result.data.reference,
+        reference: result.data.reference || uniqueRef,
+        externalref: uniqueRef,
       })
     }
 

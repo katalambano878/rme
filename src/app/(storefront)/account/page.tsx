@@ -26,6 +26,7 @@ import { Separator } from "@/components/ui/separator"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { Card, CardContent } from "@/components/ui/card"
+import { CONTACT_EMAIL } from "@/lib/brand"
 
 const tabs = [
   { value: "profile", label: "Profile", icon: User },
@@ -73,7 +74,7 @@ const mockAddresses = [
     line2: "Suite 4",
     city: "Example City",
     region: "Example Region",
-    phone: "059 270 7791",
+    phone: "000 000 0000",
     isDefault: true,
   },
   {
@@ -84,7 +85,7 @@ const mockAddresses = [
     line2: "Floor 3",
     city: "Example City",
     region: "Example Region",
-    phone: "025 667 8884",
+    phone: "000 000 0001",
     isDefault: false,
   },
 ]
@@ -137,7 +138,8 @@ function ProfileTab() {
           <Input
             id="email"
             type="email"
-            defaultValue="hello@ronnyandme.com"
+            defaultValue=""
+            placeholder={CONTACT_EMAIL}
             className="h-10 rounded-xl border-rose-border focus-visible:border-rose-primary focus-visible:ring-rose-primary/20"
           />
         </div>
@@ -146,7 +148,8 @@ function ProfileTab() {
           <Input
             id="phone"
             type="tel"
-            defaultValue="059 270 7791"
+            defaultValue=""
+            placeholder="Phone number"
             className="h-10 rounded-xl border-rose-border focus-visible:border-rose-primary focus-visible:ring-rose-primary/20"
           />
         </div>
@@ -359,7 +362,7 @@ function AddressesTab() {
                   <Label htmlFor="addrPhone">Phone</Label>
                   <Input
                     id="addrPhone"
-                    placeholder="059 270 7791"
+                    placeholder="Phone number"
                     className="h-10 rounded-xl border-rose-border"
                   />
                 </div>

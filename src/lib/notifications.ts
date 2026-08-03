@@ -1,17 +1,20 @@
 import { Resend } from 'resend';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { escapeHtml } from '@/lib/sanitize';
+import { BRAND_NAME, BRAND_TAGLINE, CONTACT_EMAIL, SITE_DOMAIN } from '@/lib/brand';
 
 const resend = new Resend(process.env.RESEND_API_KEY || 'missing_api_key');
-const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'hello@ronnyandme.com';
-const EMAIL_FROM = process.env.EMAIL_FROM || 'RonnyandMe <noreply@ronnyandme.com>';
+const ADMIN_EMAIL = process.env.ADMIN_EMAIL || CONTACT_EMAIL;
+const EMAIL_FROM = process.env.EMAIL_FROM || `${BRAND_NAME} <noreply@${SITE_DOMAIN}>`;
+const SMS_SENDER_ID = process.env.MOOLRE_SMS_SENDER_ID || 'TrustEcom';
 const ADMIN_SMS_NUMBERS = (process.env.ADMIN_SMS_NUMBERS || '').split(',').map(n => n.trim()).filter(Boolean);
 const BRAND = {
-    name: 'RonnyandMe',
-    color: '#be123c',
-    colorLight: '#fff1f2',
-    colorDark: '#881337',
-    url: ((/^https?:\/\//.test(process.env.NEXT_PUBLIC_APP_URL || '') ? process.env.NEXT_PUBLIC_APP_URL! : `https://${process.env.NEXT_PUBLIC_APP_URL || 'ronnyandme.com'}`)).replace(/\/+$/, ''),
+    name: BRAND_NAME,
+    tagline: BRAND_TAGLINE,
+    color: '#0D9488',
+    colorLight: '#F0FDFA',
+    colorDark: '#0B1B3A',
+    url: ((/^https?:\/\//.test(process.env.NEXT_PUBLIC_APP_URL || '') ? process.env.NEXT_PUBLIC_APP_URL! : `https://${process.env.NEXT_PUBLIC_APP_URL || SITE_DOMAIN}`)).replace(/\/+$/, ''),
 };
 
 export function emailLayout(body: string, preheader?: string): string {
@@ -29,7 +32,7 @@ ${preheader ? `<span style="display:none;max-height:0;overflow:hidden;">${prehea
 <!-- Header -->
 <tr><td style="background:linear-gradient(135deg,${BRAND.color},${BRAND.colorDark});padding:32px 40px;text-align:center;">
 <h1 style="margin:0;color:#ffffff;font-size:22px;font-weight:700;letter-spacing:0.5px;">${BRAND.name}</h1>
-<p style="margin:6px 0 0;color:rgba(255,255,255,0.8);font-size:12px;letter-spacing:1.5px;text-transform:uppercase;">We've Gotcha!!!</p>
+<p style="margin:6px 0 0;color:rgba(255,255,255,0.8);font-size:12px;letter-spacing:1.5px;text-transform:uppercase;">${BRAND.tagline}</p>
 </td></tr>
 
 <!-- Body -->
@@ -84,7 +87,8 @@ function maskPhone(phone: string): string {
 function isDeliverableEmail(email?: string): boolean {
     if (!email) return false;
     const value = String(email).trim().toLowerCase();
-    const isGuestPlaceholder = /^guest-\d+@ronnyandme\.com$/.test(value);
+    const guestDomain = SITE_DOMAIN.replace(/\./g, '\\.');
+    const isGuestPlaceholder = new RegExp(`^guest-\\d+@${guestDomain}$`).test(value);
     const isPosPlaceholder = value === 'pos-walkin@store.local' || value.endsWith('@pos.local');
     return (
         /\S+@\S+\.\S+/.test(value) &&
@@ -140,7 +144,7 @@ export async function sendSMS({ to, message }: { to: string; message: string }) 
             },
             body: JSON.stringify({
                 type: 1,
-                senderid: process.env.MOOLRE_SMS_SENDER_ID || 'RonnyandMe',
+                senderid: SMS_SENDER_ID,
                 messages: [{ recipient, message }]
             })
         });
@@ -374,14 +378,14 @@ export async function sendWelcomeMessage(user: { email: string; firstName: strin
   <p style="margin:0;color:#6b7280;font-size:15px;">We're so glad you're here.</p>
 </div>
 
-<p style="color:#374151;font-size:14px;line-height:1.7;margin:16px 0;">Thank you for joining ${BRAND.name}. We've got everything you need — We've gotcha!!!</p>
+<p style="color:#374151;font-size:14px;line-height:1.7;margin:16px 0;">Thank you for joining ${BRAND.name}. ${BRAND.tagline}</p>
 
 ${emailButton('Start Shopping', `${BRAND.url}/shop`)}
 `, `Welcome to ${BRAND.name}, ${firstName}!`)
         });
     }
 
-    if (phone) await sendSMS({ to: phone, message: `Welcome ${firstName}! Thanks for joining ${BRAND.name}. We've gotcha!!!` });
+    if (phone) await sendSMS({ to: phone, message: `Welcome ${firstName}! Thanks for joining ${BRAND.name}. ${BRAND.tagline}` });
 }
 
 export async function sendPaymentLink(order: any) {

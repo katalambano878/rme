@@ -20,13 +20,16 @@
   --font-mono: var(--font-geist-mono);
   --font-heading: var(--font-display);
 
-  /* Default storefront palette — customize in globals.css */
-  --color-rose-primary: #E11D48;
-  --color-rose-soft: #FB7185;
-  --color-rose-light: #FFF5F8;
-  --color-rose-border: #F1D6DF;
+  /* Trust Ecom commerce palette (navy + teal; rose-* aliases kept for existing class names) */
+  --color-rose-primary: #0D9488;
+  --color-rose-soft: #2DD4BF;
+  --color-rose-light: #F0FDFA;
+  --color-rose-border: #99F6E4;
   --color-navy: #0B1B3A;
   --color-navy-light: #1E3A5F;
+  --color-teal: #0D9488;
+  --color-teal-soft: #2DD4BF;
+  --color-teal-light: #F0FDFA;
 
   /* Extended radius for luxury rounded feel */
   --radius-sm: calc(var(--radius) * 0.6);
@@ -78,32 +81,32 @@
   --card-foreground: #0F172A;
   --popover: #FFFFFF;
   --popover-foreground: #0F172A;
-  --primary: #E11D48;
+  --primary: #0B1B3A;
   --primary-foreground: #FFFFFF;
-  --secondary: #FFF5F8;
+  --secondary: #F0FDFA;
   --secondary-foreground: #0F172A;
   --muted: #F8FAFC;
   --muted-foreground: #64748B;
-  --accent: #FFF5F8;
-  --accent-foreground: #0F172A;
+  --accent: #F0FDFA;
+  --accent-foreground: #0B1B3A;
   --destructive: #DC2626;
-  --border: #F1D6DF;
+  --border: #E2E8F0;
   --input: #E2E8F0;
-  --ring: #E11D48;
-  --chart-1: #E11D48;
-  --chart-2: #FB7185;
+  --ring: #0D9488;
+  --chart-1: #0D9488;
+  --chart-2: #2DD4BF;
   --chart-3: #0B1B3A;
   --chart-4: #64748B;
-  --chart-5: #F1D6DF;
-  --radius: 1.125rem;
+  --chart-5: #99F6E4;
+  --radius: 0.75rem;
   --sidebar: #FFFFFF;
   --sidebar-foreground: #0F172A;
-  --sidebar-primary: #E11D48;
+  --sidebar-primary: #0B1B3A;
   --sidebar-primary-foreground: #FFFFFF;
-  --sidebar-accent: #FFF5F8;
-  --sidebar-accent-foreground: #0F172A;
-  --sidebar-border: #F1D6DF;
-  --sidebar-ring: #E11D48;
+  --sidebar-accent: #F0FDFA;
+  --sidebar-accent-foreground: #0B1B3A;
+  --sidebar-border: #E2E8F0;
+  --sidebar-ring: #0D9488;
 }
 
 @layer base {
@@ -142,18 +145,18 @@
 
 @layer utilities {
   .luxury-shadow {
-    box-shadow: 0 2px 16px -2px rgba(225, 29, 72, 0.06),
+    box-shadow: 0 2px 16px -2px rgba(11, 27, 58, 0.06),
                 0 1px 4px -1px rgba(0, 0, 0, 0.04);
   }
   .luxury-shadow-lg {
-    box-shadow: 0 8px 32px -4px rgba(225, 29, 72, 0.08),
+    box-shadow: 0 8px 32px -4px rgba(11, 27, 58, 0.08),
                 0 4px 12px -2px rgba(0, 0, 0, 0.06);
   }
   .luxury-gradient {
-    background: linear-gradient(135deg, #FFF5F8 0%, #FFFFFF 50%, #FFF5F8 100%);
+    background: linear-gradient(135deg, #F0FDFA 0%, #FFFFFF 50%, #F8FAFC 100%);
   }
   .text-gradient-rose {
-    background: linear-gradient(135deg, #E11D48, #FB7185);
+    background: linear-gradient(135deg, #0B1B3A, #0D9488);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;

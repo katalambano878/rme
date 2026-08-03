@@ -50,33 +50,24 @@ const playfair = Playfair_Display({
 export const metadata: Metadata = {
   metadataBase: getSiteUrl(),
   title: {
-    default: `${BRAND_NAME} — Beauty & Skincare Essentials`,
+    default: `${BRAND_NAME} — Online Store`,
     template: `%s | ${BRAND_NAME}`,
   },
-  description: `${BRAND_NAME} (${BRAND_LEGAL_NAME}) — premium skincare, lip care, body lotion, makeup, hair products, and baby essentials in Ghana. ${BRAND_TAGLINE}`,
+  description: `${BRAND_NAME} (${BRAND_LEGAL_NAME}) — your trusted online store for quality products and secure shopping. ${BRAND_TAGLINE}`,
   keywords: [
     BRAND_NAME,
     BRAND_LEGAL_NAME,
-    "beauty products Ghana",
-    "skincare Ghana",
-    "lip gloss Ghana",
-    "lip care",
-    "body lotion Ghana",
-    "makeup Ghana",
-    "hair products Ghana",
-    "baby products Ghana",
-    "online beauty store Ghana",
-    "lip scrub",
-    "lip oil",
-    "setting spray",
-    "Accra beauty",
-    "Ghana cosmetics",
+    "ecommerce",
+    "online shopping",
+    "online store",
+    "shop online",
+    "Trust Ecom",
   ],
   authors: [{ name: BRAND_LEGAL_NAME, url: siteUrl }],
   creator: BRAND_LEGAL_NAME,
   publisher: BRAND_LEGAL_NAME,
   category: "shopping",
-  classification: "Beauty & Personal Care",
+  classification: "Ecommerce / Retail",
   applicationName: BRAND_NAME,
   generator: "Next.js",
   referrer: "origin-when-cross-origin",
@@ -86,8 +77,8 @@ export const metadata: Metadata = {
     telephone: false,
   },
   openGraph: {
-    title: `${BRAND_NAME} — Beauty & Skincare Essentials`,
-    description: `Shop ${BRAND_NAME} — premium beauty products in Ghana. Skincare, lip care, body care, makeup, and more. ${BRAND_TAGLINE}`,
+    title: `${BRAND_NAME} — Online Store`,
+    description: `Shop ${BRAND_NAME} — quality products, secure checkout, and reliable delivery. ${BRAND_TAGLINE}`,
     siteName: BRAND_NAME,
     url: siteUrl,
     type: "website",
@@ -102,11 +93,12 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: `${BRAND_NAME} — Beauty & Skincare Essentials`,
-    description: `Shop ${BRAND_NAME} — premium beauty products in Ghana. ${BRAND_TAGLINE}`,
+    title: `${BRAND_NAME} — Online Store`,
+    description: `Shop ${BRAND_NAME} — quality products and secure checkout. ${BRAND_TAGLINE}`,
     images: ["/opengraph-image.png"],
-    creator: INSTAGRAM_HANDLE,
-    site: INSTAGRAM_HANDLE,
+    ...(INSTAGRAM_HANDLE
+      ? { creator: INSTAGRAM_HANDLE, site: INSTAGRAM_HANDLE }
+      : {}),
   },
   robots: {
     index: true,
@@ -123,6 +115,8 @@ export const metadata: Metadata = {
   },
 }
 
+const sameAs = [INSTAGRAM_URL, TIKTOK_URL, WHATSAPP_URL].filter(Boolean)
+
 const organizationJsonLd = {
   "@context": "https://schema.org",
   "@type": "Organization",
@@ -137,20 +131,26 @@ const organizationJsonLd = {
     height: 512,
   },
   image: `${siteUrl}${BRAND_LOGO_SRC}`,
-  description: `${BRAND_NAME} — premium beauty and skincare products in Ghana. Skincare, lip care, body care, makeup, hair products, and baby essentials.`,
+  description: `${BRAND_NAME} — a trusted online store for quality products and secure shopping.`,
   email: CONTACT_EMAIL,
-  telephone: PHONE_INTERNATIONAL_PRIMARY,
+  ...(PHONE_INTERNATIONAL_PRIMARY
+    ? { telephone: PHONE_INTERNATIONAL_PRIMARY }
+    : {}),
   address: {
     "@type": "PostalAddress",
     addressCountry: "GH",
   },
-  sameAs: [INSTAGRAM_URL, TIKTOK_URL, WHATSAPP_URL],
-  contactPoint: {
-    "@type": "ContactPoint",
-    telephone: PHONE_INTERNATIONAL_PRIMARY,
-    contactType: "customer service",
-    availableLanguage: "English",
-  },
+  sameAs,
+  ...(PHONE_INTERNATIONAL_PRIMARY
+    ? {
+        contactPoint: {
+          "@type": "ContactPoint",
+          telephone: PHONE_INTERNATIONAL_PRIMARY,
+          contactType: "customer service",
+          availableLanguage: "English",
+        },
+      }
+    : {}),
 }
 
 const websiteJsonLd = {
@@ -159,7 +159,7 @@ const websiteJsonLd = {
   "@id": `${siteUrl}/#website`,
   url: siteUrl,
   name: BRAND_NAME,
-  description: `${BRAND_TAGLINE} — Shop beauty & skincare at ${BRAND_NAME}`,
+  description: `${BRAND_TAGLINE} — Shop online at ${BRAND_NAME}`,
   publisher: { "@id": `${siteUrl}/#organization` },
   potentialAction: {
     "@type": "SearchAction",
@@ -193,12 +193,12 @@ export default function RootLayout({
         />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-        <meta name="theme-color" content="#e8637e" />
-        <meta name="msapplication-TileColor" content="#e8637e" />
+        <meta name="theme-color" content="#0B1B3A" />
+        <meta name="msapplication-TileColor" content="#0B1B3A" />
         <meta name="geo.region" content="GH" />
         <meta name="geo.placename" content="Ghana" />
         <meta name="ICBM" content="7.9465, -1.0232" />
-        <link rel="me" href={INSTAGRAM_URL} />
+        {INSTAGRAM_URL ? <link rel="me" href={INSTAGRAM_URL} /> : null}
       </head>
       <body className="min-h-full flex flex-col">
         {process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY ? (

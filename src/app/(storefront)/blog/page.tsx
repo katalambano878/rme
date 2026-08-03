@@ -29,14 +29,14 @@ const fadeUp = {
 export default function BlogPage() {
   return (
     <>
-      <Section className="bg-gradient-to-b from-rose-light/50 to-white">
+      <Section className="bg-gradient-to-b from-teal-50/80 to-white">
         <Container>
           <Heading
             as="h1"
             align="center"
-            subtitle="Beauty tips, skincare guides, and self-care inspiration from our editorial team."
+            subtitle="Guides, updates, and tips from the Trust Ecom team."
           >
-            Beauty Journal
+            Blog
           </Heading>
 
           <div className="mt-14 grid gap-8 md:grid-cols-2 lg:grid-cols-3">
@@ -118,7 +118,7 @@ export default function BlogPage() {
               Stay in the Loop
             </h2>
             <p className="mt-3 text-muted-foreground">
-              Subscribe to our newsletter for exclusive beauty tips, early access
+              Subscribe to our newsletter for exclusive tips, early access
               to new arrivals, and members-only offers.
             </p>
             <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-center">

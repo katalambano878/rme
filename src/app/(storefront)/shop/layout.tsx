@@ -5,14 +5,11 @@ const siteUrl = `https://${SITE_DOMAIN}`
 
 export const metadata: Metadata = {
   title: "Shop All Products",
-  description: `Browse all beauty products at ${BRAND_NAME} — skincare, lip glosses, lip scrubs, lip oils, body lotions, makeup, hair products, and baby essentials. Filter by category and find your perfect match.`,
+  description: `Browse all products at ${BRAND_NAME}. Filter by category and find what you need with secure checkout and reliable delivery.`,
   keywords: [
-    "shop beauty products Ghana",
-    "buy skincare Ghana",
-    "lip gloss shop",
-    "body lotion Ghana",
-    "makeup online Ghana",
-    "all beauty products",
+    "shop online",
+    "ecommerce",
+    "online store",
     `${BRAND_NAME} shop`,
   ],
   alternates: {
@@ -20,7 +17,7 @@ export const metadata: Metadata = {
   },
   openGraph: {
     title: `Shop All Products | ${BRAND_NAME}`,
-    description: `Browse our full collection of beauty and skincare products. Skincare, lip care, body care, makeup, and more — delivered in Ghana.`,
+    description: `Browse our full product collection at ${BRAND_NAME}. Quality products with secure checkout.`,
     url: `${siteUrl}/shop`,
     type: "website",
   },

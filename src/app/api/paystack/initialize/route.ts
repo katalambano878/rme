@@ -211,7 +211,22 @@ export async function POST(req: NextRequest) {
       })
     }
 
-    const shippingCost = Math.max(0, Number(shippingCostRaw) || 0)
+    // Never trust client shippingCost — load fee from site_settings (pickup = 0)
+    void shippingCostRaw
+    let shippingCost = 0
+    const method = String(shippingMethod || "").toLowerCase()
+    if (method !== "pickup" && method !== "store_pickup") {
+      const { data: settingsRow } = await supabase
+        .from("site_settings")
+        .select("feature_flags")
+        .eq("id", 1)
+        .maybeSingle()
+      const flags = (settingsRow?.feature_flags as Record<string, unknown> | null) ?? {}
+      shippingCost =
+        typeof flags.delivery_fee === "number" && Number.isFinite(flags.delivery_fee)
+          ? Math.max(0, flags.delivery_fee)
+          : 25
+    }
     const computedTotal = Number((computedSubtotal + shippingCost).toFixed(2))
 
     if (computedTotal <= 0) {

@@ -13,13 +13,18 @@ import { Container } from "@/components/shared/container"
 import { Section } from "@/components/shared/section"
 import { Heading } from "@/components/shared/heading"
 import { Separator } from "@/components/ui/separator"
+import {
+  BRAND_NAME,
+  CONTACT_EMAIL,
+  PHONE_DISPLAY_PRIMARY,
+} from "@/lib/brand"
 
 const sections = [
   {
     icon: AlertCircle,
     title: "1. No Refunds on Used or Opened Products",
     content: [
-      "For hygiene and safety reasons, beauty and skincare items cannot be returned if opened or used.",
+      "For hygiene and safety reasons, certain items cannot be returned if opened or used.",
     ],
   },
   {
@@ -33,14 +38,14 @@ const sections = [
     icon: ShieldCheck,
     title: "3. Non-Returnable Items",
     content: [
-      "Lip glosses, skincare, or beauty products that have been opened; sale or discounted items; and items damaged due to customer misuse are not returnable.",
+      "Opened or used products; sale or discounted items; and items damaged due to customer misuse are not returnable.",
     ],
   },
   {
     icon: RotateCcw,
     title: "4. Return Process",
     content: [
-      "Contact us via email at ronnyandme25@gmail.com with your order number and clear photos.",
+      `Contact us via email at ${CONTACT_EMAIL} with your order number and clear photos.`,
       "Requests are reviewed within 24–48 hours. If approved, return instructions will be provided.",
     ],
   },
@@ -70,6 +75,10 @@ const fadeUp = {
 }
 
 export default function ReturnsPolicyPage() {
+  const phoneSuffix = PHONE_DISPLAY_PRIMARY
+    ? ` or WhatsApp ${PHONE_DISPLAY_PRIMARY}`
+    : ""
+
   return (
     <Section className="bg-gradient-to-b from-rose-light/50 to-white">
       <Container>
@@ -82,7 +91,7 @@ export default function ReturnsPolicyPage() {
           <Heading
             as="h1"
             align="center"
-            subtitle="At RONNY&ME, we want you to love your purchase. Please read our refund and return guidelines below."
+            subtitle={`At ${BRAND_NAME}, we want you to love your purchase. Please read our refund and return guidelines below.`}
           >
             Refund Policy
           </Heading>
@@ -132,12 +141,12 @@ export default function ReturnsPolicyPage() {
           >
             Last updated: March 2026. For return inquiries, contact us at{" "}
             <a
-              href="mailto:ronnyandme25@gmail.com"
+              href={`mailto:${CONTACT_EMAIL}`}
               className="font-medium text-rose-primary hover:underline"
             >
-              ronnyandme25@gmail.com
-            </a>{" "}
-            or WhatsApp +233 59 270 7791.
+              {CONTACT_EMAIL}
+            </a>
+            {phoneSuffix}.
           </motion.p>
         </motion.div>
       </Container>

@@ -5,12 +5,27 @@ import { Container } from "@/components/shared/container"
 import { Section } from "@/components/shared/section"
 import { Heading } from "@/components/shared/heading"
 import { Separator } from "@/components/ui/separator"
+import {
+  BRAND_LEGAL_NAME,
+  BRAND_NAME,
+  CONTACT_EMAIL,
+  PHONE_DISPLAY_PRIMARY,
+} from "@/lib/brand"
+
+const contactParagraphs = [
+  "If you have questions about these Terms of Service, contact us:",
+  `Email: ${CONTACT_EMAIL}`,
+  ...(PHONE_DISPLAY_PRIMARY
+    ? [`Phone/WhatsApp: ${PHONE_DISPLAY_PRIMARY}`]
+    : []),
+  "Address: Store pickup address TBD",
+]
 
 const sections = [
   {
     title: "1. Acceptance of Terms",
     paragraphs: [
-      "Welcome to RONNY&ME. By accessing or purchasing from our website, you agree to the following terms: RONNY&ME sells beauty, skincare, accessories, and other related products. All purchases are subject to availability.",
+      `Welcome to ${BRAND_LEGAL_NAME}. By accessing or purchasing from our website, you agree to the following terms: ${BRAND_LEGAL_NAME} sells products through its online store. All purchases are subject to availability.`,
       "If you do not agree with these Terms of Service, please do not use this website.",
       "We may update these terms from time to time. Continued use of the website after updates means you accept the revised terms.",
     ],
@@ -20,7 +35,7 @@ const sections = [
     paragraphs: [
       "When creating an account, you agree to provide accurate and complete information and to keep it up to date.",
       "You are responsible for keeping your login details secure and for all activities carried out through your account.",
-      "RONNY&ME may suspend or terminate accounts involved in fraud, misuse, or violations of these terms.",
+      `${BRAND_LEGAL_NAME} may suspend or terminate accounts involved in fraud, misuse, or violations of these terms.`,
     ],
   },
   {
@@ -34,7 +49,7 @@ const sections = [
   {
     title: "4. Intellectual Property",
     paragraphs: [
-      "All website content, including logos, graphics, product images, text, and design elements, is the property of RONNY&ME or its licensors.",
+      `All website content, including logos, graphics, product images, text, and design elements, is the property of ${BRAND_LEGAL_NAME} or its licensors.`,
       "You may not copy, reproduce, republish, or distribute any content from this website without prior written permission.",
       "Unauthorized use of intellectual property may result in legal action.",
     ],
@@ -43,7 +58,7 @@ const sections = [
     title: "5. Order Fulfillment & Delivery",
     paragraphs: [
       "Delivery timelines are estimates and may vary due to courier schedules, location, weather, or other factors beyond our control.",
-      "You are responsible for providing accurate shipping details. RONNY&ME is not liable for failed deliveries caused by incorrect customer information.",
+      `${BRAND_LEGAL_NAME} is not liable for failed deliveries caused by incorrect customer information.`,
       "Please inspect your order upon delivery and contact us promptly if anything is missing, incorrect, or damaged.",
     ],
   },
@@ -51,15 +66,15 @@ const sections = [
     title: "6. Returns & Refunds",
     paragraphs: [
       "Returns, exchanges, and refunds are handled according to our Refund Policy.",
-      "Not all items are eligible for return, especially used or opened beauty/skincare products for hygiene reasons.",
+      "Not all items are eligible for return, especially used or opened products for hygiene or safety reasons.",
       "Please review the full Refund Policy before making a purchase.",
     ],
   },
   {
     title: "7. Limitation of Liability",
     paragraphs: [
-      "RONNY&ME provides this website and its services on an \"as available\" basis without warranties of uninterrupted or error-free operation.",
-      "To the fullest extent permitted by law, RONNY&ME is not liable for indirect, incidental, or consequential damages resulting from website use, order delays, or third-party service disruptions.",
+      `${BRAND_LEGAL_NAME} provides this website and its services on an "as available" basis without warranties of uninterrupted or error-free operation.`,
+      `To the fullest extent permitted by law, ${BRAND_LEGAL_NAME} is not liable for indirect, incidental, or consequential damages resulting from website use, order delays, or third-party service disruptions.`,
       "Our total liability for any product-related claim is limited to the amount paid for that product.",
     ],
   },
@@ -67,17 +82,12 @@ const sections = [
     title: "8. Governing Law",
     paragraphs: [
       "These Terms of Service are governed by and interpreted under the laws of Ghana.",
-      "Any disputes arising from use of this website or purchases made through it will be subject to the jurisdiction of the courts in Accra, Ghana.",
+      "Any disputes arising from use of this website or purchases made through it will be subject to the jurisdiction of the courts in Ghana.",
     ],
   },
   {
     title: "9. Contact Information",
-    paragraphs: [
-      "If you have questions about these Terms of Service, contact us:",
-      "Email: ronnyandme25@gmail.com",
-      "Phone/WhatsApp: +233 59 270 7791",
-      "Address: Manet Ville Estates, East Airport Spintex, Accra",
-    ],
+    paragraphs: contactParagraphs,
   },
 ]
 
@@ -103,7 +113,7 @@ export default function TermsPage() {
           <Heading
             as="h1"
             align="center"
-            subtitle="Please read these terms carefully before using our website and services."
+            subtitle={`Please read these terms carefully before using ${BRAND_NAME} and our services.`}
           >
             Terms of Service
           </Heading>

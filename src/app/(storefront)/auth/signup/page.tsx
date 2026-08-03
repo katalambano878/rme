@@ -9,6 +9,7 @@ import { createClient } from "@/lib/supabase/client"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { BRAND_NAME } from "@/lib/brand"
 
 export default function SignupPage() {
   const router = useRouter()
@@ -89,7 +90,7 @@ export default function SignupPage() {
         <div className="mb-8 text-center">
           <h1 className="font-heading text-3xl text-navy">Create Account</h1>
           <p className="mt-2 text-muted-foreground">
-            Create your account
+            Create your {BRAND_NAME} account
           </p>
         </div>
 

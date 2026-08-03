@@ -26,30 +26,44 @@ import {
 } from "@/components/ui/select"
 import {
   BRAND_NAME,
+  CONTACT_EMAIL,
   GOOGLE_MAPS_URL,
   INSTAGRAM_URL,
+  PHONE_DISPLAY_PRIMARY,
+  PHONE_INTERNATIONAL_PRIMARY,
   SNAPCHAT_URL,
   TIKTOK_URL,
   WHATSAPP_URL,
 } from "@/lib/brand"
 
-const CONTACT_ADDRESS = "Manet Ville Estates, East Airport Spintex, Accra"
-const CONTACT_PHONE = "+233 59 270 7791"
-const CONTACT_EMAIL = "ronnyandme25@gmail.com"
+type ContactItem = {
+  icon: typeof Mail
+  label: string
+  value: string
+  href: string
+}
 
-const contactInfo = [
-  {
-    icon: MessageCircle,
-    label: "WhatsApp",
-    value: CONTACT_PHONE,
-    href: WHATSAPP_URL,
-  },
-  {
-    icon: Phone,
-    label: "Phone",
-    value: CONTACT_PHONE,
-    href: "tel:+233592707791",
-  },
+const contactInfo: ContactItem[] = [
+  ...(WHATSAPP_URL && PHONE_DISPLAY_PRIMARY
+    ? [
+        {
+          icon: MessageCircle,
+          label: "WhatsApp",
+          value: PHONE_DISPLAY_PRIMARY,
+          href: WHATSAPP_URL,
+        },
+      ]
+    : []),
+  ...(PHONE_INTERNATIONAL_PRIMARY
+    ? [
+        {
+          icon: Phone,
+          label: "Phone",
+          value: PHONE_DISPLAY_PRIMARY || PHONE_INTERNATIONAL_PRIMARY,
+          href: `tel:${PHONE_INTERNATIONAL_PRIMARY}`,
+        },
+      ]
+    : []),
   {
     icon: Mail,
     label: "Email",
@@ -86,7 +100,7 @@ const socials = [
       </svg>
     ),
   },
-]
+].filter((s) => s.href)
 
 const hours = [
   { day: "Monday — Friday", time: "9:00 AM — 6:00 PM" },
@@ -102,7 +116,7 @@ export default function ContactPage() {
           <Heading
             as="h1"
             align="center"
-            subtitle={`We'd love to hear from you. Reach out to ${BRAND_NAME} for orders, styling advice, or just to say hello.`}
+            subtitle={`We'd love to hear from you. Reach out to ${BRAND_NAME} for orders, support, or general inquiries.`}
           >
             Get in Touch
           </Heading>
@@ -218,26 +232,28 @@ export default function ContactPage() {
                 ))}
               </div>
 
-              <a
-                href={GOOGLE_MAPS_URL}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-start gap-4 rounded-2xl border border-rose-border/50 bg-white p-4 shadow-sm transition-all hover:border-rose-primary/30 hover:shadow-md"
-              >
-                <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-rose-light">
-                  <MapPin className="size-5 text-rose-primary" />
-                </div>
-                <div>
-                  <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                    Location
-                  </p>
-                  <p className="mt-0.5 font-medium text-navy">{CONTACT_ADDRESS}</p>
-                  <p className="mt-1 inline-flex items-center gap-1 text-sm text-rose-primary">
-                    Open in Maps
-                    <ExternalLink className="size-3.5" />
-                  </p>
-                </div>
-              </a>
+              {GOOGLE_MAPS_URL ? (
+                <a
+                  href={GOOGLE_MAPS_URL}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-start gap-4 rounded-2xl border border-rose-border/50 bg-white p-4 shadow-sm transition-all hover:border-rose-primary/30 hover:shadow-md"
+                >
+                  <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-rose-light">
+                    <MapPin className="size-5 text-rose-primary" />
+                  </div>
+                  <div>
+                    <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                      Location
+                    </p>
+                    <p className="mt-0.5 font-medium text-navy">View on Google Maps</p>
+                    <p className="mt-1 inline-flex items-center gap-1 text-sm text-rose-primary">
+                      Open in Maps
+                      <ExternalLink className="size-3.5" />
+                    </p>
+                  </div>
+                </a>
+              ) : null}
 
               {/* Operating Hours */}
               <div className="rounded-2xl border border-rose-border/50 bg-white p-5 shadow-sm">
@@ -261,53 +277,59 @@ export default function ContactPage() {
               </div>
 
               {/* Socials */}
-              <div className="rounded-2xl border border-rose-border/50 bg-white p-5 shadow-sm">
-                <h3 className="font-heading font-semibold text-navy">
-                  Follow Us
-                </h3>
-                <div className="mt-3 flex flex-wrap gap-3">
-                  {socials.map((s) => (
-                    <a
-                      key={s.label}
-                      href={s.href}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      aria-label={s.label}
-                      className="flex size-10 items-center justify-center rounded-xl border border-rose-border/50 transition-all hover:border-rose-primary hover:bg-rose-light"
-                    >
-                      {s.icon}
-                    </a>
-                  ))}
-                </div>
-              </div>
-
-              {/* WhatsApp CTA */}
-              <a
-                href={WHATSAPP_URL}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center justify-center gap-2 rounded-2xl bg-[#25D366] px-6 py-3.5 font-medium text-white shadow-sm transition-all hover:bg-[#20BD5A] hover:shadow-md"
-              >
-                <MessageCircle className="size-5" />
-                Chat on WhatsApp
-              </a>
-
-              {/* Map visual */}
-              <a
-                href={GOOGLE_MAPS_URL}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="block overflow-hidden rounded-2xl transition-opacity hover:opacity-95"
-              >
-                <div className="flex aspect-[4/3] items-center justify-center bg-gradient-to-br from-rose-100 via-pink-50 to-amber-50">
-                  <div className="text-center">
-                    <MapPin className="mx-auto size-8 text-rose-primary/40" />
-                    <p className="mt-2 text-sm font-medium text-navy/70">
-                      Tap to open {CONTACT_ADDRESS} on Google Maps
-                    </p>
+              {socials.length > 0 ? (
+                <div className="rounded-2xl border border-rose-border/50 bg-white p-5 shadow-sm">
+                  <h3 className="font-heading font-semibold text-navy">
+                    Follow Us
+                  </h3>
+                  <div className="mt-3 flex flex-wrap gap-3">
+                    {socials.map((s) => (
+                      <a
+                        key={s.label}
+                        href={s.href}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        aria-label={s.label}
+                        className="flex size-10 items-center justify-center rounded-xl border border-rose-border/50 transition-all hover:border-rose-primary hover:bg-rose-light"
+                      >
+                        {s.icon}
+                      </a>
+                    ))}
                   </div>
                 </div>
-              </a>
+              ) : null}
+
+              {/* WhatsApp CTA */}
+              {WHATSAPP_URL ? (
+                <a
+                  href={WHATSAPP_URL}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center justify-center gap-2 rounded-2xl bg-[#25D366] px-6 py-3.5 font-medium text-white shadow-sm transition-all hover:bg-[#20BD5A] hover:shadow-md"
+                >
+                  <MessageCircle className="size-5" />
+                  Chat on WhatsApp
+                </a>
+              ) : null}
+
+              {/* Map visual */}
+              {GOOGLE_MAPS_URL ? (
+                <a
+                  href={GOOGLE_MAPS_URL}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="block overflow-hidden rounded-2xl transition-opacity hover:opacity-95"
+                >
+                  <div className="flex aspect-[4/3] items-center justify-center bg-gradient-to-br from-rose-100 via-pink-50 to-amber-50">
+                    <div className="text-center">
+                      <MapPin className="mx-auto size-8 text-rose-primary/40" />
+                      <p className="mt-2 text-sm font-medium text-navy/70">
+                        Tap to open location on Google Maps
+                      </p>
+                    </div>
+                  </div>
+                </a>
+              ) : null}
             </motion.div>
           </div>
         </Container>

@@ -6,7 +6,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { supabase } from '@/lib/supabase';
 import { useRecaptcha } from '@/hooks/useRecaptcha';
-import { BRAND_LOGO_ALT, BRAND_LOGO_SRC } from '@/lib/brand';
+import { BRAND_LOGO_ALT, BRAND_LOGO_SRC, BRAND_NAME } from '@/lib/brand';
 
 export default function AdminLoginPage() {
   const router = useRouter();
@@ -60,8 +60,8 @@ export default function AdminLoginPage() {
           <Link href="/" className="inline-block">
             <Image src={BRAND_LOGO_SRC} alt={BRAND_LOGO_ALT} width={90} height={28} className="h-7 w-auto mx-auto object-contain" style={{ width: 'auto', height: 'auto' }} />
           </Link>
-          <h1 className="text-3xl font-bold text-gray-900 mt-6 mb-2">Admin Login</h1>
-          <p className="text-gray-600">Sign in to access the admin dashboard</p>
+          <h1 className="text-3xl font-bold text-gray-900 mt-6 mb-2">{BRAND_NAME} Admin</h1>
+          <p className="text-gray-600">Sign in to the {BRAND_NAME} dashboard</p>
         </div>
 
         <div className="bg-white rounded-2xl shadow-xl p-8 border border-gray-100">

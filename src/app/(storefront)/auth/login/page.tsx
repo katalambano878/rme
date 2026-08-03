@@ -9,6 +9,7 @@ import { createClient } from "@/lib/supabase/client"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { BRAND_NAME } from "@/lib/brand"
 
 export default function LoginPage() {
   const router = useRouter()
@@ -65,7 +66,7 @@ export default function LoginPage() {
         <div className="mb-8 text-center">
           <h1 className="font-heading text-3xl text-navy">Welcome Back</h1>
           <p className="mt-2 text-muted-foreground">
-            Sign in to your account
+            Sign in to your {BRAND_NAME} account
           </p>
         </div>
 

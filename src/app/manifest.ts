@@ -5,11 +5,11 @@ export default function manifest(): MetadataRoute.Manifest {
   return {
     name: BRAND_LEGAL_NAME,
     short_name: BRAND_NAME,
-    description: `${BRAND_NAME} — Beauty & Skincare Essentials. ${BRAND_TAGLINE}`,
+    description: `${BRAND_NAME} — your trusted online shop. ${BRAND_TAGLINE}`,
     start_url: "/",
     display: "standalone",
-    background_color: "#fff0f3",
-    theme_color: "#e8637e",
+    background_color: "#ffffff",
+    theme_color: "#0B1B3A",
     orientation: "portrait",
     scope: "/",
     icons: [
@@ -38,7 +38,7 @@ export default function manifest(): MetadataRoute.Manifest {
         purpose: "maskable",
       },
     ],
-    categories: ["shopping", "beauty", "lifestyle"],
+    categories: ["shopping", "ecommerce"],
     lang: "en",
     dir: "ltr",
   }

@@ -1,5 +1,5 @@
 /**
- * In-memory site knowledge for the AI assistant (RonnyandMe storefront).
+ * In-memory site knowledge for the AI assistant (Trust Ecom online store).
  */
 
 import {
@@ -31,8 +31,8 @@ export const SITE_KNOWLEDGE: SiteKnowledgeEntry[] = [
     title: `About ${BRAND_NAME}`,
     path: "/about",
     category: "company",
-    content: `${BRAND_NAME} — ${BRAND_TAGLINE}. We sell skincare, lip care, body care, makeup, hair products, and baby essentials. Based in Ghana with delivery nationwide.`,
-    keywords: ["about", "who", "brand", "mission", "company", "ronny", "essentials"],
+    content: `${BRAND_NAME} — ${BRAND_TAGLINE}. We are a general online store offering a wide range of products with delivery across Ghana.`,
+    keywords: ["about", "who", "brand", "mission", "company", "store", "shop"],
   },
   {
     id: "contact",

@@ -6,15 +6,16 @@ import { useEffect, useState } from "react"
 import { motion } from "framer-motion"
 import { ArrowRight, Star } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { BRAND_NAME, BRAND_TAGLINE } from "@/lib/brand"
 
 const HERO_SLIDES = [
   {
     src: "/images/home/hero-pink-studio.png",
-    alt: "Skincare and beauty display — cleansing pads, sugar lip scrub, and curated pink accessories",
+    alt: "Curated products displayed in a bright studio setting",
   },
   {
     src: "/images/home/hero-marble-garden.png",
-    alt: "Cosmetics on white marble with garden backdrop — lip care, body care, and turmeric skincare",
+    alt: "Featured products arranged on a clean marble surface",
   },
 ] as const
 
@@ -91,9 +92,9 @@ export function HeroSection() {
             transition={{ duration: 0.55 }}
             className="inline-flex items-center gap-2 rounded-full border border-gray-200/90 bg-white px-4 py-2.5 shadow-sm sm:px-5 sm:py-2"
           >
-            <Star className="size-[1.125rem] shrink-0 fill-rose-500 text-rose-500 sm:size-5" aria-hidden />
-            <span className="font-sans text-[14px] font-semibold tracking-normal text-rose-600 sm:text-[15px]">
-              Reveal Your Natural Glow
+            <Star className="size-[1.125rem] shrink-0 fill-teal-500 text-teal-500 sm:size-5" aria-hidden />
+            <span className="font-sans text-[14px] font-semibold tracking-normal text-navy sm:text-[15px]">
+              {BRAND_NAME}
             </span>
           </motion.div>
 
@@ -103,7 +104,7 @@ export function HeroSection() {
             transition={{ duration: 0.6, delay: 0.06 }}
             className="mt-6 font-heading text-[2rem] font-semibold leading-[1.1] tracking-tight text-balance text-white [text-shadow:0_2px_28px_rgba(0,0,0,0.5)] sm:text-4xl sm:leading-[1.08] lg:text-[2.75rem] lg:leading-[1.06]"
           >
-            Glow Starts With Healthy Skin
+            Shop With Confidence
           </motion.h1>
 
           <motion.p
@@ -112,8 +113,7 @@ export function HeroSection() {
             transition={{ duration: 0.6, delay: 0.12 }}
             className="mt-5 max-w-xl font-sans text-base font-normal leading-relaxed text-white/90 [text-shadow:0_1px_16px_rgba(0,0,0,0.5)] sm:text-[1.125rem] sm:leading-relaxed"
           >
-            Discover premium skincare and beauty essentials formulated to nourish, protect, and enhance your natural glow
-            every single day.
+            {BRAND_TAGLINE}. Discover quality products, secure checkout, and reliable delivery — all in one place.
           </motion.p>
 
           <motion.div
@@ -124,16 +124,10 @@ export function HeroSection() {
           >
             <Link
               href="/shop"
-              className="inline-flex items-center gap-2 rounded-full bg-rose-100 px-6 py-3 font-sans text-sm font-semibold tracking-tight text-navy transition-colors hover:bg-rose-200/90 sm:px-8 sm:py-3.5 sm:text-base"
+              className="inline-flex items-center gap-2 rounded-full bg-white px-6 py-3 font-sans text-sm font-semibold tracking-tight text-navy transition-colors hover:bg-teal-100 sm:px-8 sm:py-3.5 sm:text-base"
             >
-              Shop Collection
+              Shop Now
               <ArrowRight className="size-[1.125rem] sm:size-5" aria-hidden />
-            </Link>
-            <Link
-              href="/blog"
-              className="inline-flex items-center justify-center rounded-full border-2 border-rose-300 bg-white px-6 py-3 font-sans text-sm font-semibold tracking-tight text-rose-600 transition-colors hover:bg-rose-50/80 sm:px-8 sm:py-3.5 sm:text-base"
-            >
-              Beauty Guide
             </Link>
           </motion.div>
         </div>

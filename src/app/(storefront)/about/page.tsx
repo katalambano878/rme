@@ -17,31 +17,32 @@ import { Section } from "@/components/shared/section"
 import { Heading } from "@/components/shared/heading"
 import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
+import { BRAND_NAME, BRAND_TAGLINE } from "@/lib/brand"
 
 const values = [
   {
     icon: Gem,
     title: "Quality",
     description:
-      "Every product in our store is selected for quality, safety, and visible results for skin, lips, body, and hair.",
+      "Every product in our store is selected for quality, reliability, and value.",
   },
   {
     icon: ShieldCheck,
-    title: "Authenticity",
+    title: "Trust",
     description:
-      "We provide authentic beauty and personal care products sourced from trusted brands and suppliers.",
+      "We provide authentic products from trusted suppliers with transparent policies.",
   },
   {
     icon: Sparkles,
-    title: "Glow First",
+    title: "Simplicity",
     description:
-      "We believe confidence starts with healthy skin and simple routines that fit your real lifestyle.",
+      "We believe shopping should be straightforward — browse, checkout, and receive with confidence.",
   },
   {
     icon: Users,
     title: "Community",
     description:
-      "RonnyandMe is more than a store - it is a growing community sharing skincare and beauty wins every day.",
+      `${BRAND_NAME} is more than a store — it is a community of customers who shop with confidence.`,
   },
 ]
 
@@ -49,12 +50,12 @@ const trustPoints = [
   {
     icon: Award,
     title: "Curated Selection",
-    description: "We stock skincare, lip care, body care, makeup, hair essentials, and baby care products.",
+    description: "A wide range of products organized by category for easy browsing.",
   },
   {
     icon: Truck,
-    title: "Nationwide Delivery",
-    description: "Fast, reliable delivery in your region and beyond.",
+    title: "Reliable Delivery",
+    description: "Fast, dependable delivery to your doorstep.",
   },
   {
     icon: RefreshCw,
@@ -63,8 +64,8 @@ const trustPoints = [
   },
   {
     icon: Heart,
-    title: "Personal Care Support",
-    description: "Friendly product guidance and routine support via WhatsApp.",
+    title: "Customer Support",
+    description: "Friendly help when you need it — before, during, and after your order.",
   },
 ]
 
@@ -92,13 +93,12 @@ export default function AboutPage() {
               Our Story
             </p>
             <h1 className="mt-4 font-heading text-4xl font-semibold tracking-tight text-navy sm:text-5xl lg:text-6xl">
-              Where Beauty Meets
+              Welcome to
               <br />
-              <span className="text-rose-primary">Everyday Care</span>
+              <span className="text-rose-primary">{BRAND_NAME}</span>
             </h1>
             <p className="mx-auto mt-6 max-w-2xl text-lg text-muted-foreground">
-              Born from a passion for beauty and skincare, we make trusted personal
-              care products accessible to everyone in your region and beyond.
+              {BRAND_TAGLINE}. We make online shopping simple, secure, and accessible for everyone.
             </p>
           </motion.div>
         </Container>
@@ -117,7 +117,7 @@ export default function AboutPage() {
               <div className="aspect-[4/5] overflow-hidden rounded-3xl">
                 <img
                   src="/images/store-front.png"
-                  alt="RonnyandMe store — Ronny & Mimi's Essentials"
+                  alt={`${BRAND_NAME} online store`}
                   className="h-full w-full object-cover object-center"
                 />
               </div>
@@ -133,19 +133,19 @@ export default function AboutPage() {
               <Heading as="h2">The Beginning</Heading>
               <div className="space-y-4 text-muted-foreground leading-relaxed">
                 <p>
-                  RonnyandMe was born from a simple observation: quality beauty
-                  care should be easy to find - trusted products, honest quality, and a
-                  shopping experience that respects your time.
+                  {BRAND_NAME} was built on a simple idea: quality products should be
+                  easy to find — trusted items, honest pricing, and a shopping
+                  experience that respects your time.
                 </p>
                 <p>
-                  What began as a small curation grew into a full storefront for
-                  skincare, lip care, body lotions, body wash, makeup, hair products,
-                  and baby essentials. Every item is chosen with care so your routine
-                  feels intentional and effective.
+                  What started as a small catalog has grown into a full online
+                  storefront with a wide selection of products across multiple
+                  categories. Every item is chosen with care so you can shop with
+                  confidence.
                 </p>
                 <p>
-                  Today we serve customers across cities and regions. From first
-                  orders to restocks, we are glad to be part of the moments
+                  Today we serve customers across regions and cities. From first
+                  orders to repeat purchases, we are glad to be part of the moments
                   that matter to you.
                 </p>
               </div>
@@ -201,7 +201,7 @@ export default function AboutPage() {
             align="center"
             subtitle="More than just a store — a commitment to excellence."
           >
-            Why Choose RonnyandMe
+            Why Choose {BRAND_NAME}
           </Heading>
 
           <div className="mt-14 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
@@ -239,18 +239,17 @@ export default function AboutPage() {
             className="mx-auto max-w-xl"
           >
             <h2 className="font-heading text-3xl font-semibold text-navy sm:text-4xl">
-              Ready to Elevate Your Routine?
+              Ready to Start Shopping?
             </h2>
             <p className="mt-4 text-muted-foreground">
-              Discover our curated categories of skincare, lip care, body care,
-              makeup, hair essentials, and more - all chosen with you in mind.
+              Explore our product categories — all chosen with you in mind.
             </p>
             <Button
               className="mt-8 rounded-xl bg-rose-100 px-8 py-3 text-navy hover:bg-rose-200"
               size="lg"
               render={<Link href="/shop" />}
             >
-              Explore Categories
+              Shop Now
             </Button>
           </motion.div>
         </Container>

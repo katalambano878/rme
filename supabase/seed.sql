@@ -1,29 +1,19 @@
 -- Optional seed (run after migration, as postgres or service role in SQL Editor)
--- Default catalog categories (mirrors src/lib/catalog-default-categories.ts)
+-- Neutral starter categories for Trust Ecom (customize in admin)
 
 insert into public.categories (name, slug, description, sort_order, is_active)
 values
-  ('Dresses', 'dresses', 'Dresses for every occasion', 1, true),
-  ('Two piece', 'two-piece', 'Coordinated two-piece sets', 2, true),
-  ('Tops', 'tops', 'Blouses, shirts, and tops', 3, true),
-  ('Jeans', 'jeans', 'Denim fits you will love', 4, true),
-  ('Bags', 'bags', 'Handbags and everyday bags', 5, true),
-  ('Watches', 'watches', 'Timepieces and wristwear', 6, true),
-  ('Perfumes', 'perfumes', 'Fragrances and scents', 7, true),
-  ('Sunglasses', 'sunglasses', 'Eyewear and sun protection', 8, true),
-  ('Shoes', 'shoes', 'Footwear for every look', 9, true),
-  ('Heels', 'heels', 'Heels and elevated styles', 10, true),
-  ('Slippers', 'slippers', 'Comfortable slip-ons', 11, true),
-  ('Jewelries', 'jewelries', 'Jewelry and accessories', 12, true),
-  ('Luggage', 'luggage', 'Travel bags and luggage', 13, true),
-  ('Men', 'men', 'Men''s collection', 14, true)
+  ('Featured', 'featured', 'Featured products', 1, true),
+  ('New Arrivals', 'new-arrivals', 'Latest products', 2, true),
+  ('Best Sellers', 'best-sellers', 'Customer favorites', 3, true),
+  ('Sale', 'sale', 'Deals and discounts', 4, true)
 on conflict (slug) do nothing;
 
 update public.storefront_settings set
-  announcement_bar = 'Free delivery on orders over GH₵ 2,000 · Authentic products · Easy returns',
-  store_name = 'RonnyandMe',
-  whatsapp_number = '+233592707791',
-  support_email = 'hello@ronnyandme.com'
+  announcement_bar = 'Free delivery on qualifying orders · Easy returns · Shop with confidence',
+  store_name = 'Trust Ecom',
+  whatsapp_number = '',
+  support_email = 'hello@trustecom.com'
 where id = 1;
 
 update public.site_settings set

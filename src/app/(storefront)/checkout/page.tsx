@@ -591,7 +591,7 @@ export default function CheckoutPage() {
                     <FormField label="Phone Number" required>
                       <Input
                         type="tel"
-                        placeholder="059 270 7791"
+                        placeholder="Your phone number"
                         value={formData.phone}
                         onChange={(e) =>
                           updateField("phone", e.target.value)
@@ -605,7 +605,7 @@ export default function CheckoutPage() {
 
                     <FormField label="Street Address / Delivery Address" required>
                       <Input
-                        placeholder="e.g. 111 Newtown Rd, Accra Newtown"
+                        placeholder="e.g. 123 Main Street, City"
                         value={formData.address1}
                         onChange={(e) =>
                           updateField("address1", e.target.value)
@@ -714,7 +714,7 @@ export default function CheckoutPage() {
                       {
                         id: "pickup",
                         name: "Store Pickup",
-                        estimate: "Manet Ville Estates, East Airport Spintex, Accra",
+                        estimate: "Store pickup address TBD",
                         price: 0,
                         icon: Package,
                       },

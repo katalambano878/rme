@@ -461,7 +461,7 @@ const STORE_INFO: Record<string, string> = {
   returns: `We accept returns in line with our Returns policy. Visit /policies/returns on the site or ask us to open a support ticket.`,
   payment: `We accept secure checkout via Paystack (cards & MoMo) and Mobile Money via Moolre where enabled (GHS).`,
   contact: `Reach ${BRAND_NAME}:\n- Email: ${CONTACT_EMAIL}\n- Phone: ${PHONE_DISPLAY_PRIMARY} (${PHONE_INTERNATIONAL_PRIMARY})\n- WhatsApp: ${WHATSAPP_URL}`,
-  about: `${BRAND_NAME} — ${BRAND_TAGLINE}. We offer beauty, skincare, body care, makeup, hair, and baby essentials.`,
+  about: `${BRAND_NAME} — ${BRAND_TAGLINE}. We are a general online store with a curated catalog and nationwide delivery in Ghana.`,
   delivery_times: `Delivery estimates depend on your location and are confirmed at checkout.`,
   hours: `Shop online anytime. For fastest help, use this chat or WhatsApp.`,
 }
