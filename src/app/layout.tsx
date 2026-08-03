@@ -193,8 +193,8 @@ export default function RootLayout({
         />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-        <meta name="theme-color" content="#0B1B3A" />
-        <meta name="msapplication-TileColor" content="#0B1B3A" />
+        <meta name="theme-color" content="#244b39" />
+        <meta name="msapplication-TileColor" content="#244b39" />
         <meta name="geo.region" content="GH" />
         <meta name="geo.placename" content="Ghana" />
         <meta name="ICBM" content="7.9465, -1.0232" />

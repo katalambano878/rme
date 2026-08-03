@@ -63,12 +63,12 @@ const nextConfig: NextConfig = {
         ],
       },
       {
-        // Long-lived cache for static brand assets
+        // Brand assets — allow revalidation when logo files are replaced
         source: "/brand/(.*)",
         headers: [
           {
             key: "Cache-Control",
-            value: "public, max-age=31536000, immutable",
+            value: "public, max-age=3600, must-revalidate",
           },
         ],
       },

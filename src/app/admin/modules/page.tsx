@@ -15,14 +15,14 @@ interface Module {
 
 /** Icon badge: small circle, pale pink / soft accents (readable on white cards). */
 const colorMap: Record<string, string> = {
-  red: 'bg-pink-50 text-rose-700 ring-1 ring-rose-100',
-  blue: 'bg-pink-50 text-rose-700 ring-1 ring-rose-100',
-  purple: 'bg-pink-50 text-rose-700 ring-1 ring-rose-100',
-  teal: 'bg-pink-50 text-rose-700 ring-1 ring-rose-100',
-  orange: 'bg-pink-50 text-rose-700 ring-1 ring-rose-100',
-  amber: 'bg-pink-50 text-rose-700 ring-1 ring-rose-100',
-  yellow: 'bg-pink-50 text-rose-700 ring-1 ring-rose-100',
-  indigo: 'bg-pink-50 text-rose-700 ring-1 ring-rose-100',
+  red: 'bg-rose-light text-navy ring-1 ring-rose-border',
+  blue: 'bg-rose-light text-navy ring-1 ring-rose-border',
+  purple: 'bg-rose-light text-navy ring-1 ring-rose-border',
+  teal: 'bg-rose-light text-navy ring-1 ring-rose-border',
+  orange: 'bg-rose-light text-navy ring-1 ring-rose-border',
+  amber: 'bg-rose-light text-navy ring-1 ring-rose-border',
+  yellow: 'bg-rose-light text-navy ring-1 ring-rose-border',
+  indigo: 'bg-rose-light text-navy ring-1 ring-rose-border',
   gray: 'bg-gray-100 text-gray-600 ring-1 ring-gray-200',
 }
 
@@ -179,8 +179,8 @@ export default function ModulesPage() {
     return (
       <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4">
         <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-8 text-center border border-gray-100">
-          <div className="w-20 h-20 bg-rose-100 rounded-full flex items-center justify-center mx-auto mb-6">
-            <i className="ri-lock-2-line text-4xl text-rose-600"></i>
+          <div className="w-20 h-20 bg-rose-light rounded-full flex items-center justify-center mx-auto mb-6">
+            <i className="ri-lock-2-line text-4xl text-navy"></i>
           </div>
           <h2 className="text-2xl font-bold text-gray-900 mb-2">Restricted Access</h2>
           <p className="text-gray-500 mb-8">Please enter the security PIN to access Modules.</p>
@@ -194,7 +194,7 @@ export default function ModulesPage() {
                   setPin(e.target.value);
                   setPinError('');
                 }}
-                className="w-full text-center text-3xl font-bold tracking-widest px-4 py-4 border-2 border-gray-200 rounded-xl focus:border-rose-400 focus:ring-4 focus:ring-rose-400/10 outline-none transition-all"
+                className="w-full text-center text-3xl font-bold tracking-widest px-4 py-4 border-2 border-gray-200 rounded-xl focus:border-rose-primary focus:ring-4 focus:ring-navy outline-none transition-all"
                 placeholder="• • • •"
                 maxLength={4}
                 autoFocus
@@ -205,7 +205,7 @@ export default function ModulesPage() {
             )}
             <button
               type="submit"
-              className="w-full bg-gray-900 hover:bg-rose-600 text-white font-bold py-4 rounded-xl transition-colors text-lg"
+              className="w-full bg-gray-900 hover:bg-navy text-white font-bold py-4 rounded-xl transition-colors text-lg"
             >
               Unlock Dashboard
             </button>
@@ -246,7 +246,7 @@ export default function ModulesPage() {
                 placeholder="Search modules..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-rose-400 outline-none"
+                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-navy outline-none"
               />
             </div>
             <select
@@ -265,7 +265,7 @@ export default function ModulesPage() {
           <div className="space-y-10">
             {Object.entries(groupedModules).map(([category, items]) => (
               <div key={category}>
-                <h2 className="text-xl font-bold text-gray-800 mb-4 border-l-4 border-pink-200 pl-3">
+                <h2 className="text-xl font-bold text-gray-800 mb-4 border-l-4 border-rose-border pl-3">
                   {category}
                 </h2>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6 lg:gap-8">
@@ -274,7 +274,7 @@ export default function ModulesPage() {
                       key={module.id}
                       className={`bg-white rounded-xl border-2 p-6 min-w-0 transition-all ${
                         module.enabled
-                          ? 'border-rose-300 shadow-md opacity-100'
+                          ? 'border-rose-border shadow-md opacity-100'
                           : 'border-gray-200'
                       }`}
                     >
@@ -291,8 +291,8 @@ export default function ModulesPage() {
                           aria-checked={module.enabled}
                           aria-label={`${module.enabled ? 'Disable' : 'Enable'} ${module.name}`}
                           onClick={() => toggleModule(module.id, module.enabled)}
-                          className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-400 focus-visible:ring-offset-2 ${
-                            module.enabled ? 'bg-rose-500' : 'bg-gray-300'
+                          className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-navy focus-visible:ring-offset-2 ${
+                            module.enabled ? 'bg-rose-light0' : 'bg-gray-300'
                           }`}
                         >
                           <span
@@ -307,7 +307,7 @@ export default function ModulesPage() {
                       <div className="mt-4 pt-4 border-t border-gray-100 flex justify-between items-center">
                         <span
                           className={`text-xs font-bold px-2.5 py-1 rounded-full ${
-                            module.enabled ? 'bg-rose-100 text-rose-800' : 'bg-gray-100 text-gray-600'
+                            module.enabled ? 'bg-rose-light text-navy' : 'bg-gray-100 text-gray-600'
                           }`}
                         >
                           {module.enabled ? 'Enabled' : 'Disabled'}

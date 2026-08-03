@@ -159,11 +159,11 @@ export function Footer() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
-                className="h-9 border-white/20 bg-white/10 text-white placeholder:text-white/40 focus-visible:border-teal-200 focus-visible:ring-teal-100/40"
+                className="h-9 border-white/20 bg-white/10 text-white placeholder:text-white/40 focus-visible:border-rose-border focus-visible:ring-navy/20"
               />
               <Button
                 type="submit"
-                className="h-9 w-9 shrink-0 rounded-full bg-white p-0 text-navy hover:bg-teal-100"
+                className="h-9 w-9 shrink-0 rounded-full bg-white p-0 text-navy hover:bg-teal-light"
               >
                 <Send className="size-4" />
               </Button>
@@ -172,14 +172,17 @@ export function Footer() {
         </div>
 
         <div className="flex flex-col items-center justify-between gap-6 border-t border-white/10 py-8 sm:flex-row sm:items-start">
-          <div className="flex max-w-xs flex-col items-center gap-2 sm:flex-row sm:items-center sm:gap-3">
-            <Image
-              src={BRAND_LOGO_SRC}
-              alt={BRAND_LOGO_ALT}
-              width={120}
-              height={40}
-              className="h-8 w-auto object-contain brightness-0 invert"
-            />
+          <div className="flex max-w-xs flex-col items-center gap-3 sm:flex-row sm:items-center sm:gap-4">
+            <div className="rounded-xl bg-white px-3 py-2 shadow-sm">
+              <Image
+                src={BRAND_LOGO_SRC}
+                alt={BRAND_LOGO_ALT}
+                width={168}
+                height={140}
+                className="h-10 w-auto object-contain"
+                unoptimized
+              />
+            </div>
             <div className="text-center sm:text-left">
               <p className="text-xs text-white/40">
                 &copy; 2026 {BRAND_NAME}. All rights reserved.

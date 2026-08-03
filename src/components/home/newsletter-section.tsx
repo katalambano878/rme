@@ -51,11 +51,11 @@ export function NewsletterSection() {
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="Enter your email address"
                 required
-                className="min-w-0 flex-1 rounded-full border border-rose-border bg-white px-5 py-3.5 text-sm text-navy placeholder:text-muted-foreground/60 transition-all focus:border-teal-300 focus:outline-none focus:ring-2 focus:ring-teal-200/40"
+                className="min-w-0 flex-1 rounded-full border border-rose-border bg-white px-5 py-3.5 text-sm text-navy placeholder:text-muted-foreground/60 transition-all focus:border-rose-border focus:outline-none focus:ring-2 focus:ring-navy/20"
               />
               <button
                 type="submit"
-                className="inline-flex shrink-0 items-center gap-2 rounded-full bg-white px-6 py-3.5 text-sm font-semibold text-navy transition-all duration-300 hover:bg-teal-100 hover:shadow-md active:scale-[0.98]"
+                className="inline-flex shrink-0 items-center gap-2 rounded-full bg-white px-6 py-3.5 text-sm font-semibold text-navy transition-all duration-300 hover:bg-teal-light hover:shadow-md active:scale-[0.98]"
               >
                 <Send className="size-4" />
                 <span className="hidden sm:inline">Subscribe</span>

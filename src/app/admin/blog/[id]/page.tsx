@@ -52,14 +52,14 @@ export default function AdminEditBlogPostPage({ params }: { params: Promise<{ id
 
       {loading ? (
         <div className="rounded-xl border border-gray-200 bg-white p-12 text-center text-gray-600">
-          <i className="ri-loader-4-line animate-spin text-3xl inline-block mb-2 text-rose-500"></i>
+          <i className="ri-loader-4-line animate-spin text-3xl inline-block mb-2 text-rose-primary"></i>
           <p>Loading post…</p>
         </div>
       ) : error === 'invalid-id' ? (
         <div className="rounded-xl border border-amber-200 bg-amber-50 p-6 text-amber-950">
           <p className="font-semibold">This link uses an old demo ID.</p>
           <p className="mt-2 text-sm">
-            Open <Link href="/admin/blog" className="font-semibold text-rose-800 underline">Blog Posts</Link>, then use
+            Open <Link href="/admin/blog" className="font-semibold text-navy underline">Blog Posts</Link>, then use
             “Edit” on a real post (posts are stored in Supabase with a UUID id).
           </p>
         </div>
@@ -67,7 +67,7 @@ export default function AdminEditBlogPostPage({ params }: { params: Promise<{ id
         <div className="rounded-xl border border-gray-200 bg-gray-50 p-6 text-gray-800">
           <p className="font-semibold">Post not found</p>
           <p className="mt-2 text-sm">It may have been deleted, or the ID is wrong.</p>
-          <Link href="/admin/blog" className="mt-4 inline-block text-rose-700 font-semibold hover:underline">
+          <Link href="/admin/blog" className="mt-4 inline-block text-navy font-semibold hover:underline">
             ← Back to Blog
           </Link>
         </div>

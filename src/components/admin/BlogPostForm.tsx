@@ -154,7 +154,7 @@ export default function BlogPostForm({ mode, postId, initialData }: BlogPostForm
             type="text"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-rose-400 focus:border-rose-400"
+            className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-navy focus:border-rose-primary"
             placeholder="Post title"
           />
         </div>
@@ -168,7 +168,7 @@ export default function BlogPostForm({ mode, postId, initialData }: BlogPostForm
                 setSlug(slugifyTitle(title));
                 setSlugTouched(false);
               }}
-              className="text-xs font-semibold text-rose-700 hover:text-rose-900"
+              className="text-xs font-semibold text-navy hover:text-navy"
             >
               Sync from title
             </button>
@@ -180,7 +180,7 @@ export default function BlogPostForm({ mode, postId, initialData }: BlogPostForm
               setSlugTouched(true);
               setSlug(e.target.value);
             }}
-            className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-rose-400 focus:border-rose-400 font-mono text-sm"
+            className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-navy focus:border-rose-primary font-mono text-sm"
             placeholder="url-friendly-slug"
           />
         </div>
@@ -192,7 +192,7 @@ export default function BlogPostForm({ mode, postId, initialData }: BlogPostForm
             onChange={(e) => setExcerpt(e.target.value)}
             rows={3}
             maxLength={500}
-            className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-rose-400 focus:border-rose-400 resize-none"
+            className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-navy focus:border-rose-primary resize-none"
             placeholder="Short summary for listings"
           />
         </div>
@@ -203,11 +203,11 @@ export default function BlogPostForm({ mode, postId, initialData }: BlogPostForm
             value={body}
             onChange={(e) => setBody(e.target.value)}
             rows={16}
-            className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-rose-400 focus:border-rose-400 font-mono text-sm"
+            className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-navy focus:border-rose-primary font-mono text-sm"
             placeholder="Full post body (plain text or HTML)"
           />
           <p className="text-xs text-gray-500 mt-1">
-            <button type="button" onClick={estimateReadTime} className="text-rose-700 font-medium hover:underline">
+            <button type="button" onClick={estimateReadTime} className="text-navy font-medium hover:underline">
               Estimate read time
             </button>{' '}
             from word count (~200 wpm).
@@ -220,7 +220,7 @@ export default function BlogPostForm({ mode, postId, initialData }: BlogPostForm
             type="text"
             value={category}
             onChange={(e) => setCategory(e.target.value)}
-            className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-rose-400 focus:border-rose-400"
+            className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-navy focus:border-rose-primary"
             placeholder="e.g. Interior Design"
           />
         </div>
@@ -232,10 +232,10 @@ export default function BlogPostForm({ mode, postId, initialData }: BlogPostForm
               type="url"
               value={coverImageUrl}
               onChange={(e) => setCoverImageUrl(e.target.value)}
-              className="flex-1 px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-rose-400 focus:border-rose-400 text-sm"
+              className="flex-1 px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-navy focus:border-rose-primary text-sm"
               placeholder="https://…"
             />
-            <label className="inline-flex items-center justify-center px-4 py-3 border-2 border-dashed border-gray-300 rounded-lg hover:border-rose-400 cursor-pointer text-sm font-medium text-gray-700 whitespace-nowrap">
+            <label className="inline-flex items-center justify-center px-4 py-3 border-2 border-dashed border-gray-300 rounded-lg hover:border-rose-primary cursor-pointer text-sm font-medium text-gray-700 whitespace-nowrap">
               {uploading ? 'Uploading…' : 'Upload file'}
               <input type="file" accept="image/*" className="hidden" onChange={handleCoverUpload} disabled={uploading} />
             </label>
@@ -256,7 +256,7 @@ export default function BlogPostForm({ mode, postId, initialData }: BlogPostForm
               min={1}
               value={readTime}
               onChange={(e) => setReadTime(e.target.value)}
-              className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-rose-400 focus:border-rose-400"
+              className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-navy focus:border-rose-primary"
               placeholder="Auto or manual"
             />
           </div>
@@ -266,7 +266,7 @@ export default function BlogPostForm({ mode, postId, initialData }: BlogPostForm
               id="blog-published"
               checked={published}
               onChange={(e) => setPublished(e.target.checked)}
-              className="w-5 h-5 text-rose-600 border-gray-300 rounded focus:ring-rose-400"
+              className="w-5 h-5 text-navy border-gray-300 rounded focus:ring-navy"
             />
             <label htmlFor="blog-published" className="text-gray-900 font-medium">
               Published (visible on storefront when published)
@@ -280,7 +280,7 @@ export default function BlogPostForm({ mode, postId, initialData }: BlogPostForm
           type="button"
           onClick={handleSubmit}
           disabled={loading}
-          className="px-6 py-3 bg-rose-600 hover:bg-rose-700 disabled:opacity-60 text-white rounded-lg font-semibold transition-colors"
+          className="px-6 py-3 bg-navy hover:bg-navy disabled:opacity-60 text-white rounded-lg font-semibold transition-colors"
         >
           {loading ? 'Saving…' : mode === 'create' ? 'Create post' : 'Save changes'}
         </button>

@@ -14,6 +14,7 @@ import {
   Truck,
 
   CreditCard,
+  Smartphone,
   Package,
   MessageCircle,
 } from "lucide-react"
@@ -91,12 +92,14 @@ const paymentMethods = [
     name: "Card Payment",
     description: "Debit & credit cards, bank transfer & more (via Paystack)",
     recommended: true,
+    icon: CreditCard,
   },
   {
     id: "moolre",
     name: "Mobile Money",
     description: "Pay with mobile money from your network",
     recommended: false,
+    icon: Smartphone,
   },
 ]
 
@@ -131,7 +134,7 @@ function StepIndicator({ currentStep }: { currentStep: number }) {
                 "flex size-9 items-center justify-center rounded-full text-sm font-semibold transition-colors duration-300 sm:size-10",
                 step.id < currentStep && "bg-navy text-white",
                 step.id === currentStep &&
-                  "bg-rose-100 text-navy shadow-lg shadow-rose-200/40",
+                  "bg-rose-light text-navy shadow-lg shadow-rose-border/40",
                 step.id > currentStep &&
                   "border-2 border-gray-300 text-gray-400",
               )}
@@ -181,8 +184,8 @@ function FormField({
   children: React.ReactNode
 }) {
   return (
-    <div className="space-y-1.5">
-      <Label className="text-[17px] font-semibold text-navy">
+    <div className="space-y-2">
+      <Label className="text-sm font-medium text-navy">
         {label}
         {required && <span className="ml-0.5 text-rose-primary">*</span>}
       </Label>
@@ -233,7 +236,7 @@ export default function CheckoutPage() {
   }
 
   const fieldClass =
-    "h-14 rounded-2xl border-2 border-rose-100 bg-white text-base text-navy placeholder:text-gray-400 focus-visible:border-rose-200 focus-visible:ring-0"
+    "h-12 rounded-md border border-rose-border bg-white px-3.5 text-sm text-navy placeholder:text-muted-foreground shadow-none focus-visible:border-navy focus-visible:ring-2 focus-visible:ring-navy/10"
 
   const canProceedStep1 =
     formData.phone.trim() !== "" &&
@@ -433,7 +436,7 @@ export default function CheckoutPage() {
               Add some items before checking out
             </p>
             <Link href="/" className="mt-8">
-              <Button className="h-auto rounded-full bg-rose-100 px-10 py-3.5 text-base font-semibold text-navy hover:bg-rose-200">
+              <Button className="h-auto rounded-full bg-rose-light px-10 py-3.5 text-base font-semibold text-navy hover:bg-rose-border">
                 Continue Shopping
               </Button>
             </Link>
@@ -542,317 +545,401 @@ export default function CheckoutPage() {
             <AnimatePresence mode="wait">
               {step === 1 && (
                 <StepWrapper key="details">
-                  <h2 className="mb-6 font-heading text-2xl font-semibold text-navy">
-                    Your Details
-                  </h2>
+                  <div className="rounded-md border border-slate-200 bg-white p-5 sm:p-7">
+                    <h2 className="mb-1 text-2xl font-bold tracking-tight text-navy">
+                      Your Details
+                    </h2>
+                    <p className="mb-6 text-sm text-muted-foreground">
+                      Where should we deliver your order?
+                    </p>
 
-                  <div className="space-y-4">
-                    <div className="grid gap-4 sm:grid-cols-2">
-                      <FormField label="First Name" required>
+                    <div className="space-y-5">
+                      <div className="grid gap-5 sm:grid-cols-2">
+                        <FormField label="First Name" required>
+                          <Input
+                            placeholder="First name"
+                            value={formData.firstName}
+                            onChange={(e) =>
+                              updateField("firstName", e.target.value)
+                            }
+                            className={cn(
+                              fieldClass,
+                              step1Touched &&
+                                !formData.firstName.trim() &&
+                                "border-red-400 focus-visible:border-red-400 focus-visible:ring-red-400/20",
+                            )}
+                          />
+                          {step1Touched && !formData.firstName.trim() && (
+                            <p className="mt-1 text-xs text-red-500">
+                              First name is required
+                            </p>
+                          )}
+                        </FormField>
+                        <FormField label="Last Name" required>
+                          <Input
+                            placeholder="Last name"
+                            value={formData.lastName}
+                            onChange={(e) =>
+                              updateField("lastName", e.target.value)
+                            }
+                            className={cn(
+                              fieldClass,
+                              step1Touched &&
+                                !formData.lastName.trim() &&
+                                "border-red-400 focus-visible:border-red-400 focus-visible:ring-red-400/20",
+                            )}
+                          />
+                          {step1Touched && !formData.lastName.trim() && (
+                            <p className="mt-1 text-xs text-red-500">
+                              Last name is required
+                            </p>
+                          )}
+                        </FormField>
+                      </div>
+
+                      <FormField label="Email Address (optional)">
                         <Input
-                          placeholder="First name"
-                          value={formData.firstName}
+                          type="email"
+                          placeholder="your@email.com"
+                          value={formData.email}
                           onChange={(e) =>
-                            updateField("firstName", e.target.value)
+                            updateField("email", e.target.value)
                           }
-                          className={cn(fieldClass, step1Touched && !formData.firstName.trim() && "border-red-400")}
+                          className={fieldClass}
                         />
-                        {step1Touched && !formData.firstName.trim() && (
-                          <p className="text-xs text-red-500 mt-1">First name is required</p>
+                      </FormField>
+
+                      <FormField label="Phone Number" required>
+                        <Input
+                          type="tel"
+                          placeholder="Your phone number"
+                          value={formData.phone}
+                          onChange={(e) =>
+                            updateField("phone", e.target.value)
+                          }
+                          className={cn(
+                            fieldClass,
+                            step1Touched &&
+                              !formData.phone.trim() &&
+                              "border-red-400 focus-visible:border-red-400 focus-visible:ring-red-400/20",
+                          )}
+                        />
+                        {step1Touched && !formData.phone.trim() && (
+                          <p className="mt-1 text-xs text-red-500">
+                            Phone number is required
+                          </p>
                         )}
                       </FormField>
-                      <FormField label="Last Name" required>
+
+                      <FormField
+                        label="Street Address / Delivery Address"
+                        required
+                      >
                         <Input
-                          placeholder="Last name"
-                          value={formData.lastName}
+                          placeholder="e.g. 123 Main Street, City"
+                          value={formData.address1}
                           onChange={(e) =>
-                            updateField("lastName", e.target.value)
+                            updateField("address1", e.target.value)
                           }
-                          className={cn(fieldClass, step1Touched && !formData.lastName.trim() && "border-red-400")}
+                          className={cn(
+                            fieldClass,
+                            step1Touched &&
+                              !formData.address1.trim() &&
+                              "border-red-400 focus-visible:border-red-400 focus-visible:ring-red-400/20",
+                          )}
                         />
-                        {step1Touched && !formData.lastName.trim() && (
-                          <p className="text-xs text-red-500 mt-1">Last name is required</p>
+                        {step1Touched && !formData.address1.trim() && (
+                          <p className="mt-1 text-xs text-red-500">
+                            Delivery address is required
+                          </p>
                         )}
                       </FormField>
-                    </div>
 
-                    <FormField label="Email Address (optional)">
-                      <Input
-                        type="email"
-                        placeholder="your@email.com"
-                        value={formData.email}
-                        onChange={(e) =>
-                          updateField("email", e.target.value)
-                        }
-                        className={fieldClass}
-                      />
-                    </FormField>
+                      <div className="grid gap-5 sm:grid-cols-2">
+                        <FormField label="City" required>
+                          <Input
+                            placeholder="City"
+                            value={formData.city}
+                            onChange={(e) =>
+                              updateField("city", e.target.value)
+                            }
+                            className={cn(
+                              fieldClass,
+                              step1Touched &&
+                                !formData.city.trim() &&
+                                "border-red-400 focus-visible:border-red-400 focus-visible:ring-red-400/20",
+                            )}
+                          />
+                          {step1Touched && !formData.city.trim() && (
+                            <p className="mt-1 text-xs text-red-500">
+                              City is required
+                            </p>
+                          )}
+                        </FormField>
+                        <FormField label="Region" required>
+                          <Select
+                            value={formData.region}
+                            onValueChange={(val) =>
+                              updateField("region", val as string)
+                            }
+                          >
+                            <SelectTrigger
+                              className={cn(
+                                "w-full",
+                                fieldClass,
+                                step1Touched &&
+                                  !formData.region &&
+                                  "border-red-400 focus-visible:border-red-400 focus-visible:ring-red-400/20",
+                              )}
+                            >
+                              <SelectValue placeholder="Select Region" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {ghanaRegions.map((r) => (
+                                <SelectItem key={r} value={r}>
+                                  {r}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          {step1Touched && !formData.region && (
+                            <p className="mt-1 text-xs text-red-500">
+                              Please select your region
+                            </p>
+                          )}
+                        </FormField>
+                      </div>
 
-                    <FormField label="Phone Number" required>
-                      <Input
-                        type="tel"
-                        placeholder="Your phone number"
-                        value={formData.phone}
-                        onChange={(e) =>
-                          updateField("phone", e.target.value)
-                        }
-                        className={cn(fieldClass, step1Touched && !formData.phone.trim() && "border-red-400")}
-                      />
-                      {step1Touched && !formData.phone.trim() && (
-                        <p className="text-xs text-red-500 mt-1">Phone number is required</p>
-                      )}
-                    </FormField>
-
-                    <FormField label="Street Address / Delivery Address" required>
-                      <Input
-                        placeholder="e.g. 123 Main Street, City"
-                        value={formData.address1}
-                        onChange={(e) =>
-                          updateField("address1", e.target.value)
-                        }
-                        className={cn(fieldClass, step1Touched && !formData.address1.trim() && "border-red-400")}
-                      />
-                      {step1Touched && !formData.address1.trim() && (
-                        <p className="text-xs text-red-500 mt-1">Delivery address is required</p>
-                      )}
-                    </FormField>
-
-                    <div className="grid gap-4 sm:grid-cols-2">
-                      <FormField label="City" required>
-                        <Input
-                          placeholder="City"
-                          value={formData.city}
-                          onChange={(e) =>
-                            updateField("city", e.target.value)
+                      <div className="flex items-center gap-3 pt-1">
+                        <Checkbox
+                          checked={formData.saveForNextTime}
+                          onCheckedChange={(checked) =>
+                            updateField("saveForNextTime", checked as boolean)
                           }
-                          className={cn(fieldClass, step1Touched && !formData.city.trim() && "border-red-400")}
                         />
-                        {step1Touched && !formData.city.trim() && (
-                          <p className="text-xs text-red-500 mt-1">City is required</p>
-                        )}
-                      </FormField>
-                      <FormField label="Region" required>
-                        <Select
-                          value={formData.region}
-                          onValueChange={(val) =>
-                            updateField("region", val as string)
-                          }
+                        <Label className="cursor-pointer text-sm text-muted-foreground">
+                          Save this address for future orders
+                        </Label>
+                      </div>
+
+                      <div className="space-y-2 border-t border-slate-100 pt-5">
+                        <Label
+                          htmlFor="orderNotes"
+                          className="text-sm font-medium text-navy"
                         >
-                          <SelectTrigger className={cn("w-full", fieldClass, step1Touched && !formData.region && "border-red-400")}>
-                            <SelectValue placeholder="Select Region" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {ghanaRegions.map((r) => (
-                              <SelectItem key={r} value={r}>
-                                {r}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        {step1Touched && !formData.region && (
-                          <p className="text-xs text-red-500 mt-1">Please select your region</p>
-                        )}
-                      </FormField>
+                          Order Notes{" "}
+                          <span className="font-normal text-muted-foreground">
+                            (optional)
+                          </span>
+                        </Label>
+                        <textarea
+                          id="orderNotes"
+                          rows={3}
+                          placeholder="Any special instructions, delivery notes, or requests for your order…"
+                          value={formData.orderNotes}
+                          onChange={(e) =>
+                            updateField("orderNotes", e.target.value)
+                          }
+                          className="w-full resize-none rounded-md border border-rose-border bg-white px-3.5 py-3 text-sm text-navy placeholder:text-muted-foreground outline-none focus:border-navy focus:ring-2 focus:ring-navy/10"
+                        />
+                      </div>
                     </div>
 
-                    <div className="flex items-center gap-3 pt-2">
-                      <Checkbox
-                        checked={formData.saveForNextTime}
-                        onCheckedChange={(checked) =>
-                          updateField("saveForNextTime", checked as boolean)
-                        }
-                      />
-                      <Label className="cursor-pointer text-sm text-muted-foreground">
-                        Save this address for future orders
-                      </Label>
+                    <div className="mt-7 flex justify-end">
+                      <Button
+                        onClick={() => {
+                          setStep1Touched(true)
+                          if (canProceedStep1) setStep(2)
+                        }}
+                        className="h-auto rounded-md bg-navy px-8 py-3.5 text-sm font-semibold text-white hover:bg-navy-light"
+                      >
+                        Continue to Shipping
+                        <ArrowRight className="ml-2 size-4" />
+                      </Button>
                     </div>
-                  </div>
-
-                  <div className="mt-6 space-y-2">
-                    <Label htmlFor="orderNotes" className="text-sm font-medium">
-                      Order Notes <span className="text-muted-foreground font-normal">(optional)</span>
-                    </Label>
-                    <textarea
-                      id="orderNotes"
-                      rows={3}
-                      placeholder="Any special instructions, delivery notes, or requests for your order…"
-                      value={formData.orderNotes}
-                      onChange={(e) => updateField("orderNotes", e.target.value)}
-                      className="w-full resize-none rounded-lg border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-rose-200"
-                    />
-                  </div>
-
-                  <div className="mt-7 flex justify-end">
-                    <Button
-                      onClick={() => {
-                        setStep1Touched(true)
-                        if (canProceedStep1) setStep(2)
-                      }}
-                      className="h-auto rounded-full bg-rose-200 px-9 py-4 text-base font-semibold text-rose-800 hover:bg-rose-300"
-                    >
-                      Continue to Shipping
-                      <ArrowRight className="ml-2 size-4" />
-                    </Button>
                   </div>
                 </StepWrapper>
               )}
 
               {step === 2 && (
                 <StepWrapper key="shipping">
-                  <h2 className="mb-5 font-heading text-2xl font-semibold text-navy">
-                    Shipping Method
-                  </h2>
+                  <div className="rounded-md border border-slate-200 bg-white p-5 sm:p-7">
+                    <h2 className="mb-1 text-2xl font-bold tracking-tight text-navy">
+                      Shipping Method
+                    </h2>
+                    <p className="mb-6 text-sm text-muted-foreground">
+                      Choose how you&apos;d like to receive your order
+                    </p>
 
-                  <RadioGroup
-                    value={formData.shippingMethod}
-                    onValueChange={(val) =>
-                      updateField("shippingMethod", val as string)
-                    }
-                    className="space-y-3"
-                  >
-                    {[
-                      {
-                        id: "pickup",
-                        name: "Store Pickup",
-                        estimate: "Store pickup address TBD",
-                        price: 0,
-                        icon: Package,
-                      },
-                      {
-                        id: "delivery",
-                        name: "Doorstep Delivery",
-                        estimate: "We will contact you with the delivery cost",
-                        price: -1,
-                        icon: Truck,
-                      },
-                    ].map((option) => (
-                      <label
-                        key={option.id}
-                        className={cn(
-                          "flex cursor-pointer items-center gap-3 rounded-2xl border-2 p-4 transition-all",
+                    <RadioGroup
+                      value={formData.shippingMethod}
+                      onValueChange={(val) =>
+                        updateField("shippingMethod", val as string)
+                      }
+                      className="space-y-3"
+                    >
+                      {[
+                        {
+                          id: "pickup",
+                          name: "Store Pickup",
+                          estimate: "Store pickup address TBD",
+                          priceLabel: "Free",
+                          priceTone: "free" as const,
+                          icon: Package,
+                        },
+                        {
+                          id: "delivery",
+                          name: "Doorstep Delivery",
+                          estimate:
+                            "We will contact you with the delivery cost",
+                          priceLabel: "At a Cost",
+                          priceTone: "paid" as const,
+                          icon: Truck,
+                        },
+                      ].map((option) => {
+                        const selected =
                           formData.shippingMethod === option.id
-                            ? "border-rose-300 bg-rose-light/50"
-                            : "border-rose-border hover:border-rose-300/50",
-                        )}
+                        return (
+                          <label
+                            key={option.id}
+                            className={cn(
+                              "flex cursor-pointer items-center gap-3.5 rounded-md border p-4 transition-all sm:gap-4 sm:px-5",
+                              selected
+                                ? "border-navy bg-rose-light/40 ring-1 ring-navy/15"
+                                : "border-rose-border hover:border-navy/30",
+                            )}
+                          >
+                            <RadioGroupItem value={option.id} />
+                            <option.icon className="size-5 shrink-0 text-navy" />
+                            <div className="min-w-0 flex-1">
+                              <p className="text-sm font-semibold text-navy">
+                                {option.name}
+                              </p>
+                              <p className="mt-0.5 text-sm text-muted-foreground">
+                                {option.estimate}
+                              </p>
+                            </div>
+                            <span
+                              className={cn(
+                                "shrink-0 text-sm font-semibold",
+                                option.priceTone === "free"
+                                  ? "text-navy"
+                                  : "text-rose-primary",
+                              )}
+                            >
+                              {option.priceLabel}
+                            </span>
+                          </label>
+                        )
+                      })}
+                    </RadioGroup>
+
+                    <div className="mt-7 flex justify-between">
+                      <Button
+                        variant="ghost"
+                        onClick={() => setStep(1)}
+                        className="h-auto gap-2 rounded-md px-5 py-3 text-navy"
                       >
-                        <RadioGroupItem value={option.id} />
-                        <option.icon className="size-5 shrink-0 text-navy" />
-                        <div className="flex-1">
-                          <p className="font-medium text-navy">{option.name}</p>
-                          <p className="text-sm text-muted-foreground">
-                            {option.estimate}
-                          </p>
-                        </div>
-                        <span
-                          className={cn(
-                            "text-sm font-semibold",
-                            option.price === 0
-                              ? "text-emerald-600"
-                              : "text-amber-600",
-                          )}
-                        >
-                          {option.price === 0
-                            ? "Free"
-                            : "At a Cost"}
-                        </span>
-                      </label>
-                    ))}
-                  </RadioGroup>
-
-
-                  <div className="mt-7 flex justify-between">
-                    <Button
-                      variant="ghost"
-                      onClick={() => setStep(1)}
-                      className="h-auto gap-2 px-5 py-3"
-                    >
-                      <ArrowLeft className="size-4" />
-                      Back
-                    </Button>
-                    <Button
-                      onClick={() => formData.shippingMethod && setStep(3)}
-                      disabled={!formData.shippingMethod}
-                      className="h-auto rounded-full bg-rose-100 px-8 py-3 text-sm font-semibold text-navy hover:bg-rose-200"
-                    >
-                      Continue to Payment
-                      <ArrowRight className="ml-2 size-4" />
-                    </Button>
+                        <ArrowLeft className="size-4" />
+                        Back
+                      </Button>
+                      <Button
+                        onClick={() =>
+                          formData.shippingMethod && setStep(3)
+                        }
+                        disabled={!formData.shippingMethod}
+                        className="h-auto rounded-md bg-navy px-8 py-3.5 text-sm font-semibold text-white hover:bg-navy-light disabled:opacity-50"
+                      >
+                        Continue to Payment
+                        <ArrowRight className="ml-2 size-4" />
+                      </Button>
+                    </div>
                   </div>
                 </StepWrapper>
               )}
 
               {step === 3 && (
                 <StepWrapper key="payment">
-                  <h2 className="mb-5 font-heading text-2xl font-semibold text-navy">
-                    Payment Method
-                  </h2>
+                  <div className="rounded-md border border-slate-200 bg-white p-5 sm:p-7">
+                    <h2 className="mb-1 text-2xl font-bold tracking-tight text-navy">
+                      Payment Method
+                    </h2>
+                    <p className="mb-6 text-sm text-muted-foreground">
+                      Select how you&apos;d like to pay
+                    </p>
 
-                  <RadioGroup
-                    value={formData.paymentMethod}
-                    onValueChange={(val) =>
-                      updateField("paymentMethod", val as string)
-                    }
-                    className="space-y-3"
-                  >
-                    {paymentMethods.map((method) => (
-                      <label
-                        key={method.id}
-                        className={cn(
-                          "flex cursor-pointer items-start gap-3 rounded-2xl border-2 p-4 transition-all",
-                          formData.paymentMethod === method.id
-                            ? "border-rose-300 bg-rose-light/50"
-                            : "border-rose-border hover:border-rose-300/50",
-                        )}
-                      >
-                        <RadioGroupItem value={method.id} className="mt-0.5" />
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2">
-                            <CreditCard className="size-4 text-navy" />
-                            <p className="font-medium text-navy">
-                              {method.name}
-                            </p>
-                            {method.recommended && (
-                              <span className="rounded-full bg-rose-200/60 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-navy">
-                                Recommended
-                              </span>
-                            )}
-                          </div>
-                          <p className="mt-1 text-sm text-muted-foreground">
-                            {method.description}
-                          </p>
-                        </div>
-                      </label>
-                    ))}
-                  </RadioGroup>
-
-                  <p className="mt-6 text-center text-sm text-muted-foreground">
-                    You&apos;ll be redirected to{" "}
-                    <span className="font-medium text-navy">
-                      {
-                        paymentMethods.find(
-                          (m) => m.id === formData.paymentMethod,
-                        )?.name
+                    <RadioGroup
+                      value={formData.paymentMethod}
+                      onValueChange={(val) =>
+                        updateField("paymentMethod", val as string)
                       }
-                    </span>{" "}
-                    to complete payment
-                  </p>
+                      className="space-y-3"
+                    >
+                      {paymentMethods.map((method) => {
+                        const selected =
+                          formData.paymentMethod === method.id
+                        const Icon = method.icon
+                        return (
+                          <label
+                            key={method.id}
+                            className={cn(
+                              "flex cursor-pointer items-center gap-3.5 rounded-md border p-4 transition-all sm:gap-4 sm:px-5",
+                              selected
+                                ? "border-navy bg-rose-light/40 ring-1 ring-navy/15"
+                                : "border-rose-border hover:border-navy/30",
+                            )}
+                          >
+                            <RadioGroupItem value={method.id} />
+                            <Icon className="size-5 shrink-0 text-navy" />
+                            <div className="min-w-0 flex-1">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <p className="text-sm font-semibold text-navy">
+                                  {method.name}
+                                </p>
+                                {method.recommended && (
+                                  <span className="rounded-sm bg-rose-border/70 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-navy">
+                                    Recommended
+                                  </span>
+                                )}
+                              </div>
+                              <p className="mt-0.5 text-sm text-muted-foreground">
+                                {method.description}
+                              </p>
+                            </div>
+                          </label>
+                        )
+                      })}
+                    </RadioGroup>
 
-                  <div className="mt-7 flex justify-between">
-                    <Button
-                      variant="ghost"
-                      onClick={() => setStep(2)}
-                      className="h-auto gap-2 px-5 py-3"
-                    >
-                      <ArrowLeft className="size-4" />
-                      Back
-                    </Button>
-                    <Button
-                      onClick={() => setStep(4)}
-                      className="h-auto rounded-full bg-rose-100 px-8 py-3 text-sm font-semibold text-navy hover:bg-rose-200"
-                    >
-                      Review Order
-                      <ArrowRight className="ml-2 size-4" />
-                    </Button>
+                    <p className="mt-6 text-center text-sm text-muted-foreground">
+                      You&apos;ll be redirected to{" "}
+                      <span className="font-medium text-navy">
+                        {
+                          paymentMethods.find(
+                            (m) => m.id === formData.paymentMethod,
+                          )?.name
+                        }
+                      </span>{" "}
+                      to complete payment
+                    </p>
+
+                    <div className="mt-7 flex justify-between">
+                      <Button
+                        variant="ghost"
+                        onClick={() => setStep(2)}
+                        className="h-auto gap-2 rounded-md px-5 py-3 text-navy"
+                      >
+                        <ArrowLeft className="size-4" />
+                        Back
+                      </Button>
+                      <Button
+                        onClick={() => setStep(4)}
+                        className="h-auto rounded-md bg-navy px-8 py-3.5 text-sm font-semibold text-white hover:bg-navy-light"
+                      >
+                        Review Order
+                        <ArrowRight className="ml-2 size-4" />
+                      </Button>
+                    </div>
                   </div>
                 </StepWrapper>
               )}
@@ -1048,7 +1135,7 @@ export default function CheckoutPage() {
                     <Button
                       onClick={handlePlaceOrder}
                       disabled={!formData.agreeToTerms || placingOrder}
-                      className="h-auto rounded-full bg-rose-100 px-10 py-3.5 text-base font-semibold text-navy hover:bg-rose-200"
+                      className="h-auto rounded-full bg-rose-light px-10 py-3.5 text-base font-semibold text-navy hover:bg-rose-border"
                     >
                       {placingOrder ? (
                         <>
@@ -1070,7 +1157,7 @@ export default function CheckoutPage() {
 
           <div className="hidden lg:block">
             <div className="sticky top-20 space-y-3">
-              <Card className="overflow-visible rounded-[2rem] border border-rose-border/60 bg-rose-100 text-navy shadow-[0_22px_50px_-25px_rgba(15,23,42,0.12)]">
+              <Card className="overflow-visible rounded-[2rem] border border-rose-border/60 bg-rose-light text-navy shadow-[0_22px_50px_-25px_rgba(15,23,42,0.12)]">
                 <CardContent className="p-5">
                   <h3 className="mb-4 font-heading text-2xl font-semibold text-navy">
                     Order Summary
@@ -1160,7 +1247,7 @@ function OrderSummaryContent({
                   alt=""
                   className="size-full object-cover"
                 />
-                <span className="absolute -top-1 -right-1 flex size-5 items-center justify-center rounded-full bg-rose-200 text-[10px] font-bold text-navy">
+                <span className="absolute -top-1 -right-1 flex size-5 items-center justify-center rounded-full bg-rose-border text-[10px] font-bold text-navy">
                   {item.quantity}
                 </span>
               </div>
@@ -1199,7 +1286,7 @@ function OrderSummaryContent({
           <button
             type="button"
             onClick={onApplyCoupon}
-            className="px-4 text-base font-semibold text-navy hover:bg-rose-50"
+            className="px-4 text-base font-semibold text-navy hover:bg-rose-light"
           >
             Apply
           </button>

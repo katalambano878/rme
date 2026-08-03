@@ -18,6 +18,8 @@ import { Section } from "@/components/shared/section"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
+import { HERO_IMAGES } from "@/lib/hero-images"
+import { PageHero } from "@/components/shared/page-hero"
 
 type BlogPost = {
   id: string
@@ -57,7 +59,7 @@ export default function BlogPostPage({
     return (
       <Section>
         <Container className="py-20 text-center">
-          <div className="mx-auto size-10 animate-spin rounded-full border-4 border-rose-200 border-t-rose-primary" />
+          <div className="mx-auto size-10 animate-spin rounded-full border-4 border-rose-border border-t-rose-primary" />
         </Container>
       </Section>
     )
@@ -74,7 +76,7 @@ export default function BlogPostPage({
             The article you&apos;re looking for doesn&apos;t exist.
           </p>
           <Button
-            className="mt-6 rounded-xl bg-rose-100 text-navy hover:bg-rose-200"
+            className="mt-6 rounded-xl bg-rose-light text-navy hover:bg-rose-border"
             render={<Link href="/blog" />}
           >
             Back to Journal
@@ -88,55 +90,45 @@ export default function BlogPostPage({
 
   return (
     <>
-      {/* Hero */}
-      <Section className="bg-gradient-to-b from-rose-light/50 to-white pb-0 sm:pb-0">
-        <Container>
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] as const }}
-          >
+      <PageHero
+        imageSrc={HERO_IMAGES.ladiesBag.src}
+        imageAlt={HERO_IMAGES.ladiesBag.alt}
+        align="left"
+        title={post.title}
+        subtitle={post.excerpt}
+        topContent={
+          <>
             <Link
               href="/blog"
-              className="inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground transition-colors hover:text-rose-primary"
+              className="mb-6 inline-flex items-center gap-1.5 text-sm font-medium text-white/80 transition-colors hover:text-white"
             >
               <ArrowLeft className="size-4" />
               Back to Journal
             </Link>
 
-            <div className="mt-6 max-w-3xl">
-              <Badge className="rounded-full bg-rose-light text-rose-primary border-rose-border">
-                {post.category}
-              </Badge>
-
-              <h1 className="mt-4 font-heading text-3xl font-semibold tracking-tight text-navy sm:text-4xl lg:text-5xl">
-                {post.title}
-              </h1>
-
-              <p className="mt-4 text-lg text-muted-foreground">
-                {post.excerpt}
-              </p>
-
-              <div className="mt-6 flex items-center gap-4 text-sm text-muted-foreground">
-                <span className="flex items-center gap-1.5">
-                  <Calendar className="size-4" />
-                  {new Date(dateStr).toLocaleDateString("en-GB", {
-                    day: "numeric",
-                    month: "long",
-                    year: "numeric",
-                  })}
-                </span>
-                <span className="flex items-center gap-1.5">
-                  <Clock className="size-4" />
-                  {post.content
-                    ? `${Math.max(1, Math.ceil(post.content.split(/\s+/).length / 200))} min read`
-                    : "4 min read"}
-                </span>
-              </div>
-            </div>
-          </motion.div>
-        </Container>
-      </Section>
+            <Badge className="mb-4 rounded-full border-white/20 bg-white/15 text-white backdrop-blur-sm">
+              {post.category}
+            </Badge>
+          </>
+        }
+      >
+        <div className="mt-6 flex items-center gap-4 text-sm text-white/80">
+          <span className="flex items-center gap-1.5">
+            <Calendar className="size-4" />
+            {new Date(dateStr).toLocaleDateString("en-GB", {
+              day: "numeric",
+              month: "long",
+              year: "numeric",
+            })}
+          </span>
+          <span className="flex items-center gap-1.5">
+            <Clock className="size-4" />
+            {post.content
+              ? `${Math.max(1, Math.ceil(post.content.split(/\s+/).length / 200))} min read`
+              : "4 min read"}
+          </span>
+        </div>
+      </PageHero>
 
       {/* Featured Image */}
       <Section className="pt-8 pb-0 sm:pt-10 sm:pb-0">
@@ -145,7 +137,7 @@ export default function BlogPostPage({
             initial={{ opacity: 0, scale: 0.98 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ duration: 0.6, delay: 0.2 }}
-            className="aspect-[21/9] overflow-hidden rounded-3xl bg-gradient-to-br from-rose-200 via-pink-100 to-amber-50"
+            className="aspect-[21/9] overflow-hidden rounded-3xl bg-gradient-to-br from-[#244b39]/20 via-rose-light to-amber-50"
           >
             {post.cover_image_url ? (
               // eslint-disable-next-line @next/next/no-img-element
@@ -211,7 +203,7 @@ export default function BlogPostPage({
 
             {/* Author Card */}
             <div className="flex items-center gap-4 rounded-2xl border border-rose-border/50 bg-rose-light/40 p-5">
-              <div className="flex size-14 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-rose-200 to-pink-100">
+              <div className="flex size-14 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-[#244b39]/15 to-rose-light">
                 <User className="size-6 text-rose-primary" />
               </div>
               <div>
@@ -247,7 +239,7 @@ export default function BlogPostPage({
                 >
                   <Link href={`/blog/${rp.slug}`} className="group block">
                     <article className="overflow-hidden rounded-2xl border border-rose-border/30 bg-white shadow-sm transition-all hover:-translate-y-1 hover:shadow-lg">
-                      <div className="aspect-[16/9] overflow-hidden bg-gradient-to-br from-violet-100 via-purple-50 to-pink-50">
+                      <div className="aspect-[16/9] overflow-hidden bg-gradient-to-br from-[#e4eee8] via-[#f7f3ed] to-teal-light">
                         {rp.cover_image_url ? (
                           // eslint-disable-next-line @next/next/no-img-element
                           <img

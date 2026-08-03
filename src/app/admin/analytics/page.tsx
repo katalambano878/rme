@@ -182,14 +182,14 @@ export default function AnalyticsPage() {
             <select
               value={timeRange}
               onChange={(e) => setTimeRange(e.target.value)}
-              className="px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-rose-400 focus:border-rose-400 font-medium pr-8 cursor-pointer bg-white"
+              className="px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-navy focus:border-rose-primary font-medium pr-8 cursor-pointer bg-white"
             >
               <option value="7days">Last 7 Days</option>
               <option value="30days">Last 30 Days</option>
               <option value="90days">Last 90 Days</option>
               <option value="year">This Year</option>
             </select>
-            <button className="bg-rose-500 hover:bg-rose-600 text-white px-6 py-3 rounded-lg font-semibold transition-colors whitespace-nowrap cursor-pointer flex items-center justify-center">
+            <button className="bg-rose-light0 hover:bg-navy text-white px-6 py-3 rounded-lg font-semibold transition-colors whitespace-nowrap cursor-pointer flex items-center justify-center">
               <i className="ri-download-line mr-2"></i>
               Export
             </button>
@@ -206,8 +206,8 @@ export default function AnalyticsPage() {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
           <div className="bg-white rounded-xl shadow-sm p-6">
             <div className="flex items-center justify-between mb-4">
-              <div className="w-12 h-12 flex items-center justify-center bg-rose-100 rounded-lg">
-                <i className="ri-money-dollar-circle-line text-2xl text-rose-700"></i>
+              <div className="w-12 h-12 flex items-center justify-center bg-rose-light rounded-lg">
+                <i className="ri-money-dollar-circle-line text-2xl text-navy"></i>
               </div>
               <span className={`font-semibold text-sm ${metrics.revenueGrowth >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
                 {metrics.revenueGrowth >= 0 ? '+' : ''}{metrics.revenueGrowth}%
@@ -220,8 +220,8 @@ export default function AnalyticsPage() {
 
           <div className="bg-white rounded-xl shadow-sm p-6">
             <div className="flex items-center justify-between mb-4">
-              <div className="w-12 h-12 flex items-center justify-center bg-rose-100 rounded-lg">
-                <i className="ri-shopping-cart-line text-2xl text-rose-700"></i>
+              <div className="w-12 h-12 flex items-center justify-center bg-rose-light rounded-lg">
+                <i className="ri-shopping-cart-line text-2xl text-navy"></i>
               </div>
               <span className={`font-semibold text-sm ${metrics.ordersGrowth >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
                 {metrics.ordersGrowth >= 0 ? '+' : ''}{metrics.ordersGrowth}%
@@ -330,7 +330,7 @@ export default function AnalyticsPage() {
                     <tr key={index}>
                       <td className="py-3 text-sm font-medium text-gray-900">{product.name}</td>
                       <td className="py-3 text-right text-sm text-gray-600">{product.units}</td>
-                      <td className="py-3 text-right text-sm font-semibold text-rose-600">GH₵{product.revenue.toLocaleString()}</td>
+                      <td className="py-3 text-right text-sm font-semibold text-navy">GH₵{product.revenue.toLocaleString()}</td>
                     </tr>
                   ))}
                   {topProducts.length === 0 && <tr><td colSpan={3} className="text-center py-4 text-gray-500">No sales data yet.</td></tr>}

@@ -128,8 +128,8 @@ export default function CustomerInsightsPage() {
 
   const getSegmentBadge = (segment: string) => {
     const badges: any = {
-      vip: 'bg-rose-100 text-rose-800',
-      returning: 'bg-rose-100 text-rose-800',
+      vip: 'bg-rose-light text-navy',
+      returning: 'bg-rose-light text-navy',
       new: 'bg-amber-100 text-amber-700',
       'at-risk': 'bg-red-100 text-red-700'
     };
@@ -148,7 +148,7 @@ export default function CustomerInsightsPage() {
 
   const getRiskBadge = (risk: string) => {
     const badges: any = {
-      low: 'bg-rose-100 text-rose-800',
+      low: 'bg-rose-light text-navy',
       medium: 'bg-amber-100 text-amber-700',
       high: 'bg-red-100 text-red-700'
     };
@@ -182,24 +182,24 @@ export default function CustomerInsightsPage() {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
           <div className="bg-white rounded-xl shadow-sm p-6">
             <div className="flex items-center justify-between mb-4">
-              <div className="w-12 h-12 flex items-center justify-center bg-rose-100 rounded-lg">
-                <i className="ri-vip-crown-line text-2xl text-rose-700"></i>
+              <div className="w-12 h-12 flex items-center justify-center bg-rose-light rounded-lg">
+                <i className="ri-vip-crown-line text-2xl text-navy"></i>
               </div>
             </div>
             <p className="text-sm text-gray-600 mb-1">VIP Customers</p>
             <p className="text-3xl font-bold text-gray-900">{stats.vip}</p>
-            <p className="text-sm text-rose-700 font-semibold mt-2">Spent &gt; GH₵1,000</p>
+            <p className="text-sm text-navy font-semibold mt-2">Spent &gt; GH₵1,000</p>
           </div>
 
           <div className="bg-white rounded-xl shadow-sm p-6">
             <div className="flex items-center justify-between mb-4">
-              <div className="w-12 h-12 flex items-center justify-center bg-rose-100 rounded-lg">
-                <i className="ri-refresh-line text-2xl text-rose-700"></i>
+              <div className="w-12 h-12 flex items-center justify-center bg-rose-light rounded-lg">
+                <i className="ri-refresh-line text-2xl text-navy"></i>
               </div>
             </div>
             <p className="text-sm text-gray-600 mb-1">Returning Customers</p>
             <p className="text-3xl font-bold text-gray-900">{stats.returning}</p>
-            <p className="text-sm text-rose-700 font-semibold mt-2">More than 1 order</p>
+            <p className="text-sm text-navy font-semibold mt-2">More than 1 order</p>
           </div>
 
           <div className="bg-white rounded-xl shadow-sm p-6">
@@ -235,7 +235,7 @@ export default function CustomerInsightsPage() {
                   placeholder="Search customers by name or email..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-12 pr-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-rose-400 focus:border-rose-400 text-sm"
+                  className="w-full pl-12 pr-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-navy focus:border-rose-primary text-sm"
                 />
               </div>
             </div>
@@ -273,7 +273,7 @@ export default function CustomerInsightsPage() {
               <div key={customer.id} className="bg-white rounded-xl shadow-sm p-6 hover:shadow-md transition-shadow">
                 <div className="flex items-start justify-between mb-4">
                   <div className="flex items-start space-x-4">
-                    <div className="w-16 h-16 flex items-center justify-center bg-gradient-to-br from-rose-400 to-rose-600 rounded-full text-white text-2xl font-bold">
+                    <div className="w-16 h-16 flex items-center justify-center bg-gradient-to-br from-navy to-navy-light rounded-full text-white text-2xl font-bold">
                       {customer.name?.charAt(0).toUpperCase() || 'U'}
                     </div>
                     <div>
@@ -320,15 +320,15 @@ export default function CustomerInsightsPage() {
                   </div>
                   <div className="bg-gray-50 rounded-lg p-4">
                     <p className="text-sm text-gray-600 mb-1">Lifetime Value</p>
-                    <p className="text-2xl font-bold text-rose-700">{formatCurrency(customer.lifetimeValue)}</p>
+                    <p className="text-2xl font-bold text-navy">{formatCurrency(customer.lifetimeValue)}</p>
                   </div>
                   <div className="bg-gray-50 rounded-lg p-4">
                     <p className="text-sm text-gray-600 mb-1">Engagement</p>
                     <div className="flex items-center space-x-2">
                       <div className="flex-1 bg-gray-200 rounded-full h-2">
                         <div
-                          className={`h-2 rounded-full ${customer.engagementScore >= 80 ? 'bg-rose-500' :
-                            customer.engagementScore >= 60 ? 'bg-rose-500' :
+                          className={`h-2 rounded-full ${customer.engagementScore >= 80 ? 'bg-rose-light0' :
+                            customer.engagementScore >= 60 ? 'bg-rose-light0' :
                               customer.engagementScore >= 40 ? 'bg-amber-600' : 'bg-red-600'
                             }`}
                           style={{ width: `${customer.engagementScore}%` }}

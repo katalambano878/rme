@@ -6,9 +6,14 @@ import type { ProductBadge } from "@/types/product"
 
 const badgeStyles: Record<ProductBadge, string> = {
   New: "bg-navy text-white hover:bg-navy/90",
-  "Best Seller": "bg-rose-100 text-navy hover:bg-rose-200",
+  "Best Seller": "bg-rose-light text-navy hover:bg-rose-border",
   Limited: "bg-amber-600 text-white hover:bg-amber-600/90",
-  Sale: "bg-red-600 text-white hover:bg-red-600/90",
+  Sale: "bg-rose-primary text-navy hover:bg-rose-soft",
+  "Pre-Order": "bg-rose-primary text-navy hover:bg-rose-soft",
+}
+
+const badgeLabels: Partial<Record<ProductBadge, string>> = {
+  Sale: "Pre-Order",
 }
 
 interface BadgeSetProps {
@@ -34,11 +39,11 @@ export function BadgeSet({ badges, className, discountPercent }: BadgeSetProps) 
         <Badge
           key={badge}
           className={cn(
-            "rounded-full px-2.5 py-0.5 text-[0.65rem] font-semibold uppercase tracking-wide",
+            "rounded-md px-2.5 py-0.5 text-[0.65rem] font-semibold uppercase tracking-wide",
             badgeStyles[badge]
           )}
         >
-          {badge}
+          {badgeLabels[badge] ?? badge}
         </Badge>
       ))}
     </div>

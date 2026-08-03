@@ -82,7 +82,7 @@ export default function ConversationsPage() {
   };
 
   const sentimentIcon = (s: string) => {
-    if (s === 'positive') return <span className="text-rose-500"><i className="ri-emotion-happy-line text-lg" /></span>;
+    if (s === 'positive') return <span className="text-rose-primary"><i className="ri-emotion-happy-line text-lg" /></span>;
     if (s === 'negative') return <span className="text-red-500"><i className="ri-emotion-unhappy-line text-lg" /></span>;
     return <span className="text-gray-400"><i className="ri-emotion-normal-line text-lg" /></span>;
   };
@@ -94,7 +94,7 @@ export default function ConversationsPage() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <div className="flex items-center gap-2 text-sm text-gray-500 mb-1">
-            <Link href="/admin/support" className="hover:text-rose-600">Support</Link>
+            <Link href="/admin/support" className="hover:text-navy">Support</Link>
             <i className="ri-arrow-right-s-line text-xs" />
             <span className="text-gray-900 font-medium">Conversations</span>
           </div>
@@ -110,7 +110,7 @@ export default function ConversationsPage() {
             <i className="ri-search-line absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
             <input
               type="text" placeholder="Search anything said in conversations..."
-              className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-rose-500"
+              className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-navy focus:border-navy"
               value={search} onChange={(e) => setSearch(e.target.value)}
             />
             {debouncedSearch && (
@@ -120,21 +120,21 @@ export default function ConversationsPage() {
             )}
           </div>
           <select value={sentimentFilter} onChange={(e) => { setSentimentFilter(e.target.value); setPage(1); }}
-            className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-rose-500">
+            className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-navy">
             <option value="">All Sentiments</option>
             <option value="positive">Positive</option>
             <option value="neutral">Neutral</option>
             <option value="negative">Negative</option>
           </select>
           <select value={resolvedFilter} onChange={(e) => { setResolvedFilter(e.target.value); setPage(1); }}
-            className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-rose-500">
+            className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-navy">
             <option value="">All Status</option>
             <option value="true">Resolved</option>
             <option value="false">Unresolved</option>
             <option value="escalated">Escalated</option>
           </select>
           {debouncedSearch && (
-            <span className="text-xs text-rose-600 bg-rose-50 px-2 py-1 rounded-lg flex items-center gap-1">
+            <span className="text-xs text-navy bg-rose-light px-2 py-1 rounded-lg flex items-center gap-1">
               <i className="ri-search-eye-line" /> Deep searching messages
             </span>
           )}
@@ -176,7 +176,7 @@ export default function ConversationsPage() {
                     const snippet = findMatchSnippet(conv.messages, debouncedSearch);
                     if (!snippet) return null;
                     return (
-                      <p className="text-[10px] text-rose-600 bg-rose-50 px-1.5 py-0.5 rounded mt-1 truncate">
+                      <p className="text-[10px] text-navy bg-rose-light px-1.5 py-0.5 rounded mt-1 truncate">
                         <i className="ri-chat-quote-line mr-1" />{snippet}
                       </p>
                     );
@@ -191,7 +191,7 @@ export default function ConversationsPage() {
                 <div className="col-span-1 flex gap-1 flex-wrap">
                   {conv.is_escalated && <span className="text-[9px] font-bold bg-red-100 text-red-600 px-1.5 py-0.5 rounded">ESC</span>}
                   {conv.is_resolved ? (
-                    <span className="text-[9px] font-bold bg-rose-100 text-rose-600 px-1.5 py-0.5 rounded">OK</span>
+                    <span className="text-[9px] font-bold bg-rose-light text-navy px-1.5 py-0.5 rounded">OK</span>
                   ) : (
                     <span className="text-[9px] font-bold bg-amber-100 text-amber-600 px-1.5 py-0.5 rounded">OPEN</span>
                   )}

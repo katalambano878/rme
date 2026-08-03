@@ -86,7 +86,7 @@ export default function AdminSalesPage() {
         </p>
       </div>
 
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 p-4 rounded-xl border-2 border-rose-100 bg-[#FFF5F5]">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 p-4 rounded-xl border-2 border-rose-border bg-rose-light">
         <div className="min-w-0 flex-1">
           <p className="text-sm font-semibold text-gray-900">Sale / promotion</p>
           <p className="text-xs text-gray-600 mt-0.5 max-w-xl">
@@ -101,8 +101,8 @@ export default function AdminSalesPage() {
             aria-checked={salePromotionOn}
             disabled={loading || saving}
             onClick={toggleSalePromotion}
-            className={`relative inline-flex h-9 w-16 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors focus:outline-none focus:ring-2 focus:ring-rose-400 focus:ring-offset-2 disabled:opacity-50 ${
-              salePromotionOn ? 'bg-rose-600' : 'bg-gray-200'
+            className={`relative inline-flex h-9 w-16 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors focus:outline-none focus:ring-2 focus:ring-navy focus:ring-offset-2 disabled:opacity-50 ${
+              salePromotionOn ? 'bg-navy' : 'bg-gray-200'
             }`}
           >
             <span
@@ -113,14 +113,14 @@ export default function AdminSalesPage() {
           </button>
           <Link
             href="/admin/products"
-            className="px-4 py-2 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-sm font-semibold transition-colors whitespace-nowrap"
+            className="px-4 py-2 rounded-lg bg-navy hover:bg-navy text-white text-sm font-semibold transition-colors whitespace-nowrap"
           >
             Go to products
           </Link>
         </div>
       </div>
 
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 p-4 rounded-xl border-2 border-rose-100 bg-[#FFF5F5]">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 p-4 rounded-xl border-2 border-rose-border bg-rose-light">
         <div className="min-w-0 flex-1">
           <p className="text-sm font-semibold text-gray-900">Doorstep Delivery Fee (GH₵)</p>
           <p className="text-xs text-gray-600 mt-0.5 max-w-xl">
@@ -134,13 +134,13 @@ export default function AdminSalesPage() {
             step="0.01"
             value={deliveryFee}
             onChange={(e) => setDeliveryFee(e.target.value)}
-            className="w-24 px-3 py-2 border-2 border-gray-300 rounded-lg text-sm font-semibold text-center focus:ring-2 focus:ring-rose-400 focus:border-rose-400 input-no-spinner"
+            className="w-24 px-3 py-2 border-2 border-gray-300 rounded-lg text-sm font-semibold text-center focus:ring-2 focus:ring-navy focus:border-rose-primary input-no-spinner"
           />
           <button
             type="button"
             onClick={saveDeliveryFee}
             disabled={savingFee}
-            className="px-4 py-2 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-sm font-semibold transition-colors whitespace-nowrap disabled:opacity-50"
+            className="px-4 py-2 rounded-lg bg-navy hover:bg-navy text-white text-sm font-semibold transition-colors whitespace-nowrap disabled:opacity-50"
           >
             {savingFee ? 'Saving…' : 'Save'}
           </button>

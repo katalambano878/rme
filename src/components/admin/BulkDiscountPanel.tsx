@@ -109,7 +109,7 @@ export default function BulkDiscountPanel({ onApplied }: BulkDiscountPanelProps)
   const selectionBlocked = bulkScope === 'selected' && selectedIds.length === 0;
 
   return (
-    <div className="bg-white rounded-xl border border-rose-200 shadow-sm p-5 space-y-4">
+    <div className="bg-white rounded-xl border border-rose-border shadow-sm p-5 space-y-4">
       <div>
         <h2 className="text-lg font-bold text-gray-900">Bulk discount</h2>
         <p className="text-sm text-gray-600 mt-1 max-w-2xl">
@@ -127,7 +127,7 @@ export default function BulkDiscountPanel({ onApplied }: BulkDiscountPanelProps)
             name="bulkScopeSales"
             checked={bulkScope === 'all'}
             onChange={() => setBulkScope('all')}
-            className="text-rose-600 focus:ring-rose-400"
+            className="text-navy focus:ring-navy"
           />
           All products ({loadingList ? '…' : products.length})
         </label>
@@ -137,7 +137,7 @@ export default function BulkDiscountPanel({ onApplied }: BulkDiscountPanelProps)
             name="bulkScopeSales"
             checked={bulkScope === 'selected'}
             onChange={() => setBulkScope('selected')}
-            className="text-rose-600 focus:ring-rose-400"
+            className="text-navy focus:ring-navy"
           />
           Selected only ({selectedIds.length})
         </label>
@@ -151,7 +151,7 @@ export default function BulkDiscountPanel({ onApplied }: BulkDiscountPanelProps)
               <button
                 type="button"
                 onClick={selectAllFiltered}
-                className="text-xs font-semibold text-rose-700 hover:text-rose-900 cursor-pointer"
+                className="text-xs font-semibold text-navy hover:text-navy cursor-pointer"
               >
                 Select all in list
               </button>
@@ -169,7 +169,7 @@ export default function BulkDiscountPanel({ onApplied }: BulkDiscountPanelProps)
             value={pickerSearch}
             onChange={(e) => setPickerSearch(e.target.value)}
             placeholder="Search products…"
-            className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-rose-400 focus:border-rose-400"
+            className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-navy focus:border-rose-primary"
           />
           <div className="max-h-56 overflow-y-auto rounded-md border border-gray-200 bg-white divide-y divide-gray-100">
             {loadingList ? (
@@ -180,13 +180,13 @@ export default function BulkDiscountPanel({ onApplied }: BulkDiscountPanelProps)
               filteredPicker.map((p) => (
                 <label
                   key={p.id}
-                  className="flex items-center gap-3 px-3 py-2 hover:bg-rose-50/50 cursor-pointer text-sm"
+                  className="flex items-center gap-3 px-3 py-2 hover:bg-rose-light cursor-pointer text-sm"
                 >
                   <input
                     type="checkbox"
                     checked={selectedIds.includes(p.id)}
                     onChange={() => toggleId(p.id)}
-                    className="w-4 h-4 text-rose-600 border-gray-300 rounded focus:ring-rose-400"
+                    className="w-4 h-4 text-navy border-gray-300 rounded focus:ring-navy"
                   />
                   <span className="text-gray-900 truncate">{p.name}</span>
                 </label>
@@ -205,13 +205,13 @@ export default function BulkDiscountPanel({ onApplied }: BulkDiscountPanelProps)
               type="button"
               disabled={bulkDiscountBusy || selectionBlocked}
               onClick={() => runBulk(pct)}
-              className="px-4 py-2 rounded-lg bg-rose-600 hover:bg-rose-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-semibold transition-colors cursor-pointer whitespace-nowrap"
+              className="px-4 py-2 rounded-lg bg-navy hover:bg-navy disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-semibold transition-colors cursor-pointer whitespace-nowrap"
             >
               {`${pct}% off`}
             </button>
           ))}
         </div>
-        <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-end gap-3 pt-2 border-t border-rose-100">
+        <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-end gap-3 pt-2 border-t border-rose-border">
           <div className="flex-1 min-w-[140px] max-w-xs">
             <label
               htmlFor="bulk-custom-pct-sales"
@@ -233,14 +233,14 @@ export default function BulkDiscountPanel({ onApplied }: BulkDiscountPanelProps)
                 if (e.key === 'Enter') handleBulkDiscountCustom();
               }}
               disabled={bulkDiscountBusy}
-              className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-rose-400 focus:border-rose-400 text-sm disabled:opacity-50"
+              className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-navy focus:border-rose-primary text-sm disabled:opacity-50"
             />
           </div>
           <button
             type="button"
             disabled={bulkDiscountBusy || selectionBlocked || !bulkCustomPercent.trim()}
             onClick={handleBulkDiscountCustom}
-            className="px-4 py-2 rounded-lg border-2 border-rose-600 text-rose-700 hover:bg-rose-50 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-semibold transition-colors cursor-pointer whitespace-nowrap self-start sm:self-auto"
+            className="px-4 py-2 rounded-lg border-2 border-navy text-navy hover:bg-rose-light disabled:opacity-50 disabled:cursor-not-allowed text-sm font-semibold transition-colors cursor-pointer whitespace-nowrap self-start sm:self-auto"
           >
             Apply custom %
           </button>

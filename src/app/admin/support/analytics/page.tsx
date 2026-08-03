@@ -53,14 +53,14 @@ export default function SupportAnalyticsPage() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <div className="flex items-center gap-2 text-sm text-gray-500 mb-1">
-            <Link href="/admin/support" className="hover:text-rose-600">Support</Link>
+            <Link href="/admin/support" className="hover:text-navy">Support</Link>
             <i className="ri-arrow-right-s-line text-xs" />
             <span className="text-gray-900 font-medium">Analytics</span>
           </div>
           <h1 className="text-2xl font-bold text-gray-900">Support Analytics</h1>
         </div>
         <select value={days} onChange={(e) => setDays(Number(e.target.value))}
-          className="border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-rose-500">
+          className="border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-navy">
           <option value={7}>Last 7 days</option>
           <option value={14}>Last 14 days</option>
           <option value={30}>Last 30 days</option>
@@ -72,7 +72,7 @@ export default function SupportAnalyticsPage() {
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
         {[
           { label: 'Conversations', value: s.totalConversations, icon: 'ri-chat-3-line', color: 'text-blue-600 bg-blue-50' },
-          { label: 'Tickets', value: s.totalTickets, icon: 'ri-ticket-line', color: 'text-rose-600 bg-rose-50' },
+          { label: 'Tickets', value: s.totalTickets, icon: 'ri-ticket-line', color: 'text-navy bg-rose-light' },
           { label: 'AI Handled', value: `${aiRate}%`, icon: 'ri-robot-2-line', color: 'text-purple-600 bg-purple-50' },
           { label: 'Escalated', value: `${escalationRate}%`, icon: 'ri-alarm-warning-line', color: 'text-orange-600 bg-orange-50' },
           { label: 'Avg Rating', value: s.avgRating, icon: 'ri-star-line', color: 'text-amber-600 bg-amber-50' },

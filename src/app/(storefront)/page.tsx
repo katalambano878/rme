@@ -28,7 +28,7 @@ export const metadata: Metadata = {
 import { CategoriesRow } from "@/components/home/categories-row"
 import { FeaturedCollections } from "@/components/home/featured-collections"
 import { TrendingCarousel } from "@/components/home/trending-carousel"
-import { TestimonialsSection } from "@/components/home/testimonials-section"
+import { PromoBannersSection } from "@/components/home/promo-banners-section"
 import { NewsletterSection } from "@/components/home/newsletter-section"
 import { Container } from "@/components/shared/container"
 import { Section } from "@/components/shared/section"
@@ -64,7 +64,7 @@ export default async function HomePage() {
         <TrendingCarousel products={featuredProducts} />
       )}
 
-      <Section className="bg-[#FFF5F5]">
+      <Section className="bg-rose-light">
         <Container>
           <FeaturedCollections
             newArrivals={newArrivals}
@@ -73,7 +73,7 @@ export default async function HomePage() {
         </Container>
       </Section>
 
-      <TestimonialsSection />
+      <PromoBannersSection />
 
       <NewsletterSection />
     </>

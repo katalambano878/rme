@@ -18,7 +18,7 @@ export default function ProductNotFound() {
           removed. Explore the shop to find something you&apos;ll love.
         </p>
         <Link href="/shop" className="mt-8 inline-block">
-          <Button className="rounded-full bg-rose-100 px-8 py-2.5 text-navy hover:bg-rose-200">
+          <Button className="rounded-full bg-rose-light px-8 py-2.5 text-navy hover:bg-rose-border">
             Continue Shopping
           </Button>
         </Link>

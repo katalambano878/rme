@@ -1,24 +1,16 @@
 "use client"
 
 import { useState, useMemo, useEffect } from "react"
-import Link from "next/link"
 import { useSearchParams } from "next/navigation"
 import { motion } from "framer-motion"
-import {
-  ChevronRight,
-  SlidersHorizontal,
-  X,
-  Package,
-  Heart,
-  ShoppingBag,
-  Eye,
-} from "lucide-react"
-import { cn, formatPrice } from "@/lib/utils"
+import { SlidersHorizontal, X, Package } from "lucide-react"
+import { formatPrice } from "@/lib/utils"
 import type { Product } from "@/types/product"
 import type { StorefrontCategory } from "@/lib/data/storefront-products"
 import { Container } from "@/components/shared/container"
-import { Heading } from "@/components/shared/heading"
-import { QuickViewModal } from "@/components/shared/quick-view-modal"
+import { ProductCard } from "@/components/shared/product-card"
+import { PageHero } from "@/components/shared/page-hero"
+import { HERO_IMAGES } from "@/lib/hero-images"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Slider } from "@/components/ui/slider"
@@ -36,13 +28,11 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet"
-import { getProductPrimaryImageUrl } from "@/lib/product-image"
-import { useCartStore } from "@/lib/store/cart-store"
-import { useWishlistStore } from "@/lib/store/wishlist-store"
 
-const ITEMS_PER_PAGE = 9
+const ITEMS_PER_PAGE = 12
 
 const sortOptions = [
+  { value: "default", label: "Default Sorting" },
   { value: "best-sellers", label: "Best Sellers" },
   { value: "newest", label: "Newest" },
   { value: "price-low", label: "Price: Low → High" },
@@ -82,16 +72,13 @@ export default function ShopPageClient({
   const [selectedCategories, setSelectedCategories] = useState<string[]>(() =>
     initialCategory ? [initialCategory] : [],
   )
-  const [priceRange, setPriceRange] = useState<number[]>([
-    MIN_PRICE,
-    maxPrice,
-  ])
-  const [sort, setSort] = useState<string>("best-sellers")
+  const [priceRange, setPriceRange] = useState<number[]>([MIN_PRICE, maxPrice])
+  const [sort, setSort] = useState<string>("default")
   const [inStockOnly, setInStockOnly] = useState(false)
+  const [newArrivalsOnly, setNewArrivalsOnly] = useState(false)
+  const [bestSellersOnly, setBestSellersOnly] = useState(false)
+  const [onSaleOnly, setOnSaleOnly] = useState(false)
   const [visibleCount, setVisibleCount] = useState(ITEMS_PER_PAGE)
-
-  const [quickViewProduct, setQuickViewProduct] = useState<Product | null>(null)
-  const [quickViewOpen, setQuickViewOpen] = useState(false)
 
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false)
 
@@ -101,11 +88,14 @@ export default function ShopPageClient({
 
   useEffect(() => {
     const cat = searchParams.get("category")
-    if (cat) {
-      setSelectedCategories([cat.toLowerCase()])
-    }
+    if (cat) setSelectedCategories([cat.toLowerCase()])
     const filter = searchParams.get("filter")
-    if (filter === "best-sellers") setSort("best-sellers")
+    if (filter === "best-sellers") {
+      setBestSellersOnly(true)
+      setSort("best-sellers")
+    }
+    if (filter === "sale") setOnSaleOnly(true)
+    if (filter === "new") setNewArrivalsOnly(true)
   }, [searchParams])
 
   const filteredProducts = useMemo(() => {
@@ -123,8 +113,13 @@ export default function ShopPageClient({
       return price >= priceRange[0] && price <= priceRange[1]
     })
 
-    if (inStockOnly) {
-      result = result.filter((p) => p.stock > 0)
+    if (inStockOnly) result = result.filter((p) => p.stock > 0)
+    if (newArrivalsOnly) result = result.filter((p) => p.isNewArrival)
+    if (bestSellersOnly) result = result.filter((p) => p.isBestSeller)
+    if (onSaleOnly) {
+      result = result.filter(
+        (p) => p.salePrice !== undefined && p.salePrice < p.price,
+      )
     }
 
     switch (sort) {
@@ -155,6 +150,8 @@ export default function ShopPageClient({
       case "top-rated":
         result.sort((a, b) => b.rating - a.rating)
         break
+      default:
+        break
     }
 
     return result
@@ -164,30 +161,39 @@ export default function ShopPageClient({
     priceRange,
     sort,
     inStockOnly,
+    newArrivalsOnly,
+    bestSellersOnly,
+    onSaleOnly,
   ])
 
   const displayedProducts = filteredProducts.slice(0, visibleCount)
   const hasMore = visibleCount < filteredProducts.length
+  const showingFrom = filteredProducts.length === 0 ? 0 : 1
+  const showingTo = displayedProducts.length
 
-  const activeCategoryName =
-    selectedCategories.length === 1
-      ? categories.find(
-          (c) => c.slug.toLowerCase() === selectedCategories[0],
-        )?.name
-      : null
+  const priceFilterActive =
+    priceRange[0] > MIN_PRICE || priceRange[1] < maxPrice
 
   const hasActiveFilters =
     selectedCategories.length > 0 ||
-    priceRange[0] > MIN_PRICE ||
-    priceRange[1] < maxPrice ||
-    inStockOnly
+    priceFilterActive ||
+    inStockOnly ||
+    newArrivalsOnly ||
+    bestSellersOnly ||
+    onSaleOnly
+
+  const activeFilterCount =
+    selectedCategories.length +
+    (priceFilterActive ? 1 : 0) +
+    (inStockOnly ? 1 : 0) +
+    (newArrivalsOnly ? 1 : 0) +
+    (bestSellersOnly ? 1 : 0) +
+    (onSaleOnly ? 1 : 0)
 
   function toggleCategory(slug: string) {
     const key = slug.toLowerCase()
     setSelectedCategories((prev) =>
-      prev.includes(key)
-        ? prev.filter((s) => s !== key)
-        : [...prev, key],
+      prev.includes(key) ? prev.filter((s) => s !== key) : [...prev, key],
     )
     setVisibleCount(ITEMS_PER_PAGE)
   }
@@ -196,22 +202,35 @@ export default function ShopPageClient({
     setSelectedCategories([])
     setPriceRange([MIN_PRICE, maxPrice])
     setInStockOnly(false)
-    setSort("best-sellers")
+    setNewArrivalsOnly(false)
+    setBestSellersOnly(false)
+    setOnSaleOnly(false)
+    setSort("default")
     setVisibleCount(ITEMS_PER_PAGE)
   }
 
-  function handleQuickView(product: Product) {
-    setQuickViewProduct(product)
-    setQuickViewOpen(true)
-  }
+  const FilterPill = ({
+    label,
+    onRemove,
+  }: {
+    label: string
+    onRemove: () => void
+  }) => (
+    <button
+      type="button"
+      onClick={onRemove}
+      className="inline-flex items-center gap-1.5 rounded-full bg-navy px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-navy/90"
+    >
+      {label}
+      <X className="size-3 opacity-80" />
+    </button>
+  )
 
   const filterContent = (
     <div className="space-y-8">
       <div>
-        <h3 className="font-heading text-sm font-semibold uppercase tracking-wider text-rose-300">
-          Categories
-        </h3>
-        <div className="mt-3 space-y-2.5">
+        <h3 className="text-sm font-semibold text-navy">By Categories</h3>
+        <div className="mt-4 space-y-3">
           {categories.map((cat) => (
             <label
               key={cat.id}
@@ -221,8 +240,10 @@ export default function ShopPageClient({
                 checked={selectedCategories.includes(cat.slug.toLowerCase())}
                 onCheckedChange={() => toggleCategory(cat.slug.toLowerCase())}
               />
-              <span className="text-sm text-rose-300 whitespace-pre-wrap">{cat.displayName}</span>
-              <span className="ml-auto text-xs text-rose-300/90">
+              <span className="text-sm text-muted-foreground whitespace-pre-wrap">
+                {cat.displayName}
+              </span>
+              <span className="ml-auto text-xs text-muted-foreground/80">
                 ({cat.productCount})
               </span>
             </label>
@@ -231,18 +252,19 @@ export default function ShopPageClient({
       </div>
 
       <div>
-        <h3 className="font-heading text-sm font-semibold uppercase tracking-wider text-rose-300">
-          Price Range
-        </h3>
+        <h3 className="text-sm font-semibold text-navy">Price</h3>
         <div className="mt-4 px-1">
           <Slider
             value={priceRange}
-            onValueChange={(val) => setPriceRange(val as number[])}
+            onValueChange={(val) => {
+              setPriceRange(val as number[])
+              setVisibleCount(ITEMS_PER_PAGE)
+            }}
             min={MIN_PRICE}
             max={maxPrice}
             step={10}
           />
-          <div className="mt-3 flex items-center justify-between text-sm text-rose-300">
+          <div className="mt-3 flex items-center justify-between text-sm text-muted-foreground">
             <span>{formatPrice(priceRange[0])}</span>
             <span>{formatPrice(priceRange[1])}</span>
           </div>
@@ -250,235 +272,224 @@ export default function ShopPageClient({
       </div>
 
       <div>
-        <h3 className="font-heading text-sm font-semibold uppercase tracking-wider text-rose-300">
-          Availability
-        </h3>
-        <label className="mt-3 flex cursor-pointer items-center gap-2.5">
-          <Checkbox
-            checked={inStockOnly}
-            onCheckedChange={(checked) => setInStockOnly(Boolean(checked))}
-          />
-          <span className="text-sm text-rose-300">In Stock Only</span>
-        </label>
+        <h3 className="text-sm font-semibold text-navy">By Promotions</h3>
+        <div className="mt-4 space-y-3">
+          <label className="flex cursor-pointer items-center gap-2.5">
+            <Checkbox
+              checked={newArrivalsOnly}
+              onCheckedChange={(checked) => {
+                setNewArrivalsOnly(Boolean(checked))
+                setVisibleCount(ITEMS_PER_PAGE)
+              }}
+            />
+            <span className="text-sm text-muted-foreground">New Arrivals</span>
+          </label>
+          <label className="flex cursor-pointer items-center gap-2.5">
+            <Checkbox
+              checked={bestSellersOnly}
+              onCheckedChange={(checked) => {
+                setBestSellersOnly(Boolean(checked))
+                setVisibleCount(ITEMS_PER_PAGE)
+              }}
+            />
+            <span className="text-sm text-muted-foreground">Best Sellers</span>
+          </label>
+          <label className="flex cursor-pointer items-center gap-2.5">
+            <Checkbox
+              checked={onSaleOnly}
+              onCheckedChange={(checked) => {
+                setOnSaleOnly(Boolean(checked))
+                setVisibleCount(ITEMS_PER_PAGE)
+              }}
+            />
+            <span className="text-sm text-muted-foreground">On Sale</span>
+          </label>
+        </div>
       </div>
 
-      {hasActiveFilters && (
-        <Button variant="outline" onClick={clearFilters} className="w-full">
-          Clear All Filters
-        </Button>
-      )}
+      <div>
+        <h3 className="text-sm font-semibold text-navy">Availability</h3>
+        <div className="mt-4 space-y-3">
+          <label className="flex cursor-pointer items-center gap-2.5">
+            <Checkbox
+              checked={inStockOnly}
+              onCheckedChange={(checked) => {
+                setInStockOnly(Boolean(checked))
+                setVisibleCount(ITEMS_PER_PAGE)
+              }}
+            />
+            <span className="text-sm text-muted-foreground">In Stock</span>
+          </label>
+        </div>
+      </div>
     </div>
   )
 
+  const resultsToolbar = (
+    <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+      <p className="text-sm text-muted-foreground">
+        Showing{" "}
+        <span className="font-medium text-navy">
+          {showingFrom}-{showingTo}
+        </span>{" "}
+        of{" "}
+        <span className="font-medium text-navy">{filteredProducts.length}</span>{" "}
+        results
+      </p>
+
+      <div className="flex items-center gap-2">
+        <span className="text-sm text-muted-foreground">Sort by :</span>
+        <Select
+          value={sort}
+          onValueChange={(val) => {
+            if (val) {
+              setSort(val)
+              setVisibleCount(ITEMS_PER_PAGE)
+            }
+          }}
+        >
+          <SelectTrigger className="h-9 w-[180px] rounded-lg border-slate-200 bg-white">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {sortOptions.map((opt) => (
+              <SelectItem key={opt.value} value={opt.value}>
+                {opt.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+    </div>
+  )
+
+  const activeFiltersRow = hasActiveFilters ? (
+    <div className="flex flex-wrap items-center gap-2">
+      <span className="text-sm font-medium text-navy">Active Filter</span>
+      {selectedCategories.map((slug) => {
+        const cat = categories.find((c) => c.slug.toLowerCase() === slug)
+        if (!cat) return null
+        return (
+          <FilterPill
+            key={slug}
+            label={cat.name}
+            onRemove={() => toggleCategory(slug)}
+          />
+        )
+      })}
+      {priceFilterActive ? (
+        <FilterPill
+          label={`Price: ${formatPrice(priceRange[0])} - ${formatPrice(priceRange[1])}`}
+          onRemove={() => setPriceRange([MIN_PRICE, maxPrice])}
+        />
+      ) : null}
+      {newArrivalsOnly ? (
+        <FilterPill
+          label="New Arrivals"
+          onRemove={() => setNewArrivalsOnly(false)}
+        />
+      ) : null}
+      {bestSellersOnly ? (
+        <FilterPill
+          label="Best Seller"
+          onRemove={() => setBestSellersOnly(false)}
+        />
+      ) : null}
+      {onSaleOnly ? (
+        <FilterPill label="On Sale" onRemove={() => setOnSaleOnly(false)} />
+      ) : null}
+      {inStockOnly ? (
+        <FilterPill label="In Stock" onRemove={() => setInStockOnly(false)} />
+      ) : null}
+      <button
+        type="button"
+        onClick={clearFilters}
+        className="text-sm font-medium text-rose-primary transition-colors hover:text-rose-primary/80"
+      >
+        Clear All
+      </button>
+    </div>
+  ) : null
+
   return (
     <>
+      <PageHero
+        imageSrc={HERO_IMAGES.purse.src}
+        imageAlt={HERO_IMAGES.purse.alt}
+        title="Shop"
+        subtitle="Browse our curated collection of bags, heels, and everyday essentials."
+      />
+
       <div className="min-h-screen bg-white">
-        <Container className="py-8 sm:py-12">
-          <nav className="mb-8 flex items-center gap-1.5 text-sm text-rose-300/80">
-            <Link href="/" className="transition-colors hover:text-rose-300">
-              Home
-            </Link>
-            <ChevronRight className="size-3.5" />
-            <span className="font-medium text-rose-300">Shop</span>
-          </nav>
-
-          <div className="mb-8">
-            <Heading as="h1" className="text-rose-300">{activeCategoryName ?? "Shop All"}</Heading>
-          </div>
-
+        <Container className="py-10 sm:py-14">
           <div className="mb-6 flex items-center gap-3 lg:hidden">
             <Sheet open={mobileFiltersOpen} onOpenChange={setMobileFiltersOpen}>
-              <SheetTrigger render={<Button variant="outline" className="gap-2" />}>
+              <SheetTrigger
+                render={<Button variant="outline" className="gap-2 rounded-xl" />}
+              >
                 <SlidersHorizontal className="size-4" />
-                Filters
-                {hasActiveFilters && (
-                  <span className="flex size-5 items-center justify-center rounded-full bg-rose-200 text-[10px] font-bold text-navy">
-                    {selectedCategories.length +
-                      (priceRange[0] > MIN_PRICE || priceRange[1] < maxPrice
-                        ? 1
-                        : 0) +
-                      (inStockOnly ? 1 : 0)}
+                Filter Options
+                {hasActiveFilters ? (
+                  <span className="flex size-5 items-center justify-center rounded-full bg-navy text-[10px] font-bold text-white">
+                    {activeFilterCount}
                   </span>
-                )}
+                ) : null}
               </SheetTrigger>
               <SheetContent side="left" className="overflow-y-auto">
                 <SheetHeader>
-                  <SheetTitle>Filters</SheetTitle>
+                  <SheetTitle>Filter Options</SheetTitle>
                 </SheetHeader>
                 <div className="px-4 pb-8">{filterContent}</div>
               </SheetContent>
             </Sheet>
-
-            <div className="ml-auto">
-              <Select
-                value={sort}
-                onValueChange={(val) => {
-                  if (val) setSort(val)
-                }}
-              >
-                <SelectTrigger className="w-[170px]">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {sortOptions.map((opt) => (
-                    <SelectItem key={opt.value} value={opt.value}>
-                      {opt.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
           </div>
 
-          {hasActiveFilters && (
-            <div className="mb-6 flex flex-wrap items-center gap-2">
-              {selectedCategories.map((slug) => {
-                const cat = categories.find(
-                  (c) => c.slug.toLowerCase() === slug,
-                )
-                if (!cat) return null
-                return (
-                  <button
-                    key={slug}
-                    type="button"
-                    onClick={() => toggleCategory(slug)}
-                    className="inline-flex items-center gap-1.5 rounded-full border border-rose-border bg-rose-light px-3 py-1 text-xs font-medium text-navy transition-colors hover:border-rose-primary"
-                  >
-                    {cat.name}
-                    <X className="size-3" />
-                  </button>
-                )
-              })}
-              {(priceRange[0] > MIN_PRICE || priceRange[1] < maxPrice) && (
-                <button
-                  type="button"
-                  onClick={() => setPriceRange([MIN_PRICE, maxPrice])}
-                  className="inline-flex items-center gap-1.5 rounded-full border border-rose-border bg-rose-light px-3 py-1 text-xs font-medium text-navy transition-colors hover:border-rose-primary"
-                >
-                  {formatPrice(priceRange[0])} – {formatPrice(priceRange[1])}
-                  <X className="size-3" />
-                </button>
-              )}
-              {inStockOnly && (
-                <button
-                  type="button"
-                  onClick={() => setInStockOnly(false)}
-                  className="inline-flex items-center gap-1.5 rounded-full border border-rose-border bg-rose-light px-3 py-1 text-xs font-medium text-navy transition-colors hover:border-rose-primary"
-                >
-                  In Stock
-                  <X className="size-3" />
-                </button>
-              )}
-              <button
-                type="button"
-                onClick={clearFilters}
-                className="text-xs font-medium text-rose-primary underline underline-offset-2"
-              >
-                Clear all
-              </button>
-            </div>
-          )}
-
-          <div className="flex gap-10">
-            <aside className="hidden w-[280px] shrink-0 lg:block">
-              <div className="sticky top-8">
-                <div className="mb-6 flex items-center justify-between">
-                  <h2 className="font-heading text-lg font-semibold text-rose-300">
-                    Filters
-                  </h2>
-                  {hasActiveFilters && (
-                    <button
-                      type="button"
-                      onClick={clearFilters}
-                      className="text-xs font-medium text-rose-primary underline underline-offset-2"
-                    >
-                      Clear all
-                    </button>
-                  )}
-                </div>
-
+          <div className="flex gap-8 lg:gap-12">
+            <aside className="hidden w-[260px] shrink-0 lg:block xl:w-[280px]">
+              <div className="sticky top-24">
+                <h2 className="mb-6 text-lg font-semibold text-navy">
+                  Filter Options
+                </h2>
                 {filterContent}
-
-                <div className="mt-8">
-                  <h3 className="font-heading text-sm font-semibold uppercase tracking-wider text-rose-300">
-                    Sort By
-                  </h3>
-                  <div className="mt-3">
-                    <Select
-                      value={sort}
-                      onValueChange={(val) => {
-                        if (val) setSort(val)
-                      }}
-                    >
-                      <SelectTrigger className="w-full">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {sortOptions.map((opt) => (
-                          <SelectItem key={opt.value} value={opt.value}>
-                            {opt.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
               </div>
             </aside>
 
-            <div className="min-w-0 flex-1">
-              <div className="mb-6 flex items-center justify-between">
-                <p className="text-sm text-muted-foreground">
-                  Showing{" "}
-                  <span className="font-medium text-navy">
-                    {displayedProducts.length}
-                  </span>{" "}
-                  of{" "}
-                  <span className="font-medium text-navy">
-                    {filteredProducts.length}
-                  </span>{" "}
-                  products
-                </p>
-              </div>
+            <div className="min-w-0 flex-1 space-y-5">
+              {resultsToolbar}
+              {activeFiltersRow}
 
               {displayedProducts.length > 0 ? (
                 <>
                   <motion.div
-                    className="grid grid-cols-2 gap-4 sm:gap-6 lg:grid-cols-3"
+                    className="grid grid-cols-2 gap-x-4 gap-y-8 sm:gap-x-6 sm:gap-y-10 lg:grid-cols-3"
                     initial="hidden"
                     animate="visible"
                     variants={staggerContainer}
-                    key={`${selectedCategories.join(",")}-${sort}-${priceRange.join(",")}-${inStockOnly}`}
+                    key={`${selectedCategories.join(",")}-${sort}-${priceRange.join(",")}-${inStockOnly}-${newArrivalsOnly}-${bestSellersOnly}-${onSaleOnly}`}
                   >
                     {displayedProducts.map((product) => (
                       <motion.div key={product.id} variants={staggerItem}>
-                        <ShopProductCard
+                        <ProductCard
                           product={product}
-                          onQuickView={handleQuickView}
+                          variant="catalog"
                         />
                       </motion.div>
                     ))}
                   </motion.div>
 
-                  {hasMore && (
-                    <div className="mt-12 flex justify-center">
-                      <motion.div
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        transition={{ delay: 0.3 }}
+                  {hasMore ? (
+                    <div className="flex justify-center pt-4">
+                      <Button
+                        variant="outline"
+                        onClick={() =>
+                          setVisibleCount((prev) => prev + ITEMS_PER_PAGE)
+                        }
+                        className="rounded-full border-slate-200 px-8 py-2.5 font-medium text-navy hover:border-navy hover:bg-navy hover:text-white"
                       >
-                        <Button
-                          variant="outline"
-                          onClick={() =>
-                            setVisibleCount((prev) => prev + ITEMS_PER_PAGE)
-                          }
-                          className="rounded-full border-rose-border px-8 py-2.5 font-medium text-navy hover:border-rose-primary hover:bg-rose-light hover:text-rose-primary"
-                        >
-                          Load More Products
-                        </Button>
-                      </motion.div>
+                        Load More Products
+                      </Button>
                     </div>
-                  )}
+                  ) : null}
                 </>
               ) : (
                 <motion.div
@@ -500,7 +511,7 @@ export default function ShopPageClient({
                   <Button
                     variant="outline"
                     onClick={clearFilters}
-                    className="mt-6 rounded-full border-rose-border px-6 hover:border-rose-primary hover:bg-rose-light hover:text-rose-primary"
+                    className="mt-6 rounded-full px-6"
                   >
                     Clear All Filters
                   </Button>
@@ -511,89 +522,6 @@ export default function ShopPageClient({
         </Container>
       </div>
 
-      <QuickViewModal
-        open={quickViewOpen}
-        onClose={() => setQuickViewOpen(false)}
-        product={quickViewProduct}
-      />
     </>
-  )
-}
-
-function ShopProductCard({
-  product,
-  onQuickView,
-}: {
-  product: Product
-  onQuickView: (product: Product) => void
-}) {
-  const addItem = useCartStore((s) => s.addItem)
-  const toggleItem = useWishlistStore((s) => s.toggleItem)
-  const isInWishlist = useWishlistStore((s) => s.isInWishlist(product.id))
-
-  return (
-    <div className="group overflow-hidden rounded-2xl border border-rose-border/20 bg-white transition-all duration-300 hover:border-rose-200 hover:shadow-[0_18px_38px_-18px_rgba(15,23,42,0.45)]">
-      <Link href={`/products/${product.slug}`} className="block">
-        <div className="relative h-[330px] overflow-hidden bg-[#E9E7E3]">
-          <img
-            src={getProductPrimaryImageUrl(product)}
-            alt={product.name}
-            className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-[1.03]"
-            loading="lazy"
-          />
-
-          <button
-            onClick={(e) => {
-              e.preventDefault()
-              toggleItem(product)
-            }}
-            className={cn(
-              "absolute right-3 top-3 z-20 flex size-10 items-center justify-center rounded-full bg-white/95 text-navy shadow-md transition-all hover:scale-105",
-              isInWishlist && "text-rose-primary",
-            )}
-            aria-label={isInWishlist ? "Remove from wishlist" : "Add to wishlist"}
-          >
-            <Heart className="size-4" fill={isInWishlist ? "currentColor" : "none"} />
-          </button>
-
-          <div className="pointer-events-none absolute inset-x-0 bottom-0 flex justify-center pb-4 opacity-0 transition-opacity duration-300 group-hover:opacity-100">
-            <button
-              onClick={(e) => {
-                e.preventDefault()
-                addItem(product)
-              }}
-              className="pointer-events-auto inline-flex items-center gap-2 rounded-full bg-white px-7 py-3 text-base font-semibold text-rose-primary shadow-xl"
-            >
-              <ShoppingBag className="size-4" />
-              Add to Bag
-            </button>
-          </div>
-        </div>
-      </Link>
-
-      <div className="bg-white px-5 pb-5 pt-4">
-        <span className="inline-flex rounded-full bg-rose-100 px-2.5 py-0.5 text-xs font-medium text-rose-primary">
-          {product.categoryName || "Category"}
-        </span>
-        <h3 className="mt-2 text-[17px] font-semibold leading-tight tracking-tight text-navy">
-          {product.name}
-        </h3>
-        <div className="mt-2.5 flex items-center justify-between">
-          <p className="text-[18px] font-semibold leading-none text-rose-primary">
-            {formatPrice(product.salePrice ?? product.price)}
-          </p>
-          <button
-            onClick={(e) => {
-              e.preventDefault()
-              onQuickView(product)
-            }}
-            className="flex size-8 items-center justify-center rounded-full bg-rose-100 text-rose-primary transition-colors hover:bg-rose-200"
-            aria-label="Quick view"
-          >
-            <Eye className="size-4" />
-          </button>
-        </div>
-      </div>
-    </div>
   )
 }

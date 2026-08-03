@@ -12,7 +12,6 @@ import {
 } from "lucide-react"
 import { Container } from "@/components/shared/container"
 import { Section } from "@/components/shared/section"
-import { Heading } from "@/components/shared/heading"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -35,6 +34,8 @@ import {
   TIKTOK_URL,
   WHATSAPP_URL,
 } from "@/lib/brand"
+import { HERO_IMAGES } from "@/lib/hero-images"
+import { PageHero } from "@/components/shared/page-hero"
 
 type ContactItem = {
   icon: typeof Mail
@@ -111,17 +112,16 @@ const hours = [
 export default function ContactPage() {
   return (
     <>
-      <Section className="bg-gradient-to-b from-rose-light/50 to-white">
-        <Container>
-          <Heading
-            as="h1"
-            align="center"
-            subtitle={`We'd love to hear from you. Reach out to ${BRAND_NAME} for orders, support, or general inquiries.`}
-          >
-            Get in Touch
-          </Heading>
+      <PageHero
+        imageSrc={HERO_IMAGES.purse.src}
+        imageAlt={HERO_IMAGES.purse.alt}
+        title="Get in Touch"
+        subtitle={`We'd love to hear from you. Reach out to ${BRAND_NAME} for orders, support, or general inquiries.`}
+      />
 
-          <div className="mt-14 grid gap-12 lg:grid-cols-5 lg:gap-16">
+      <Section className="bg-white">
+        <Container>
+          <div className="grid gap-12 lg:grid-cols-5 lg:gap-16">
             {/* Contact Form */}
             <motion.div
               initial={{ opacity: 0, x: -20 }}
@@ -191,7 +191,7 @@ export default function ContactPage() {
                     />
                   </div>
 
-                  <Button className="w-full gap-2 rounded-xl bg-rose-100 py-3 text-navy hover:bg-rose-200 sm:w-auto sm:px-8">
+                  <Button className="w-full gap-2 rounded-xl bg-rose-light py-3 text-navy hover:bg-rose-border sm:w-auto sm:px-8">
                     <Send className="size-4" />
                     Send Message
                   </Button>
@@ -320,7 +320,7 @@ export default function ContactPage() {
                   rel="noopener noreferrer"
                   className="block overflow-hidden rounded-2xl transition-opacity hover:opacity-95"
                 >
-                  <div className="flex aspect-[4/3] items-center justify-center bg-gradient-to-br from-rose-100 via-pink-50 to-amber-50">
+                  <div className="flex aspect-[4/3] items-center justify-center bg-gradient-to-br from-rose-light via-rose-light to-amber-50">
                     <div className="text-center">
                       <MapPin className="mx-auto size-8 text-rose-primary/40" />
                       <p className="mt-2 text-sm font-medium text-navy/70">

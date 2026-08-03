@@ -62,7 +62,7 @@ export default function SupportDashboard() {
   }
 
   const sentimentIcon = (s: string) => {
-    if (s === 'positive') return <i className="ri-emotion-happy-line text-rose-500" />;
+    if (s === 'positive') return <i className="ri-emotion-happy-line text-rose-primary" />;
     if (s === 'negative') return <i className="ri-emotion-unhappy-line text-red-500" />;
     return <i className="ri-emotion-normal-line text-gray-400" />;
   };
@@ -73,7 +73,7 @@ export default function SupportDashboard() {
   };
 
   const statusBadge = (s: string) => {
-    const colors: Record<string, string> = { open: 'bg-blue-100 text-blue-700', in_progress: 'bg-yellow-100 text-yellow-700', waiting_customer: 'bg-purple-100 text-purple-700', resolved: 'bg-rose-100 text-rose-700', closed: 'bg-gray-100 text-gray-600' };
+    const colors: Record<string, string> = { open: 'bg-blue-100 text-blue-700', in_progress: 'bg-yellow-100 text-yellow-700', waiting_customer: 'bg-purple-100 text-purple-700', resolved: 'bg-rose-light text-navy', closed: 'bg-gray-100 text-gray-600' };
     return <span className={`px-2 py-0.5 text-[10px] font-bold uppercase rounded-full ${colors[s] || colors.open}`}>{s.replace(/_/g, ' ')}</span>;
   };
 
@@ -102,7 +102,7 @@ export default function SupportDashboard() {
   ];
 
   const colorMap: Record<string, { bg: string; icon: string; ring: string }> = {
-    rose: { bg: 'bg-pink-50', icon: 'text-rose-500', ring: 'ring-rose-300/35' },
+    rose: { bg: 'bg-rose-light', icon: 'text-rose-primary', ring: 'ring-rose-border/35' },
     blue: { bg: 'bg-blue-50', icon: 'text-blue-600', ring: 'ring-blue-500/20' },
     purple: { bg: 'bg-purple-50', icon: 'text-purple-600', ring: 'ring-purple-500/20' },
     amber: { bg: 'bg-amber-50', icon: 'text-amber-600', ring: 'ring-amber-500/20' },
@@ -120,7 +120,7 @@ export default function SupportDashboard() {
           <Link href="/admin/support/knowledge-base" className="inline-flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50 text-sm font-medium transition-colors">
             <i className="ri-book-open-line" /> Knowledge Base
           </Link>
-          <Link href="/admin/support/analytics" className="inline-flex items-center gap-2 px-4 py-2 bg-rose-500 text-white rounded-lg hover:bg-rose-600 text-sm font-medium transition-colors">
+          <Link href="/admin/support/analytics" className="inline-flex items-center gap-2 px-4 py-2 bg-rose-light0 text-white rounded-lg hover:bg-navy text-sm font-medium transition-colors">
             <i className="ri-line-chart-line" /> Analytics
           </Link>
         </div>
@@ -162,12 +162,12 @@ export default function SupportDashboard() {
             <span className="font-semibold text-gray-900">{stats?.knowledge_base?.total_articles || 0}</span>
           </div>
           <div className="flex items-center gap-2">
-            <i className="ri-chat-3-line text-rose-500" />
+            <i className="ri-chat-3-line text-rose-primary" />
             <span className="text-gray-500">This Week:</span>
             <span className="font-semibold text-gray-900">{stats?.conversations?.week || 0} conversations</span>
           </div>
           <div className="flex items-center gap-2">
-            <i className="ri-check-double-line text-rose-500" />
+            <i className="ri-check-double-line text-rose-primary" />
             <span className="text-gray-500">Resolved This Week:</span>
             <span className="font-semibold text-gray-900">{stats?.tickets?.resolved_week || 0} tickets</span>
           </div>
@@ -182,7 +182,7 @@ export default function SupportDashboard() {
             <h2 className="font-semibold text-gray-900 flex items-center gap-2">
               <i className="ri-chat-3-line text-blue-500" /> Recent Conversations
             </h2>
-            <Link href="/admin/support/conversations" className="text-xs text-rose-600 hover:text-rose-700 font-medium">View all →</Link>
+            <Link href="/admin/support/conversations" className="text-xs text-navy hover:text-navy font-medium">View all →</Link>
           </div>
           <div className="divide-y divide-gray-50 overflow-y-auto max-h-[500px]">
             {recentConversations.length === 0 ? (
@@ -203,12 +203,12 @@ export default function SupportDashboard() {
                 </div>
                 <div className="flex flex-col items-end gap-1">
                   {conv.is_escalated && <span className="px-1.5 py-0.5 text-[9px] font-bold bg-red-100 text-red-600 rounded">ESCALATED</span>}
-                  {conv.is_resolved && <span className="px-1.5 py-0.5 text-[9px] font-bold bg-rose-100 text-rose-600 rounded">RESOLVED</span>}
+                  {conv.is_resolved && <span className="px-1.5 py-0.5 text-[9px] font-bold bg-rose-light text-navy rounded">RESOLVED</span>}
                 </div>
               </Link>
             ))}
           </div>
-          <Link href="/admin/support/conversations" className="flex items-center justify-center gap-2 p-3 border-t border-gray-100 text-sm font-medium text-rose-600 hover:bg-rose-50 transition-colors">
+          <Link href="/admin/support/conversations" className="flex items-center justify-center gap-2 p-3 border-t border-gray-100 text-sm font-medium text-navy hover:bg-rose-light transition-colors">
             <i className="ri-history-line" /> View All {stats?.conversations?.total ?? 0} Conversations
           </Link>
         </div>
@@ -217,14 +217,14 @@ export default function SupportDashboard() {
         <div className="bg-white rounded-xl border border-gray-100">
           <div className="flex items-center justify-between p-4 border-b border-gray-100">
             <h2 className="font-semibold text-gray-900 flex items-center gap-2">
-              <i className="ri-ticket-line text-rose-500" /> Open Tickets
+              <i className="ri-ticket-line text-rose-primary" /> Open Tickets
             </h2>
-            <Link href="/admin/support/tickets" className="text-xs text-rose-600 hover:text-rose-700 font-medium">View all →</Link>
+            <Link href="/admin/support/tickets" className="text-xs text-navy hover:text-navy font-medium">View all →</Link>
           </div>
           <div className="divide-y divide-gray-50">
             {openTickets.length === 0 ? (
               <div className="p-8 text-center text-gray-400">
-                <i className="ri-checkbox-circle-line text-4xl mb-2 block text-rose-300" />
+                <i className="ri-checkbox-circle-line text-4xl mb-2 block text-rose-soft" />
                 <p className="text-sm">All clear! No open tickets</p>
               </div>
             ) : openTickets.map((ticket) => (
@@ -249,9 +249,9 @@ export default function SupportDashboard() {
       <div className="bg-white rounded-xl border border-gray-100 p-4">
         <h3 className="text-sm font-semibold text-gray-700 mb-3">Quick Actions</h3>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <Link href="/admin/support/tickets?new=1" className="flex flex-col items-center gap-2 p-4 rounded-lg border border-dashed border-gray-200 hover:border-rose-300 hover:bg-rose-50 transition-all text-center group">
-            <i className="ri-add-circle-line text-2xl text-gray-400 group-hover:text-rose-600" />
-            <span className="text-xs font-medium text-gray-600 group-hover:text-rose-700">Create Ticket</span>
+          <Link href="/admin/support/tickets?new=1" className="flex flex-col items-center gap-2 p-4 rounded-lg border border-dashed border-gray-200 hover:border-rose-border hover:bg-rose-light transition-all text-center group">
+            <i className="ri-add-circle-line text-2xl text-gray-400 group-hover:text-navy" />
+            <span className="text-xs font-medium text-gray-600 group-hover:text-navy">Create Ticket</span>
           </Link>
           <Link href="/admin/support/knowledge-base?new=1" className="flex flex-col items-center gap-2 p-4 rounded-lg border border-dashed border-gray-200 hover:border-blue-300 hover:bg-blue-50 transition-all text-center group">
             <i className="ri-article-line text-2xl text-gray-400 group-hover:text-blue-600" />

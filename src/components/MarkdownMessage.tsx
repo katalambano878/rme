@@ -22,7 +22,7 @@ export default function MarkdownMessage({ content, className = '', isUserMessage
       {blocks.map((block, i) => {
         if (block.type === 'list') {
           return (
-            <ul key={i} className={`list-disc pl-4 space-y-1 ${isUserMessage ? 'marker:text-rose-200' : 'marker:text-rose-400'}`}>
+            <ul key={i} className={`list-disc pl-4 space-y-1 ${isUserMessage ? 'marker:text-rose-border' : 'marker:text-rose-primary'}`}>
               {block.items.map((item, j) => (
                 <li key={j} className="text-sm leading-relaxed">
                   <InlineMarkdown text={item} isUser={isUserMessage} />
@@ -33,7 +33,7 @@ export default function MarkdownMessage({ content, className = '', isUserMessage
         }
         if (block.type === 'numbered-list') {
           return (
-            <ol key={i} className={`list-decimal pl-4 space-y-1 ${isUserMessage ? 'marker:text-rose-200' : 'marker:text-rose-400'}`}>
+            <ol key={i} className={`list-decimal pl-4 space-y-1 ${isUserMessage ? 'marker:text-rose-border' : 'marker:text-rose-primary'}`}>
               {block.items.map((item, j) => (
                 <li key={j} className="text-sm leading-relaxed">
                   <InlineMarkdown text={item} isUser={isUserMessage} />
@@ -136,7 +136,7 @@ function InlineMarkdown({ text, isUser }: { text: string; isUser: boolean }) {
     } else if (match[5]) {
       // `code`
       elements.push(
-        <code key={match.index} className={`px-1 py-0.5 rounded text-xs font-mono ${isUser ? 'bg-rose-600/35' : 'bg-gray-100 text-gray-800'}`}>
+        <code key={match.index} className={`px-1 py-0.5 rounded text-xs font-mono ${isUser ? 'bg-navy/35' : 'bg-gray-100 text-gray-800'}`}>
           {match[6]}
         </code>
       );
@@ -150,7 +150,7 @@ function InlineMarkdown({ text, isUser }: { text: string; isUser: boolean }) {
             href={safeHref}
             target="_blank"
             rel="noopener noreferrer"
-            className={`underline ${isUser ? 'text-rose-100 hover:text-white' : 'text-rose-600 hover:text-rose-700'}`}
+            className={`underline ${isUser ? 'text-rose-light hover:text-white' : 'text-navy hover:text-navy'}`}
           >
             {match[8]}
           </a>,

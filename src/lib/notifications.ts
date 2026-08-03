@@ -11,9 +11,9 @@ const ADMIN_SMS_NUMBERS = (process.env.ADMIN_SMS_NUMBERS || '').split(',').map(n
 const BRAND = {
     name: BRAND_NAME,
     tagline: BRAND_TAGLINE,
-    color: '#0D9488',
-    colorLight: '#F0FDFA',
-    colorDark: '#0B1B3A',
+    color: '#244b39',
+    colorLight: '#f7f3ed',
+    colorDark: '#244b39',
     url: ((/^https?:\/\//.test(process.env.NEXT_PUBLIC_APP_URL || '') ? process.env.NEXT_PUBLIC_APP_URL! : `https://${process.env.NEXT_PUBLIC_APP_URL || SITE_DOMAIN}`)).replace(/\/+$/, ''),
 };
 

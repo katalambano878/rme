@@ -43,7 +43,7 @@ type OrderData = {
   }
 }
 
-const confettiColors = ["#E11D48", "#FB7185", "#F1D6DF", "#0B1B3A", "#FFF5F8"]
+const confettiColors = ["#244b39", "#b6946d", "#e4d5c3", "#244b39", "#f7f3ed"]
 
 function ConfettiDots() {
   const dots = useMemo(

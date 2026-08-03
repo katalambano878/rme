@@ -5,16 +5,17 @@ import { motion } from "framer-motion"
 import { ArrowRight, Calendar, Clock, BookOpen, Mail } from "lucide-react"
 import { Container } from "@/components/shared/container"
 import { Section } from "@/components/shared/section"
-import { Heading } from "@/components/shared/heading"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { blogPosts } from "@/lib/mock-data"
+import { HERO_IMAGES } from "@/lib/hero-images"
+import { PageHero } from "@/components/shared/page-hero"
 
 const gradients = [
-  "from-rose-200 via-pink-100 to-amber-50",
-  "from-violet-200 via-purple-100 to-pink-50",
-  "from-amber-100 via-orange-50 to-rose-100",
+  "from-[#244b39]/20 via-rose-light to-[#f7f3ed]",
+  "from-[#2f5f49]/30 via-[#e4d5c3] to-teal-light",
+  "from-[#b6946d]/40 via-[#f0e8dc] to-rose-light",
 ]
 
 const fadeUp = {
@@ -29,17 +30,16 @@ const fadeUp = {
 export default function BlogPage() {
   return (
     <>
-      <Section className="bg-gradient-to-b from-teal-50/80 to-white">
-        <Container>
-          <Heading
-            as="h1"
-            align="center"
-            subtitle="Guides, updates, and tips from the Trust Ecom team."
-          >
-            Blog
-          </Heading>
+      <PageHero
+        imageSrc={HERO_IMAGES.heels.src}
+        imageAlt={HERO_IMAGES.heels.alt}
+        title="Blog"
+        subtitle="Guides, updates, and tips from the Trust Ecom team."
+      />
 
-          <div className="mt-14 grid gap-8 md:grid-cols-2 lg:grid-cols-3">
+      <Section className="bg-white">
+        <Container>
+          <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-3">
             {blogPosts.map((post, i) => (
               <motion.div
                 key={post.id}
@@ -127,7 +127,7 @@ export default function BlogPage() {
                 placeholder="Enter your email"
                 className="h-11 rounded-xl border-rose-border px-4 sm:w-72 focus-visible:border-rose-primary focus-visible:ring-rose-primary/20"
               />
-              <Button className="h-11 rounded-xl bg-rose-100 px-6 text-navy hover:bg-rose-200">
+              <Button className="h-11 rounded-xl bg-rose-light px-6 text-navy hover:bg-rose-border">
                 Subscribe
               </Button>
             </div>

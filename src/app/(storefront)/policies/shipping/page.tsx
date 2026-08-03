@@ -4,7 +4,6 @@ import { motion } from "framer-motion"
 import { Truck, MapPin, Clock, Globe, Package } from "lucide-react"
 import { Container } from "@/components/shared/container"
 import { Section } from "@/components/shared/section"
-import { Heading } from "@/components/shared/heading"
 import {
   Accordion,
   AccordionItem,
@@ -13,6 +12,8 @@ import {
 } from "@/components/ui/accordion"
 import { formatFreeShippingMinimumLabel } from "@/lib/utils"
 import { BRAND_NAME, CONTACT_EMAIL, PHONE_DISPLAY_PRIMARY } from "@/lib/brand"
+import { HERO_IMAGES } from "@/lib/hero-images"
+import { PageHero } from "@/components/shared/page-hero"
 
 const trackingContact = PHONE_DISPLAY_PRIMARY
   ? `If your tracking hasn't updated in over 48 hours, please contact us at ${PHONE_DISPLAY_PRIMARY}.`
@@ -94,22 +95,22 @@ Join our newsletter to be the first to know when we expand to new regions.`,
 
 export default function ShippingPolicyPage() {
   return (
-    <Section className="bg-gradient-to-b from-rose-light/50 to-white">
-      <Container>
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] as const }}
-          className="mx-auto max-w-3xl"
-        >
-          <Heading
-            as="h1"
-            align="center"
-            subtitle="Everything you need to know about how we get your orders to your doorstep."
-          >
-            Shipping Policy
-          </Heading>
+    <>
+      <PageHero
+        imageSrc={HERO_IMAGES.heels.src}
+        imageAlt={HERO_IMAGES.heels.alt}
+        title="Shipping Policy"
+        subtitle="Everything you need to know about how we get your orders to your doorstep."
+      />
 
+      <Section className="bg-white">
+        <Container>
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] as const }}
+            className="mx-auto max-w-3xl"
+          >
           <div className="mt-12">
             <Accordion>
               {sections.map((section) => (
@@ -165,5 +166,6 @@ export default function ShippingPolicyPage() {
         </motion.div>
       </Container>
     </Section>
+    </>
   )
 }

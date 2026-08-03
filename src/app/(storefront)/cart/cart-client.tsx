@@ -13,7 +13,7 @@ import {
   Truck,
   ShieldCheck,
   Heart,
-  Eye,
+  ArrowRight,
 } from "lucide-react"
 import { cn, formatPrice, FREE_SHIPPING_THRESHOLD_GHS } from "@/lib/utils"
 import type { Product } from "@/types/product"
@@ -196,7 +196,7 @@ export default function CartPageClient({
                               >
                                 {item.product.name}
                               </Link>
-                              <p className="mt-1 inline-flex rounded-full bg-rose-100 px-2 py-0.5 text-[11px] font-medium text-rose-primary">
+                              <p className="mt-1 inline-flex rounded-full bg-rose-light px-2 py-0.5 text-[11px] font-medium text-rose-primary">
                                 {item.product.categoryName || "Category"}
                               </p>
                               {(item.selectedSize || item.selectedColor) && (
@@ -243,7 +243,7 @@ export default function CartPageClient({
                                     item.selectedColor,
                                   )
                                 }
-                                className="flex size-8 items-center justify-center rounded-full bg-rose-100 text-rose-primary transition-colors hover:bg-rose-200"
+                                className="flex size-8 items-center justify-center rounded-full bg-rose-light text-rose-primary transition-colors hover:bg-rose-border"
                               >
                                 <Minus className="size-3.5" />
                               </button>
@@ -260,7 +260,7 @@ export default function CartPageClient({
                                     item.selectedColor,
                                   )
                                 }
-                                className="flex size-8 items-center justify-center rounded-full bg-rose-100 text-rose-primary transition-colors hover:bg-rose-200"
+                                className="flex size-8 items-center justify-center rounded-full bg-rose-light text-rose-primary transition-colors hover:bg-rose-border"
                               >
                                 <Plus className="size-3.5" />
                               </button>
@@ -308,7 +308,7 @@ export default function CartPageClient({
                 }}
                 className="sticky top-6"
               >
-                <Card className="overflow-visible rounded-2xl border-rose-border/40 bg-[#FFF5F5] shadow-[0_14px_34px_-24px_rgba(15,23,42,0.5)]">
+                <Card className="overflow-visible rounded-2xl border-rose-border/40 bg-rose-light shadow-[0_14px_34px_-24px_rgba(15,23,42,0.5)]">
                   <CardContent className="space-y-5 p-6">
                     <h3 className="font-heading text-[36px] font-semibold leading-tight text-navy">
                       Order Summary
@@ -367,7 +367,7 @@ export default function CartPageClient({
                     <Link href="/shop" className="block">
                       <Button
                         variant="outline"
-                        className="h-auto w-full rounded-full border-rose-border py-4 text-base font-semibold text-rose-primary hover:bg-rose-50"
+                        className="h-auto w-full rounded-full border-rose-border py-4 text-base font-semibold text-rose-primary hover:bg-rose-light"
                       >
                         Continue Shopping
                       </Button>
@@ -419,7 +419,7 @@ function ShopStyleRecommendationCard({ product }: { product: Product }) {
   const isInWishlist = useWishlistStore((s) => s.isInWishlist(product.id))
 
   return (
-    <div className="group overflow-hidden rounded-2xl border border-rose-border/20 bg-white transition-all duration-300 hover:border-rose-200 hover:shadow-[0_18px_38px_-18px_rgba(15,23,42,0.45)]">
+    <div className="group overflow-hidden rounded-2xl border border-rose-border/20 bg-white transition-all duration-300 hover:border-rose-border hover:shadow-[0_18px_38px_-18px_rgba(15,23,42,0.45)]">
       <Link href={`/products/${product.slug}`} className="block">
         <div className="relative h-[330px] overflow-hidden bg-[#E9E7E3]">
           <img
@@ -459,7 +459,7 @@ function ShopStyleRecommendationCard({ product }: { product: Product }) {
       </Link>
 
       <div className="bg-white px-5 pb-5 pt-4">
-        <span className="inline-flex rounded-full bg-rose-100 px-2.5 py-0.5 text-xs font-medium text-rose-primary">
+        <span className="inline-flex rounded-full bg-rose-light px-2.5 py-0.5 text-xs font-medium text-rose-primary">
           {product.categoryName || "Category"}
         </span>
         <h3 className="mt-2 text-[17px] font-semibold leading-tight tracking-tight text-navy">
@@ -471,10 +471,10 @@ function ShopStyleRecommendationCard({ product }: { product: Product }) {
           </p>
           <Link
             href={`/products/${product.slug}`}
-            className="flex size-8 items-center justify-center rounded-full bg-rose-100 text-rose-primary transition-colors hover:bg-rose-200"
+            className="flex size-8 items-center justify-center rounded-full bg-rose-light text-rose-primary transition-colors hover:bg-rose-border"
             aria-label="View product"
           >
-            <Eye className="size-4" />
+            <ArrowRight className="size-4" />
           </Link>
         </div>
       </div>

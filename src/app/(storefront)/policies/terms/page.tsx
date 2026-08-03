@@ -3,7 +3,6 @@
 import { motion } from "framer-motion"
 import { Container } from "@/components/shared/container"
 import { Section } from "@/components/shared/section"
-import { Heading } from "@/components/shared/heading"
 import { Separator } from "@/components/ui/separator"
 import {
   BRAND_LEGAL_NAME,
@@ -11,6 +10,8 @@ import {
   CONTACT_EMAIL,
   PHONE_DISPLAY_PRIMARY,
 } from "@/lib/brand"
+import { HERO_IMAGES } from "@/lib/hero-images"
+import { PageHero } from "@/components/shared/page-hero"
 
 const contactParagraphs = [
   "If you have questions about these Terms of Service, contact us:",
@@ -102,23 +103,23 @@ const fadeUp = {
 
 export default function TermsPage() {
   return (
-    <Section className="bg-gradient-to-b from-rose-light/50 to-white">
-      <Container>
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] as const }}
-          className="mx-auto max-w-3xl"
-        >
-          <Heading
-            as="h1"
-            align="center"
-            subtitle={`Please read these terms carefully before using ${BRAND_NAME} and our services.`}
-          >
-            Terms of Service
-          </Heading>
+    <>
+      <PageHero
+        imageSrc={HERO_IMAGES.heels.src}
+        imageAlt={HERO_IMAGES.heels.alt}
+        title="Terms of Service"
+        subtitle={`Please read these terms carefully before using ${BRAND_NAME} and our services.`}
+      />
 
-          <p className="mt-6 text-center text-sm text-muted-foreground">
+      <Section className="bg-white">
+        <Container>
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] as const }}
+            className="mx-auto max-w-3xl"
+          >
+          <p className="text-center text-sm text-muted-foreground">
             Effective Date: 1 January 2026 · Last Updated: March 2026
           </p>
 
@@ -168,5 +169,6 @@ export default function TermsPage() {
         </motion.div>
       </Container>
     </Section>
+    </>
   )
 }

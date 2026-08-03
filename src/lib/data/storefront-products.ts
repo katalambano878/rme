@@ -114,7 +114,7 @@ type ProductRow = {
   }[] | null
 }
 
-const BADGE_SET = new Set<ProductBadge>(["New", "Best Seller", "Limited", "Sale"])
+const BADGE_SET = new Set<ProductBadge>(["New", "Best Seller", "Limited", "Sale", "Pre-Order"])
 
 function normalizeBadges(raw: string[] | null | undefined): ProductBadge[] {
   return (raw ?? []).filter((b): b is ProductBadge => BADGE_SET.has(b as ProductBadge))

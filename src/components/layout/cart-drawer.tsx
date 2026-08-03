@@ -238,7 +238,7 @@ export function CartDrawer() {
               <Link
                 href="/checkout"
                 onClick={closeCart}
-                className="flex h-10 items-center justify-center rounded-xl bg-rose-100 text-sm font-medium text-navy transition-colors hover:bg-rose-200"
+                className="flex h-10 items-center justify-center rounded-xl bg-rose-light text-sm font-medium text-navy transition-colors hover:bg-rose-border"
               >
                 Checkout
               </Link>

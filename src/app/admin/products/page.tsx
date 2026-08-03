@@ -27,7 +27,7 @@ export default function ProductsPage() {
   });
 
   const statusColors: any = {
-    'active': 'bg-rose-100 text-rose-800',
+    'active': 'bg-rose-light text-navy',
     'draft': 'bg-gray-100 text-gray-700',
     'archived': 'bg-amber-100 text-amber-700',
   };
@@ -186,7 +186,7 @@ export default function ProductsPage() {
         </div>
         <Link
           href="/admin/products/new"
-          className="px-6 py-3 bg-rose-500 hover:bg-rose-600 text-white rounded-lg font-semibold transition-colors whitespace-nowrap cursor-pointer flex items-center justify-center md:items-start"
+          className="px-6 py-3 bg-rose-light0 hover:bg-navy text-white rounded-lg font-semibold transition-colors whitespace-nowrap cursor-pointer flex items-center justify-center md:items-start"
         >
           <i className="ri-add-line mr-2"></i>
           Add Product
@@ -200,7 +200,7 @@ export default function ProductsPage() {
         </div>
         <div className="bg-white rounded-xl border-2 border-gray-200 p-4">
           <p className="text-sm text-gray-600 mb-1">Active</p>
-          <p className="text-2xl font-bold text-rose-700">{stats.active}</p>
+          <p className="text-2xl font-bold text-navy">{stats.active}</p>
         </div>
         <div className="bg-white rounded-xl border-2 border-gray-200 p-4">
           <p className="text-sm text-gray-600 mb-1">Low Stock</p>
@@ -223,7 +223,7 @@ export default function ProductsPage() {
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder="Search products by name, SKU, or category..."
-                  className="w-full pl-12 pr-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-rose-400 focus:border-rose-400 text-sm"
+                  className="w-full pl-12 pr-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-navy focus:border-rose-primary text-sm"
                 />
               </div>
             </div>
@@ -239,7 +239,7 @@ export default function ProductsPage() {
               <select
                 value={sortBy}
                 onChange={(e) => setSortBy(e.target.value)}
-                className="px-4 py-3 pr-8 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-rose-400 focus:border-rose-400 font-medium cursor-pointer"
+                className="px-4 py-3 pr-8 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-navy focus:border-rose-primary font-medium cursor-pointer"
               >
                 <option value="newest">Newest First</option>
                 <option value="name">Sort by Name</option>
@@ -250,14 +250,14 @@ export default function ProductsPage() {
               <div className="flex border-2 border-gray-300 rounded-lg overflow-hidden">
                 <button
                   onClick={() => setViewMode('list')}
-                  className={`w-10 h-10 flex items-center justify-center transition-colors cursor-pointer ${viewMode === 'list' ? 'bg-rose-500 text-white' : 'bg-white text-gray-700 hover:bg-gray-50'
+                  className={`w-10 h-10 flex items-center justify-center transition-colors cursor-pointer ${viewMode === 'list' ? 'bg-rose-light0 text-white' : 'bg-white text-gray-700 hover:bg-gray-50'
                     }`}
                 >
                   <i className="ri-list-check text-xl w-5 h-5 flex items-center justify-center"></i>
                 </button>
                 <button
                   onClick={() => setViewMode('grid')}
-                  className={`w-10 h-10 flex items-center justify-center border-l-2 border-gray-300 transition-colors cursor-pointer ${viewMode === 'grid' ? 'bg-rose-500 text-white' : 'bg-white text-gray-700 hover:bg-gray-50'
+                  className={`w-10 h-10 flex items-center justify-center border-l-2 border-gray-300 transition-colors cursor-pointer ${viewMode === 'grid' ? 'bg-rose-light0 text-white' : 'bg-white text-gray-700 hover:bg-gray-50'
                     }`}
                 >
                   <i className="ri-grid-line text-xl w-5 h-5 flex items-center justify-center"></i>
@@ -283,8 +283,8 @@ export default function ProductsPage() {
         </div>
 
         {selectedProducts.length > 0 && (
-          <div className="p-4 bg-pink-50 border-b border-rose-200 flex items-center justify-between">
-            <p className="text-rose-900 font-semibold">
+          <div className="p-4 bg-rose-light border-b border-rose-border flex items-center justify-between">
+            <p className="text-navy font-semibold">
               {selectedProducts.length} product{selectedProducts.length > 1 ? 's' : ''} selected
             </p>
             <div className="flex items-center space-x-2">
@@ -319,7 +319,7 @@ export default function ProductsPage() {
                       type="checkbox"
                       checked={selectedProducts.length === products.length && products.length > 0}
                       onChange={handleSelectAll}
-                      className="w-4 h-4 text-rose-700 border-gray-300 rounded focus:ring-rose-400 cursor-pointer"
+                      className="w-4 h-4 text-navy border-gray-300 rounded focus:ring-navy cursor-pointer"
                     />
                   </th>
                   <th className="text-left py-4 px-4 text-sm font-semibold text-gray-700">Product</th>
@@ -339,7 +339,7 @@ export default function ProductsPage() {
                         type="checkbox"
                         checked={selectedProducts.includes(product.id)}
                         onChange={() => handleSelectProduct(product.id)}
-                        className="w-4 h-4 text-rose-700 border-gray-300 rounded focus:ring-rose-400 cursor-pointer"
+                        className="w-4 h-4 text-navy border-gray-300 rounded focus:ring-navy cursor-pointer"
                       />
                     </td>
                     <td className="py-4 px-4">
@@ -360,7 +360,7 @@ export default function ProductsPage() {
                     <td className="py-4 px-4 whitespace-nowrap">
                       {product.onSale ? (
                         <div className="flex items-baseline gap-2">
-                          <span className="font-semibold text-rose-700">GH₵ {product.price.toFixed(2)}</span>
+                          <span className="font-semibold text-navy">GH₵ {product.price.toFixed(2)}</span>
                           <span className="text-xs text-gray-400 line-through">GH₵ {product.originalPrice.toFixed(2)}</span>
                         </div>
                       ) : (
@@ -385,7 +385,7 @@ export default function ProductsPage() {
                       <div className="flex items-center space-x-2">
                         <Link
                           href={`/admin/products/${product.id}`}
-                          className="w-8 h-8 flex items-center justify-center text-gray-600 hover:text-rose-700 hover:bg-pink-50 rounded-lg transition-colors cursor-pointer"
+                          className="w-8 h-8 flex items-center justify-center text-gray-600 hover:text-navy hover:bg-rose-light rounded-lg transition-colors cursor-pointer"
                         >
                           <i className="ri-edit-line text-lg"></i>
                         </Link>
@@ -411,7 +411,7 @@ export default function ProductsPage() {
                     type="checkbox"
                     checked={selectedProducts.includes(product.id)}
                     onChange={() => handleSelectProduct(product.id)}
-                    className="absolute top-2 left-2 w-5 h-5 text-rose-700 border-gray-300 rounded focus:ring-rose-400 cursor-pointer z-10"
+                    className="absolute top-2 left-2 w-5 h-5 text-navy border-gray-300 rounded focus:ring-navy cursor-pointer z-10"
                   />
                   <div className="aspect-square bg-gray-100 rounded-lg overflow-hidden mb-3 border border-gray-200">
                     <img src={product.image} alt={product.name} className="w-full h-full object-cover" />
@@ -425,7 +425,7 @@ export default function ProductsPage() {
                 <div className="flex items-center justify-between mb-3">
                   {product.onSale ? (
                     <div className="flex items-baseline gap-2">
-                      <p className="text-lg font-bold text-rose-700">GH₵ {product.price.toFixed(2)}</p>
+                      <p className="text-lg font-bold text-navy">GH₵ {product.price.toFixed(2)}</p>
                       <p className="text-sm text-gray-400 line-through">GH₵ {product.originalPrice.toFixed(2)}</p>
                     </div>
                   ) : (
@@ -438,7 +438,7 @@ export default function ProductsPage() {
                 <div className="flex items-center space-x-2">
                   <Link
                     href={`/admin/products/${product.id}`}
-                    className="flex-1 bg-rose-500 hover:bg-rose-600 text-white py-2 rounded-lg text-sm font-medium text-center transition-colors whitespace-nowrap cursor-pointer"
+                    className="flex-1 bg-rose-light0 hover:bg-navy text-white py-2 rounded-lg text-sm font-medium text-center transition-colors whitespace-nowrap cursor-pointer"
                   >
                     Edit
                   </Link>

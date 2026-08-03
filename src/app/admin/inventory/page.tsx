@@ -148,8 +148,8 @@ export default function InventoryManagementPage() {
                 <p className="text-xs text-gray-600 mb-0.5">Total Products</p>
                 <p className="text-xl md:text-2xl font-bold text-gray-900 tabular-nums">{products.length}</p>
               </div>
-              <div className="w-9 h-9 shrink-0 flex items-center justify-center bg-rose-100 rounded-md">
-                <i className="ri-stack-line text-lg text-rose-600"></i>
+              <div className="w-9 h-9 shrink-0 flex items-center justify-center bg-rose-light rounded-md">
+                <i className="ri-stack-line text-lg text-navy"></i>
               </div>
             </div>
           </div>
@@ -182,12 +182,12 @@ export default function InventoryManagementPage() {
             <div className="flex items-center justify-between gap-2">
               <div className="min-w-0">
                 <p className="text-xs text-gray-600 mb-0.5">Total Retail Value</p>
-                <p className="text-lg md:text-xl font-bold text-rose-600 tabular-nums truncate">
+                <p className="text-lg md:text-xl font-bold text-navy tabular-nums truncate">
                   GH₵{totalValue.toLocaleString(undefined, { maximumFractionDigits: 0 })}
                 </p>
               </div>
-              <div className="w-9 h-9 shrink-0 flex items-center justify-center bg-rose-100 rounded-md">
-                <i className="ri-money-dollar-circle-line text-lg text-rose-600"></i>
+              <div className="w-9 h-9 shrink-0 flex items-center justify-center bg-rose-light rounded-md">
+                <i className="ri-money-dollar-circle-line text-lg text-navy"></i>
               </div>
             </div>
           </div>
@@ -203,7 +203,7 @@ export default function InventoryManagementPage() {
                   placeholder="Search by product name or SKU..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-rose-400 focus:border-rose-400 text-xs"
+                  className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-navy focus:border-rose-primary text-xs"
                 />
               </div>
             </div>
@@ -229,7 +229,7 @@ export default function InventoryManagementPage() {
 
               <button
                 onClick={() => setShowImportModal(true)}
-                className="bg-rose-500 hover:bg-rose-600 text-white px-3 py-2 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1.5 whitespace-nowrap cursor-pointer"
+                className="bg-rose-light0 hover:bg-navy text-white px-3 py-2 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1.5 whitespace-nowrap cursor-pointer"
               >
                 <i className="ri-upload-line text-sm"></i>
                 <span>Import</span>
@@ -246,14 +246,14 @@ export default function InventoryManagementPage() {
           </div>
 
           {selectedProducts.length > 0 && (
-            <div className="mt-4 flex items-center justify-between p-4 bg-pink-50 border border-rose-200 rounded-lg">
-              <p className="text-rose-900 font-medium">
+            <div className="mt-4 flex items-center justify-between p-4 bg-rose-light border border-rose-border rounded-lg">
+              <p className="text-navy font-medium">
                 {selectedProducts.length} product{selectedProducts.length > 1 ? 's' : ''} selected
               </p>
               <div className="flex items-center space-x-3">
                 <button
                   onClick={handleBulkRestock}
-                  className="bg-rose-500 hover:bg-rose-600 text-white px-4 py-2 rounded-lg font-semibold transition-colors whitespace-nowrap cursor-pointer"
+                  className="bg-rose-light0 hover:bg-navy text-white px-4 py-2 rounded-lg font-semibold transition-colors whitespace-nowrap cursor-pointer"
                 >
                   Bulk Restock
                 </button>
@@ -288,7 +288,7 @@ export default function InventoryManagementPage() {
                       type="checkbox"
                       checked={selectedProducts.length === filteredProducts.length && filteredProducts.length > 0}
                       onChange={toggleAllProducts}
-                      className="w-3.5 h-3.5 text-rose-600 rounded border-gray-300 cursor-pointer focus:ring-rose-400"
+                      className="w-3.5 h-3.5 text-navy rounded border-gray-300 cursor-pointer focus:ring-navy"
                     />
                   </th>
                   <th className="px-2 py-2 text-left text-[10px] font-semibold uppercase tracking-wide text-gray-500">Product</th>
@@ -313,7 +313,7 @@ export default function InventoryManagementPage() {
                           type="checkbox"
                           checked={selectedProducts.includes(product.id)}
                           onChange={() => toggleProductSelection(product.id)}
-                          className="w-3.5 h-3.5 text-rose-600 rounded border-gray-300 cursor-pointer focus:ring-rose-400"
+                          className="w-3.5 h-3.5 text-navy rounded border-gray-300 cursor-pointer focus:ring-navy"
                         />
                       </td>
                       <td className="px-2 py-2 align-top min-w-0 max-w-0">
@@ -342,7 +342,7 @@ export default function InventoryManagementPage() {
                         {product.status === 'good' && (
                           <div className="inline-flex items-center gap-1.5" role="status" aria-label="In Stock">
                             <span
-                              className="size-6 shrink-0 rounded-full bg-pink-100 border border-rose-200/80 flex items-center justify-center text-rose-600"
+                              className="size-6 shrink-0 rounded-full bg-rose-light border border-rose-border/80 flex items-center justify-center text-navy"
                               title="In Stock"
                             >
                               <i className="ri-check-line text-sm font-bold" aria-hidden />
@@ -377,7 +377,7 @@ export default function InventoryManagementPage() {
                         <div className="inline-flex items-center justify-end gap-0.5">
                           <Link
                             href={`/admin/products/${product.id}`}
-                            className="size-7 inline-flex items-center justify-center rounded-md text-gray-500 hover:text-rose-700 hover:bg-pink-50 transition-colors"
+                            className="size-7 inline-flex items-center justify-center rounded-md text-gray-500 hover:text-navy hover:bg-rose-light transition-colors"
                             title="Edit"
                           >
                             <i className="ri-edit-line text-base" aria-hidden />
@@ -388,7 +388,7 @@ export default function InventoryManagementPage() {
                               href={`/products/${product.slug}`}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="size-7 inline-flex items-center justify-center rounded-md text-gray-500 hover:text-rose-700 hover:bg-pink-50 transition-colors"
+                              className="size-7 inline-flex items-center justify-center rounded-md text-gray-500 hover:text-navy hover:bg-rose-light transition-colors"
                               title="View"
                             >
                               <i className="ri-eye-line text-base" aria-hidden />
@@ -434,7 +434,7 @@ export default function InventoryManagementPage() {
               </button>
               <button
                 onClick={handleExportCSV}
-                className="flex-1 px-4 py-2 bg-rose-500 hover:bg-rose-600 text-white rounded-lg text-sm font-semibold transition-colors"
+                className="flex-1 px-4 py-2 bg-rose-light0 hover:bg-navy text-white rounded-lg text-sm font-semibold transition-colors"
               >
                 <i className="ri-download-line mr-1" /> Download CSV
               </button>

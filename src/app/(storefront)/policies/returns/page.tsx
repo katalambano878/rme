@@ -11,13 +11,14 @@ import {
 } from "lucide-react"
 import { Container } from "@/components/shared/container"
 import { Section } from "@/components/shared/section"
-import { Heading } from "@/components/shared/heading"
 import { Separator } from "@/components/ui/separator"
 import {
   BRAND_NAME,
   CONTACT_EMAIL,
   PHONE_DISPLAY_PRIMARY,
 } from "@/lib/brand"
+import { HERO_IMAGES } from "@/lib/hero-images"
+import { PageHero } from "@/components/shared/page-hero"
 
 const sections = [
   {
@@ -80,22 +81,22 @@ export default function ReturnsPolicyPage() {
     : ""
 
   return (
-    <Section className="bg-gradient-to-b from-rose-light/50 to-white">
-      <Container>
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] as const }}
-          className="mx-auto max-w-3xl"
-        >
-          <Heading
-            as="h1"
-            align="center"
-            subtitle={`At ${BRAND_NAME}, we want you to love your purchase. Please read our refund and return guidelines below.`}
-          >
-            Refund Policy
-          </Heading>
+    <>
+      <PageHero
+        imageSrc={HERO_IMAGES.ladiesBag.src}
+        imageAlt={HERO_IMAGES.ladiesBag.alt}
+        title="Refund Policy"
+        subtitle={`At ${BRAND_NAME}, we want you to love your purchase. Please read our refund and return guidelines below.`}
+      />
 
+      <Section className="bg-white">
+        <Container>
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] as const }}
+            className="mx-auto max-w-3xl"
+          >
           <div className="mt-12 space-y-0">
             {sections.map((section, i) => (
               <motion.div
@@ -151,5 +152,6 @@ export default function ReturnsPolicyPage() {
         </motion.div>
       </Container>
     </Section>
+    </>
   )
 }

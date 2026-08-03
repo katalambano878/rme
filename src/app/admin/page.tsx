@@ -241,10 +241,10 @@ export default function AdminDashboard() {
 
   const statusColors: any = {
     'pending': 'bg-amber-100 text-amber-700',
-    'processing': 'bg-rose-100 text-rose-800',
+    'processing': 'bg-rose-light text-navy',
     'shipped': 'bg-purple-100 text-purple-700',
     'out_for_delivery': 'bg-blue-100 text-blue-700',
-    'delivered': 'bg-rose-100 text-rose-800',
+    'delivered': 'bg-rose-light text-navy',
     'cancelled': 'bg-red-100 text-red-700'
   };
 
@@ -287,7 +287,7 @@ export default function AdminDashboard() {
                 <div className={`w-9 h-9 flex items-center justify-center bg-${stat.color}-100 text-${stat.color}-700 rounded-md`}>
                   <i className={`${stat.icon} text-lg`}></i>
                 </div>
-                <span className={`text-sm font-semibold text-rose-700`}>
+                <span className={`text-sm font-semibold text-navy`}>
                   {stat.change}
                 </span>
               </div>
@@ -303,7 +303,7 @@ export default function AdminDashboard() {
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-xl font-bold text-gray-900">Revenue Trend</h2>
               <select
-                className="bg-gray-50 border border-gray-200 text-gray-700 text-sm rounded-lg focus:ring-rose-400 focus:border-rose-400 block p-2"
+                className="bg-gray-50 border border-gray-200 text-gray-700 text-sm rounded-lg focus:ring-navy focus:border-rose-primary block p-2"
                 value={dateRange}
                 onChange={(e) => setDateRange(e.target.value)}
               >
@@ -336,27 +336,27 @@ export default function AdminDashboard() {
           <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-200">
             <h2 className="text-xl font-bold text-gray-900 mb-3">Quick Actions</h2>
             <div className="space-y-3">
-              <Link href="/admin/products/new" className="flex items-center justify-between p-4 bg-gray-50 hover:bg-pink-50 text-gray-700 hover:text-rose-700 rounded-lg transition-colors group">
+              <Link href="/admin/products/new" className="flex items-center justify-between p-4 bg-gray-50 hover:bg-rose-light text-gray-700 hover:text-navy rounded-lg transition-colors group">
                 <div className="flex items-center font-medium">
-                  <span className="w-8 h-8 rounded-full bg-white flex items-center justify-center mr-3 group-hover:bg-rose-100 transition-colors shadow-sm">
+                  <span className="w-8 h-8 rounded-full bg-white flex items-center justify-center mr-3 group-hover:bg-rose-light transition-colors shadow-sm">
                     <i className="ri-add-line"></i>
                   </span>
                   Add Product
                 </div>
                 <i className="ri-arrow-right-line"></i>
               </Link>
-              <Link href="/admin/pos" className="flex items-center justify-between p-4 bg-gray-50 hover:bg-pink-50 text-gray-700 hover:text-rose-700 rounded-lg transition-colors group">
+              <Link href="/admin/pos" className="flex items-center justify-between p-4 bg-gray-50 hover:bg-rose-light text-gray-700 hover:text-navy rounded-lg transition-colors group">
                 <div className="flex items-center font-medium">
-                  <span className="w-8 h-8 rounded-full bg-white flex items-center justify-center mr-3 group-hover:bg-rose-100 transition-colors shadow-sm">
+                  <span className="w-8 h-8 rounded-full bg-white flex items-center justify-center mr-3 group-hover:bg-rose-light transition-colors shadow-sm">
                     <i className="ri-computer-line"></i>
                   </span>
                   Open POS
                 </div>
                 <i className="ri-arrow-right-line"></i>
               </Link>
-              <Link href="/admin/orders" className="flex items-center justify-between p-4 bg-gray-50 hover:bg-pink-50 text-gray-700 hover:text-rose-700 rounded-lg transition-colors group">
+              <Link href="/admin/orders" className="flex items-center justify-between p-4 bg-gray-50 hover:bg-rose-light text-gray-700 hover:text-navy rounded-lg transition-colors group">
                 <div className="flex items-center font-medium">
-                  <span className="w-8 h-8 rounded-full bg-white flex items-center justify-center mr-3 group-hover:bg-rose-100 transition-colors shadow-sm">
+                  <span className="w-8 h-8 rounded-full bg-white flex items-center justify-center mr-3 group-hover:bg-rose-light transition-colors shadow-sm">
                     <i className="ri-file-list-line"></i>
                   </span>
                   Manage Orders
@@ -371,7 +371,7 @@ export default function AdminDashboard() {
           <div className="lg:col-span-2 bg-white rounded-xl shadow-sm border border-gray-200 p-4 overflow-hidden">
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-xl font-bold text-gray-900">Recent Orders</h2>
-              <Link href="/admin/orders" className="text-rose-700 hover:text-rose-900 font-medium text-sm whitespace-nowrap cursor-pointer">
+              <Link href="/admin/orders" className="text-navy hover:text-navy font-medium text-sm whitespace-nowrap cursor-pointer">
                 View All <i className="ri-arrow-right-line ml-1"></i>
               </Link>
             </div>
@@ -394,7 +394,7 @@ export default function AdminDashboard() {
                     {recentOrders.map((order) => (
                       <tr key={order.id} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
                         <td className="py-4 px-4">
-                          <Link href={`/admin/orders/${order.id}`} className="text-rose-700 hover:text-rose-900 font-medium whitespace-nowrap cursor-pointer">
+                          <Link href={`/admin/orders/${order.id}`} className="text-navy hover:text-navy font-medium whitespace-nowrap cursor-pointer">
                             {order.displayId}
                           </Link>
                         </td>
@@ -438,7 +438,7 @@ export default function AdminDashboard() {
                   ))}
                 </div>
               )}
-              <Link href="/admin/products?filter=low-stock" className="block text-center mt-4 text-rose-700 hover:text-rose-900 font-medium text-sm whitespace-nowrap cursor-pointer">
+              <Link href="/admin/products?filter=low-stock" className="block text-center mt-4 text-navy hover:text-navy font-medium text-sm whitespace-nowrap cursor-pointer">
                 View All Products <i className="ri-arrow-right-line ml-1"></i>
               </Link>
             </div>
@@ -448,7 +448,7 @@ export default function AdminDashboard() {
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6 overflow-hidden">
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-xl font-bold text-gray-900">Products</h2>
-            <Link href="/admin/products" className="text-rose-700 hover:text-rose-900 font-medium text-sm whitespace-nowrap cursor-pointer">
+            <Link href="/admin/products" className="text-navy hover:text-navy font-medium text-sm whitespace-nowrap cursor-pointer">
               View All <i className="ri-arrow-right-line ml-1"></i>
             </Link>
           </div>
@@ -467,10 +467,10 @@ export default function AdminDashboard() {
                   <div>
                     <span className="text-sm text-gray-600">Stock: {product.stock}</span>
                     {product.sales > 0 && (
-                      <p className="text-xs text-rose-700 font-semibold mt-0.5">{product.sales} sold</p>
+                      <p className="text-xs text-navy font-semibold mt-0.5">{product.sales} sold</p>
                     )}
                   </div>
-                  <Link href={`/admin/products/${product.id}`} className="text-rose-700 hover:text-rose-900 text-sm font-medium whitespace-nowrap cursor-pointer">
+                  <Link href={`/admin/products/${product.id}`} className="text-navy hover:text-navy text-sm font-medium whitespace-nowrap cursor-pointer">
                     Edit <i className="ri-arrow-right-line ml-1"></i>
                   </Link>
                 </div>

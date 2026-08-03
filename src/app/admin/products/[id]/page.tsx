@@ -68,7 +68,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
         <div className="text-center">
-          <i className="ri-loader-4-line text-4xl text-rose-700 animate-spin mb-4 block"></i>
+          <i className="ri-loader-4-line text-4xl text-navy animate-spin mb-4 block"></i>
           <p className="text-gray-500 font-medium">Loading product details...</p>
         </div>
       </div>

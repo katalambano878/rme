@@ -171,14 +171,14 @@ const STATUS_COLORS: Record<string, string> = {
   processing: 'bg-blue-100 text-blue-700',
   shipped: 'bg-purple-100 text-purple-700',
   out_for_delivery: 'bg-blue-100 text-blue-700',
-  delivered: 'bg-rose-100 text-rose-800',
+  delivered: 'bg-rose-light text-navy',
   cancelled: 'bg-red-100 text-red-700',
   open: 'bg-blue-100 text-blue-700',
   in_progress: 'bg-yellow-100 text-yellow-700',
-  resolved: 'bg-rose-100 text-rose-800',
-  approved: 'bg-rose-100 text-rose-800',
+  resolved: 'bg-rose-light text-navy',
+  approved: 'bg-rose-light text-navy',
   rejected: 'bg-red-100 text-red-700',
-  paid: 'bg-rose-100 text-rose-800',
+  paid: 'bg-rose-light text-navy',
   failed: 'bg-red-100 text-red-700',
 };
 
@@ -574,7 +574,7 @@ export default function ChatWidget() {
         <button
           type="button"
           onClick={() => setOpen(true)}
-          className="fixed bottom-[5.5rem] right-3 z-[9999] w-14 h-14 rounded-full bg-rose-400 hover:bg-rose-500 text-white shadow-2xl flex items-center justify-center transition-all duration-300 hover:scale-105 focus:outline-none focus:ring-2 focus:ring-rose-300 focus:ring-offset-2 sm:bottom-6 sm:right-4"
+          className="fixed bottom-[5.5rem] right-3 z-[9999] w-14 h-14 rounded-full bg-rose-primary hover:bg-rose-light0 text-white shadow-2xl flex items-center justify-center transition-all duration-300 hover:scale-105 focus:outline-none focus:ring-2 focus:ring-navy focus:ring-offset-2 sm:bottom-6 sm:right-4"
           aria-label="Open chat"
         >
           <i className="ri-chat-smile-3-line text-2xl" aria-hidden />
@@ -601,15 +601,15 @@ export default function ChatWidget() {
           style={{ animation: 'chatSlideUp 0.3s cubic-bezier(0.32, 0.72, 0, 1) forwards' }}
         >
           {/* Header */}
-          <div className="flex items-center justify-between px-4 py-3 border-b border-rose-200/80 bg-gradient-to-r from-pink-100 via-rose-50 to-pink-100 text-rose-900 flex-shrink-0 rounded-t-2xl">
+          <div className="flex items-center justify-between px-4 py-3 border-b border-rose-border/80 bg-gradient-to-r from-rose-light via-teal-light to-rose-light text-navy flex-shrink-0 rounded-t-2xl">
             <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-full bg-white/70 flex items-center justify-center flex-shrink-0 text-rose-700">
+              <div className="w-9 h-9 rounded-full bg-white/70 flex items-center justify-center flex-shrink-0 text-navy">
                 <i className="ri-robot-2-line text-lg" aria-hidden />
               </div>
               <div className="min-w-0">
                 <h3 className="font-semibold text-sm leading-tight truncate">{WIDGET_TITLE}</h3>
-                <p className="text-[11px] text-rose-700 flex items-center gap-1">
-                  <span className="w-1.5 h-1.5 bg-rose-400 rounded-full inline-block animate-pulse flex-shrink-0" />
+                <p className="text-[11px] text-navy flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 bg-rose-primary rounded-full inline-block animate-pulse flex-shrink-0" />
                   AI Assistant &middot; Online
                 </p>
               </div>
@@ -618,7 +618,7 @@ export default function ChatWidget() {
               <button
                 type="button"
                 onClick={clearChat}
-                className="w-9 h-9 rounded-lg hover:bg-rose-200/60 text-rose-800 flex items-center justify-center transition-colors"
+                className="w-9 h-9 rounded-lg hover:bg-rose-border/60 text-navy flex items-center justify-center transition-colors"
                 title="Clear chat"
               >
                 <i className="ri-delete-bin-6-line text-base" aria-hidden />
@@ -626,7 +626,7 @@ export default function ChatWidget() {
               <button
                 type="button"
                 onClick={() => setOpen(false)}
-                className="w-9 h-9 rounded-lg hover:bg-rose-200/60 text-rose-800 flex items-center justify-center transition-colors"
+                className="w-9 h-9 rounded-lg hover:bg-rose-border/60 text-navy flex items-center justify-center transition-colors"
                 title="Close"
               >
                 <i className="ri-close-line text-xl" aria-hidden />
@@ -654,20 +654,20 @@ export default function ChatWidget() {
                     {voiceProcessing === 'speaking' ? (
                       <div className="flex items-center gap-1.5">
                         <div className="flex gap-0.5 items-end h-4">
-                          <span className="w-1 bg-rose-400 rounded-full animate-voice-bar" style={{ animationDelay: '0ms', height: '40%' }} />
-                          <span className="w-1 bg-rose-400 rounded-full animate-voice-bar" style={{ animationDelay: '150ms', height: '70%' }} />
-                          <span className="w-1 bg-rose-400 rounded-full animate-voice-bar" style={{ animationDelay: '300ms', height: '50%' }} />
-                          <span className="w-1 bg-rose-400 rounded-full animate-voice-bar" style={{ animationDelay: '100ms', height: '80%' }} />
-                          <span className="w-1 bg-rose-400 rounded-full animate-voice-bar" style={{ animationDelay: '250ms', height: '60%' }} />
+                          <span className="w-1 bg-rose-primary rounded-full animate-voice-bar" style={{ animationDelay: '0ms', height: '40%' }} />
+                          <span className="w-1 bg-rose-primary rounded-full animate-voice-bar" style={{ animationDelay: '150ms', height: '70%' }} />
+                          <span className="w-1 bg-rose-primary rounded-full animate-voice-bar" style={{ animationDelay: '300ms', height: '50%' }} />
+                          <span className="w-1 bg-rose-primary rounded-full animate-voice-bar" style={{ animationDelay: '100ms', height: '80%' }} />
+                          <span className="w-1 bg-rose-primary rounded-full animate-voice-bar" style={{ animationDelay: '250ms', height: '60%' }} />
                         </div>
                         <span className="text-xs text-gray-400 ml-1">Generating voice...</span>
                       </div>
                     ) : (
                       <>
                         <div className="flex gap-1">
-                          <span className="w-2 h-2 bg-rose-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-                          <span className="w-2 h-2 bg-rose-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-                          <span className="w-2 h-2 bg-rose-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                          <span className="w-2 h-2 bg-rose-primary rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                          <span className="w-2 h-2 bg-rose-primary rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                          <span className="w-2 h-2 bg-rose-primary rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
                         </div>
                         <span className="text-xs text-gray-400 ml-1">
                           {voiceProcessing === 'transcribing' ? 'Transcribing voice...' : 'Thinking...'}
@@ -682,7 +682,7 @@ export default function ChatWidget() {
 
           {/* Feedback Panel */}
           {showFeedback && (
-            <div className="border-t border-gray-100 p-3 sm:p-4 bg-gradient-to-r from-pink-50 to-rose-50 flex-shrink-0 space-y-2.5">
+            <div className="border-t border-gray-100 p-3 sm:p-4 bg-gradient-to-r from-rose-light to-teal-light flex-shrink-0 space-y-2.5">
               <p className="text-sm font-semibold text-gray-800">How was your experience?</p>
               <div className="flex gap-2">
                 {[1, 2, 3, 4, 5].map((star) => (
@@ -694,11 +694,11 @@ export default function ChatWidget() {
               </div>
               {feedbackRating > 0 && (
                 <input value={feedbackText} onChange={(e) => setFeedbackText(e.target.value)}
-                  placeholder="Any feedback? (optional)" className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-rose-400" />
+                  placeholder="Any feedback? (optional)" className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-navy" />
               )}
               <div className="flex gap-2">
                 <button type="button" onClick={submitFeedback} disabled={feedbackRating === 0}
-                  className="px-4 py-2 text-sm font-medium bg-rose-400 text-white rounded-lg hover:bg-rose-500 disabled:opacity-40 transition-colors active:scale-95">
+                  className="px-4 py-2 text-sm font-medium bg-rose-primary text-white rounded-lg hover:bg-rose-light0 disabled:opacity-40 transition-colors active:scale-95">
                   Submit &amp; Clear
                 </button>
                 <button type="button" onClick={performClearChat}
@@ -735,7 +735,7 @@ export default function ChatWidget() {
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
                   placeholder="Type or use voice..."
-                  className="flex-1 min-w-0 rounded-xl border border-gray-200 bg-gray-50 px-3 sm:px-4 py-2.5 text-[16px] sm:text-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-rose-400 focus:border-rose-400 transition-all"
+                  className="flex-1 min-w-0 rounded-xl border border-gray-200 bg-gray-50 px-3 sm:px-4 py-2.5 text-[16px] sm:text-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-navy focus:border-rose-primary transition-all"
                   disabled={loading}
                   aria-label="Message"
                 />
@@ -743,7 +743,7 @@ export default function ChatWidget() {
                   <button
                     type="submit"
                     disabled={loading}
-                    className="shrink-0 w-11 h-11 sm:w-10 sm:h-10 rounded-xl bg-rose-400 hover:bg-rose-500 text-white flex items-center justify-center disabled:opacity-40 disabled:pointer-events-none transition-all active:scale-95"
+                    className="shrink-0 w-11 h-11 sm:w-10 sm:h-10 rounded-xl bg-rose-primary hover:bg-rose-light0 text-white flex items-center justify-center disabled:opacity-40 disabled:pointer-events-none transition-all active:scale-95"
                     aria-label="Send"
                   >
                     <i className="ri-send-plane-fill text-lg" aria-hidden />
@@ -753,7 +753,7 @@ export default function ChatWidget() {
                     type="button"
                     onClick={startRecording}
                     disabled={loading}
-                    className="shrink-0 w-11 h-11 sm:w-10 sm:h-10 rounded-xl bg-rose-400 hover:bg-rose-500 text-white flex items-center justify-center disabled:opacity-40 disabled:pointer-events-none transition-all active:scale-95"
+                    className="shrink-0 w-11 h-11 sm:w-10 sm:h-10 rounded-xl bg-rose-primary hover:bg-rose-light0 text-white flex items-center justify-center disabled:opacity-40 disabled:pointer-events-none transition-all active:scale-95"
                     aria-label="Voice message"
                   >
                     <i className="ri-mic-line text-lg" aria-hidden />
@@ -827,7 +827,7 @@ function MessageBubble({
           <div
             className={`rounded-2xl px-4 py-2.5 text-sm leading-relaxed ${
               isUser
-                ? 'bg-rose-400 text-white rounded-br-sm shadow-sm'
+                ? 'bg-rose-primary text-white rounded-br-sm shadow-sm'
                 : 'bg-white text-gray-800 rounded-bl-sm border border-gray-100 shadow-sm'
             }`}
           >
@@ -848,7 +848,7 @@ function MessageBubble({
             onClick={() => onTogglePlay(message.audioUrl!)}
             className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium transition-all active:scale-95 ${
               currentlyPlayingUrl === message.audioUrl
-                ? 'bg-pink-50 text-rose-800 border border-rose-200'
+                ? 'bg-rose-light text-navy border border-rose-border'
                 : 'bg-gray-100 text-gray-600 border border-gray-200 hover:bg-gray-200'
             }`}
           >
@@ -896,7 +896,7 @@ function MessageBubble({
             href={a.paymentUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="flex items-center justify-center gap-2 w-full px-4 py-3 bg-rose-400 hover:bg-rose-500 text-white font-semibold rounded-xl shadow-md transition-all active:scale-[0.98] text-sm"
+            className="flex items-center justify-center gap-2 w-full px-4 py-3 bg-rose-primary hover:bg-rose-light0 text-white font-semibold rounded-xl shadow-md transition-all active:scale-[0.98] text-sm"
           >
             <i className="ri-secure-payment-line text-lg" />
             {a.label || 'Pay Now'}
@@ -911,7 +911,7 @@ function MessageBubble({
                 key={qr}
                 type="button"
                 onClick={() => onQuickReply(qr)}
-                className="px-3 py-1.5 text-xs font-medium bg-white border border-rose-200 text-rose-800 rounded-full hover:bg-pink-50 hover:border-rose-300 transition-all active:scale-95 shadow-sm whitespace-nowrap flex-shrink-0"
+                className="px-3 py-1.5 text-xs font-medium bg-white border border-rose-border text-navy rounded-full hover:bg-rose-light hover:border-rose-border transition-all active:scale-95 shadow-sm whitespace-nowrap flex-shrink-0"
               >
                 {qr}
               </button>
@@ -940,8 +940,8 @@ function ProductCard({ product, onAddToCart }: { product: ChatProduct; onAddToCa
         </div>
         <div className="flex-1 min-w-0">
           <p className="text-xs sm:text-sm font-medium text-gray-900 truncate">{product.name}</p>
-          <p className="text-sm font-bold text-rose-600">{GHS}{product.price.toFixed(2)}</p>
-          <span className={`text-[10px] font-medium ${product.inStock ? 'text-rose-600' : 'text-red-500'}`}>
+          <p className="text-sm font-bold text-navy">{GHS}{product.price.toFixed(2)}</p>
+          <span className={`text-[10px] font-medium ${product.inStock ? 'text-navy' : 'text-red-500'}`}>
             {product.inStock ? 'In Stock' : 'Out of Stock'}
           </span>
         </div>
@@ -950,7 +950,7 @@ function ProductCard({ product, onAddToCart }: { product: ChatProduct; onAddToCa
             <button
               type="button"
               onClick={() => onAddToCart(product)}
-              className="px-2.5 sm:px-3 py-1.5 bg-rose-400 hover:bg-rose-500 text-white text-xs font-semibold rounded-lg transition-all active:scale-95"
+              className="px-2.5 sm:px-3 py-1.5 bg-rose-primary hover:bg-rose-light0 text-white text-xs font-semibold rounded-lg transition-all active:scale-95"
             >
               <i className="ri-shopping-cart-line mr-0.5 sm:mr-1" />
               Add
@@ -990,9 +990,9 @@ function OrderCard({ order }: { order: ChatOrder }) {
           <div className="flex items-center gap-1">
             {statusSteps.map((step, idx) => (
               <div key={step} className="flex items-center flex-1">
-                <div className={`w-2 h-2 rounded-full ${idx <= currentIdx ? 'bg-rose-400' : 'bg-gray-200'}`} />
+                <div className={`w-2 h-2 rounded-full ${idx <= currentIdx ? 'bg-rose-primary' : 'bg-gray-200'}`} />
                 {idx < statusSteps.length - 1 && (
-                  <div className={`flex-1 h-0.5 ${idx < currentIdx ? 'bg-rose-400' : 'bg-gray-200'}`} />
+                  <div className={`flex-1 h-0.5 ${idx < currentIdx ? 'bg-rose-primary' : 'bg-gray-200'}`} />
                 )}
               </div>
             ))}
@@ -1091,18 +1091,18 @@ function couponDiscountLabel(coupon: ChatCoupon): string {
 function CouponCard({ coupon }: { coupon: ChatCoupon }) {
   const discountText = couponDiscountLabel(coupon);
   return (
-    <div className={`rounded-xl border shadow-sm overflow-hidden ${coupon.valid ? 'bg-white border-rose-100' : 'bg-white border-red-100'}`}>
-      <div className={`px-4 py-3 ${coupon.valid ? 'bg-pink-50/80' : 'bg-red-50/50'}`}>
+    <div className={`rounded-xl border shadow-sm overflow-hidden ${coupon.valid ? 'bg-white border-rose-border' : 'bg-white border-red-100'}`}>
+      <div className={`px-4 py-3 ${coupon.valid ? 'bg-rose-light' : 'bg-red-50/50'}`}>
         <div className="flex items-center gap-2 mb-1">
-          <i className={`${coupon.valid ? 'ri-coupon-3-line text-rose-600' : 'ri-close-circle-line text-red-500'}`} />
-          <span className={`text-xs font-bold ${coupon.valid ? 'text-rose-800' : 'text-red-600'}`}>
+          <i className={`${coupon.valid ? 'ri-coupon-3-line text-navy' : 'ri-close-circle-line text-red-500'}`} />
+          <span className={`text-xs font-bold ${coupon.valid ? 'text-navy' : 'text-red-600'}`}>
             {coupon.valid ? 'Valid Coupon' : 'Invalid Coupon'}
           </span>
         </div>
         <div className="flex items-center justify-between">
           <span className="font-mono text-sm font-bold text-gray-900 bg-gray-100 px-2 py-0.5 rounded">{coupon.code}</span>
           {coupon.valid && coupon.value != null && discountText ? (
-            <span className="text-sm font-bold text-rose-600">
+            <span className="text-sm font-bold text-navy">
               {discountText}
             </span>
           ) : null}

@@ -42,14 +42,14 @@ export default function KnowledgeBasePage() {
   }
 
   const categories = [...new Set(articles.map(a => a.category).filter(Boolean))];
-  const sourceColors: Record<string, string> = { manual: 'bg-blue-100 text-blue-700', auto_learned: 'bg-purple-100 text-purple-700', ticket_resolution: 'bg-rose-100 text-rose-700' };
+  const sourceColors: Record<string, string> = { manual: 'bg-blue-100 text-blue-700', auto_learned: 'bg-purple-100 text-purple-700', ticket_resolution: 'bg-rose-light text-navy' };
 
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <div className="flex items-center gap-2 text-sm text-gray-500 mb-1">
-            <Link href="/admin/support" className="hover:text-rose-600">Support</Link>
+            <Link href="/admin/support" className="hover:text-navy">Support</Link>
             <i className="ri-arrow-right-s-line text-xs" />
             <span className="text-gray-900 font-medium">Knowledge Base</span>
           </div>
@@ -57,7 +57,7 @@ export default function KnowledgeBasePage() {
           <p className="text-sm text-gray-500 mt-1">{articles.length} articles &middot; AI learns from these to answer customer questions</p>
         </div>
         <button onClick={() => { setEditingArticle(null); setShowModal(true); }}
-          className="inline-flex items-center gap-2 px-4 py-2 bg-rose-600 text-white rounded-lg hover:bg-rose-700 text-sm font-medium transition-colors">
+          className="inline-flex items-center gap-2 px-4 py-2 bg-navy text-white rounded-lg hover:bg-navy text-sm font-medium transition-colors">
           <i className="ri-add-line" /> New Article
         </button>
       </div>
@@ -67,11 +67,11 @@ export default function KnowledgeBasePage() {
         <div className="relative flex-1 min-w-[200px]">
           <i className="ri-search-line absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
           <input type="text" placeholder="Search articles..." value={search} onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-rose-500" />
+            className="w-full pl-10 pr-4 py-2 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-navy" />
         </div>
         {categories.length > 0 && (
           <select value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)}
-            className="bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-rose-500">
+            className="bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-navy">
             <option value="">All Categories</option>
             {categories.map(c => <option key={c} value={c}>{c}</option>)}
           </select>
@@ -98,7 +98,7 @@ export default function KnowledgeBasePage() {
                   {article.category && <span className="text-[10px] font-semibold uppercase bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded">{article.category}</span>}
                   <span className={`text-[9px] font-bold uppercase px-1.5 py-0.5 rounded ${sourceColors[article.source] || 'bg-gray-100 text-gray-600'}`}>{article.source?.replace(/_/g, ' ')}</span>
                 </div>
-                <div className={`w-2 h-2 rounded-full ${article.is_published ? 'bg-rose-500' : 'bg-gray-300'}`} title={article.is_published ? 'Published' : 'Draft'} />
+                <div className={`w-2 h-2 rounded-full ${article.is_published ? 'bg-rose-light0' : 'bg-gray-300'}`} title={article.is_published ? 'Published' : 'Draft'} />
               </div>
               <h3 className="text-sm font-semibold text-gray-900 mb-1 line-clamp-2">{article.title}</h3>
               <p className="text-xs text-gray-500 line-clamp-3 mb-3">{article.content}</p>
@@ -169,33 +169,33 @@ function ArticleModal({ article, onClose, onSaved }: { article: any; onClose: ()
           <div>
             <label className="block text-xs font-medium text-gray-700 mb-1">Title *</label>
             <input required value={form.title} onChange={e => setForm({ ...form, title: e.target.value })}
-              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-rose-500" />
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-navy" />
           </div>
           <div>
             <label className="block text-xs font-medium text-gray-700 mb-1">Content *</label>
             <textarea required value={form.content} onChange={e => setForm({ ...form, content: e.target.value })} rows={8}
-              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-rose-500 font-mono" />
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-navy font-mono" />
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-medium text-gray-700 mb-1">Category</label>
               <input value={form.category} onChange={e => setForm({ ...form, category: e.target.value })} placeholder="e.g., shipping, returns"
-                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-rose-500" />
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-navy" />
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-700 mb-1">Tags (comma-separated)</label>
               <input value={form.tags} onChange={e => setForm({ ...form, tags: e.target.value })} placeholder="shipping, delivery, policy"
-                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-rose-500" />
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-navy" />
             </div>
           </div>
           <label className="flex items-center gap-2 text-sm text-gray-700">
             <input type="checkbox" checked={form.is_published} onChange={e => setForm({ ...form, is_published: e.target.checked })}
-              className="rounded border-gray-300 text-rose-600 focus:ring-rose-500" />
+              className="rounded border-gray-300 text-navy focus:ring-navy" />
             Published (AI can use this for answers)
           </label>
           <div className="flex justify-end gap-3 pt-2">
             <button type="button" onClick={onClose} className="px-4 py-2 text-sm text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-50">Cancel</button>
-            <button type="submit" disabled={saving} className="px-4 py-2 text-sm bg-rose-600 text-white rounded-lg hover:bg-rose-700 disabled:opacity-50">
+            <button type="submit" disabled={saving} className="px-4 py-2 text-sm bg-navy text-white rounded-lg hover:bg-navy disabled:opacity-50">
               {saving ? 'Saving...' : article ? 'Update' : 'Create Article'}
             </button>
           </div>

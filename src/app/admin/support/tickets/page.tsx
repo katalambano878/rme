@@ -41,7 +41,7 @@ export default function TicketsPage() {
   };
 
   const statusBadge = (s: string) => {
-    const c: Record<string, string> = { open: 'bg-blue-100 text-blue-700', in_progress: 'bg-yellow-100 text-yellow-700', waiting_customer: 'bg-purple-100 text-purple-700', waiting_agent: 'bg-orange-100 text-orange-700', resolved: 'bg-rose-100 text-rose-700', closed: 'bg-gray-100 text-gray-600' };
+    const c: Record<string, string> = { open: 'bg-blue-100 text-blue-700', in_progress: 'bg-yellow-100 text-yellow-700', waiting_customer: 'bg-purple-100 text-purple-700', waiting_agent: 'bg-orange-100 text-orange-700', resolved: 'bg-rose-light text-navy', closed: 'bg-gray-100 text-gray-600' };
     return <span className={`px-2 py-0.5 text-[10px] font-bold uppercase rounded-full ${c[s] || c.open}`}>{s.replace(/_/g, ' ')}</span>;
   };
 
@@ -62,14 +62,14 @@ export default function TicketsPage() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <div className="flex items-center gap-2 text-sm text-gray-500 mb-1">
-            <Link href="/admin/support" className="hover:text-rose-600">Support</Link>
+            <Link href="/admin/support" className="hover:text-navy">Support</Link>
             <i className="ri-arrow-right-s-line text-xs" />
             <span className="text-gray-900 font-medium">Tickets</span>
           </div>
           <h1 className="text-2xl font-bold text-gray-900">Support Tickets</h1>
         </div>
         <button onClick={() => setShowNewModal(true)}
-          className="inline-flex items-center gap-2 px-4 py-2 bg-rose-600 text-white rounded-lg hover:bg-rose-700 text-sm font-medium transition-colors">
+          className="inline-flex items-center gap-2 px-4 py-2 bg-navy text-white rounded-lg hover:bg-navy text-sm font-medium transition-colors">
           <i className="ri-add-line" /> New Ticket
         </button>
       </div>
@@ -78,7 +78,7 @@ export default function TicketsPage() {
       <div className="flex gap-1 bg-white rounded-xl border border-gray-100 p-1 overflow-x-auto">
         {STATUS_TABS.map(tab => (
           <button key={tab} onClick={() => { setStatusTab(tab); setPage(1); }}
-            className={`px-4 py-2 text-xs font-medium rounded-lg transition-colors whitespace-nowrap ${statusTab === tab ? 'bg-rose-600 text-white' : 'text-gray-600 hover:bg-gray-50'}`}>
+            className={`px-4 py-2 text-xs font-medium rounded-lg transition-colors whitespace-nowrap ${statusTab === tab ? 'bg-navy text-white' : 'text-gray-600 hover:bg-gray-50'}`}>
             {tab === 'all' ? 'All' : tab.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}
           </button>
         ))}
@@ -89,10 +89,10 @@ export default function TicketsPage() {
         <div className="relative flex-1 min-w-[200px]">
           <i className="ri-search-line absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
           <input type="text" placeholder="Search tickets..." value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-            className="w-full pl-10 pr-4 py-2 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-rose-500" />
+            className="w-full pl-10 pr-4 py-2 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-navy" />
         </div>
         <select value={priorityFilter} onChange={(e) => { setPriorityFilter(e.target.value); setPage(1); }}
-          className="bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-rose-500">
+          className="bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-navy">
           {PRIORITY_OPTIONS.map(p => <option key={p} value={p}>{p === 'all' ? 'All Priorities' : p.charAt(0).toUpperCase() + p.slice(1)}</option>)}
         </select>
       </div>
@@ -121,7 +121,7 @@ export default function TicketsPage() {
               <Link key={t.id} href={`/admin/support/tickets/${t.id}`}
                 className="grid grid-cols-1 lg:grid-cols-12 gap-2 lg:gap-4 px-4 py-3 hover:bg-gray-50 transition-colors items-center">
                 <div className="col-span-1">
-                  <span className="text-xs font-mono text-rose-600 font-semibold">{t.ticket_number}</span>
+                  <span className="text-xs font-mono text-navy font-semibold">{t.ticket_number}</span>
                 </div>
                 <div className="col-span-3">
                   <p className="text-sm font-medium text-gray-900 truncate">{t.subject}</p>
@@ -192,42 +192,42 @@ function NewTicketModal({ onClose, onCreated }: { onClose: () => void; onCreated
           <div>
             <label className="block text-xs font-medium text-gray-700 mb-1">Subject *</label>
             <input required value={form.subject} onChange={e => setForm({ ...form, subject: e.target.value })}
-              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-rose-500" />
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-navy" />
           </div>
           <div>
             <label className="block text-xs font-medium text-gray-700 mb-1">Description</label>
             <textarea value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} rows={3}
-              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-rose-500" />
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-navy" />
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-medium text-gray-700 mb-1">Customer Name</label>
               <input value={form.customer_name} onChange={e => setForm({ ...form, customer_name: e.target.value })}
-                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-rose-500" />
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-navy" />
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-700 mb-1">Customer Email</label>
               <input type="email" value={form.customer_email} onChange={e => setForm({ ...form, customer_email: e.target.value })}
-                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-rose-500" />
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-navy" />
             </div>
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-medium text-gray-700 mb-1">Priority</label>
               <select value={form.priority} onChange={e => setForm({ ...form, priority: e.target.value })}
-                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-rose-500">
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-navy">
                 <option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option><option value="urgent">Urgent</option>
               </select>
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-700 mb-1">Category</label>
               <input value={form.category} onChange={e => setForm({ ...form, category: e.target.value })} placeholder="e.g., order, product"
-                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-rose-500" />
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-navy" />
             </div>
           </div>
           <div className="flex justify-end gap-3 pt-2">
             <button type="button" onClick={onClose} className="px-4 py-2 text-sm text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-50">Cancel</button>
-            <button type="submit" disabled={saving} className="px-4 py-2 text-sm bg-rose-600 text-white rounded-lg hover:bg-rose-700 disabled:opacity-50">
+            <button type="submit" disabled={saving} className="px-4 py-2 text-sm bg-navy text-white rounded-lg hover:bg-navy disabled:opacity-50">
               {saving ? 'Creating...' : 'Create Ticket'}
             </button>
           </div>

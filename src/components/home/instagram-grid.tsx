@@ -9,12 +9,12 @@ import { cn } from "@/lib/utils"
 import { INSTAGRAM_HANDLE, INSTAGRAM_URL } from "@/lib/brand"
 
 const tiles = [
-  "from-rose-300 via-pink-200 to-rose-100",
-  "from-fuchsia-300 via-purple-200 to-pink-100",
-  "from-amber-200 via-orange-100 to-yellow-50",
-  "from-violet-300 via-indigo-200 to-blue-100",
-  "from-emerald-200 via-teal-100 to-cyan-50",
-  "from-rose-200 via-red-100 to-orange-50",
+  "from-[#244b39] via-[#b6946d] to-rose-light",
+  "from-[#2f5f49] via-[#c9ae8f] to-rose-light",
+  "from-[#b6946d] via-[#e4d5c3] to-rose-light",
+  "from-[#244b39] via-[#5a8a70] to-teal-light",
+  "from-[#2f5f49] via-[#b6946d] to-teal-light",
+  "from-[#b6946d] via-[#c9ae8f] to-rose-light",
 ]
 
 const stagger = {

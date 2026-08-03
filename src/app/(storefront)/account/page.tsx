@@ -15,7 +15,6 @@ import {
 } from "lucide-react"
 import { Container } from "@/components/shared/container"
 import { Section } from "@/components/shared/section"
-import { Heading } from "@/components/shared/heading"
 import { ProductCard } from "@/components/shared/product-card"
 import { useWishlistStore } from "@/lib/store/wishlist-store"
 import { formatPrice } from "@/lib/utils"
@@ -27,6 +26,8 @@ import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { Card, CardContent } from "@/components/ui/card"
 import { CONTACT_EMAIL } from "@/lib/brand"
+import { HERO_IMAGES } from "@/lib/hero-images"
+import { PageHero } from "@/components/shared/page-hero"
 
 const tabs = [
   { value: "profile", label: "Profile", icon: User },
@@ -155,7 +156,7 @@ function ProfileTab() {
         </div>
       </div>
 
-      <Button className="rounded-xl bg-rose-100 px-8 py-2.5 text-navy hover:bg-rose-200">
+      <Button className="rounded-xl bg-rose-light px-8 py-2.5 text-navy hover:bg-rose-border">
         Save Changes
       </Button>
     </motion.div>
@@ -240,8 +241,8 @@ function WishlistTab() {
         transition={{ duration: 0.4 }}
         className="flex flex-col items-center justify-center py-20 text-center"
       >
-        <div className="flex size-20 items-center justify-center rounded-full bg-[#FFF5F5]">
-          <Heart className="size-8 text-rose-300" />
+        <div className="flex size-20 items-center justify-center rounded-full bg-rose-light">
+          <Heart className="size-8 text-rose-soft" />
         </div>
         <h3 className="mt-6 font-heading text-xl font-semibold text-navy">
           Your wishlist is empty
@@ -251,7 +252,7 @@ function WishlistTab() {
           curated collection will appear here.
         </p>
         <Button
-          className="mt-6 gap-2 rounded-xl border border-rose-200 bg-[#FFF5F5] px-6 text-rose-400 hover:bg-rose-100"
+          className="mt-6 gap-2 rounded-xl border border-rose-border bg-rose-light px-6 text-rose-primary hover:bg-rose-light"
           render={<a href="/shop" />}
         >
           <ShoppingBag className="size-4" />
@@ -307,7 +308,7 @@ function AddressesTab() {
         </div>
         <Button
           onClick={() => setShowForm(!showForm)}
-          className="gap-1.5 rounded-xl bg-rose-100 text-navy hover:bg-rose-200"
+          className="gap-1.5 rounded-xl bg-rose-light text-navy hover:bg-rose-border"
         >
           <Plus className="size-4" />
           Add New
@@ -368,7 +369,7 @@ function AddressesTab() {
                 </div>
               </div>
               <div className="flex gap-3 pt-2">
-                <Button className="rounded-xl bg-rose-100 text-navy hover:bg-rose-200">
+                <Button className="rounded-xl bg-rose-light text-navy hover:bg-rose-border">
                   Save Address
                 </Button>
                 <Button
@@ -452,16 +453,16 @@ export default function AccountPage() {
   }, [])
 
   return (
-    <Section className="min-h-screen bg-gradient-to-b from-rose-light/50 to-white">
-      <Container>
-        <Heading
-          as="h1"
-          subtitle="Manage your profile, orders, wishlist, and delivery addresses."
-        >
-          My Account
-        </Heading>
+    <>
+      <PageHero
+        imageSrc={HERO_IMAGES.purse.src}
+        imageAlt={HERO_IMAGES.purse.alt}
+        title="My Account"
+        subtitle="Manage your profile, orders, wishlist, and delivery addresses."
+      />
 
-        <div className="mt-10">
+      <Section className="min-h-screen bg-white">
+        <Container>
           <Tabs value={activeTab} onValueChange={setActiveTab}>
             <TabsList
               className="mb-8 flex h-auto w-full flex-wrap gap-1 rounded-2xl bg-white p-1.5 shadow-sm ring-1 ring-rose-border/50 sm:w-fit"
@@ -470,7 +471,7 @@ export default function AccountPage() {
                 <TabsTrigger
                   key={tab.value}
                   value={tab.value}
-                  className="gap-2 rounded-xl px-4 py-2.5 text-sm font-medium text-muted-foreground transition-all data-active:border data-active:border-rose-200 data-active:bg-[#FFF5F5] data-active:text-rose-400 data-active:shadow-none hover:text-navy"
+                  className="gap-2 rounded-xl px-4 py-2.5 text-sm font-medium text-muted-foreground transition-all data-active:border data-active:border-rose-border data-active:bg-rose-light data-active:text-rose-primary data-active:shadow-none hover:text-navy"
                 >
                   <tab.icon className="size-4" />
                   {tab.label}
@@ -491,8 +492,8 @@ export default function AccountPage() {
               <AddressesTab />
             </TabsContent>
           </Tabs>
-        </div>
       </Container>
     </Section>
+    </>
   )
 }

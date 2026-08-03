@@ -46,8 +46,8 @@ export default function AdminCouponsPage() {
   };
 
   const statusColors: Record<string, string> = {
-    'Active': 'bg-rose-100 text-rose-800',
-    'Scheduled': 'bg-rose-100 text-rose-800',
+    'Active': 'bg-rose-light text-navy',
+    'Scheduled': 'bg-rose-light text-navy',
     'Expired': 'bg-gray-100 text-gray-700',
     'Disabled': 'bg-red-100 text-red-700',
   };
@@ -137,7 +137,7 @@ export default function AdminCouponsPage() {
         </div>
         <button
           onClick={openAdd}
-          className="bg-rose-500 hover:bg-rose-600 text-white px-6 py-3 rounded-lg font-semibold transition-colors whitespace-nowrap cursor-pointer"
+          className="bg-rose-light0 hover:bg-navy text-white px-6 py-3 rounded-lg font-semibold transition-colors whitespace-nowrap cursor-pointer"
         >
           <i className="ri-add-line mr-2"></i>
           Create Coupon
@@ -151,7 +151,7 @@ export default function AdminCouponsPage() {
         </div>
         <div className="bg-white rounded-xl border-2 border-gray-200 p-4">
           <p className="text-sm text-gray-600 mb-1">Active</p>
-          <p className="text-2xl font-bold text-rose-700">{activeCoupons.length}</p>
+          <p className="text-2xl font-bold text-navy">{activeCoupons.length}</p>
         </div>
         <div className="bg-white rounded-xl border-2 border-gray-200 p-4">
           <p className="text-sm text-gray-600 mb-1">Total Uses</p>
@@ -168,13 +168,13 @@ export default function AdminCouponsPage() {
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-bold text-gray-900">All Coupons</h2>
             <div className="flex items-center space-x-3">
-              <select className="px-4 py-2 pr-8 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-rose-400 focus:border-rose-400 font-medium cursor-pointer">
+              <select className="px-4 py-2 pr-8 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-navy focus:border-rose-primary font-medium cursor-pointer">
                 <option>All Status</option>
                 <option>Active</option>
                 <option>Scheduled</option>
                 <option>Expired</option>
               </select>
-              <select className="px-4 py-2 pr-8 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-rose-400 focus:border-rose-400 font-medium cursor-pointer">
+              <select className="px-4 py-2 pr-8 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-navy focus:border-rose-primary font-medium cursor-pointer">
                 <option>Sort by Date</option>
                 <option>Sort by Usage</option>
                 <option>Sort by Value</option>
@@ -208,7 +208,7 @@ export default function AdminCouponsPage() {
                     <td className="py-4 px-6">
                       <div className="flex items-center space-x-2">
                         <span className="font-mono font-bold text-gray-900 bg-gray-100 px-3 py-1 rounded">{coupon.code}</span>
-                        <button className="w-7 h-7 flex items-center justify-center text-gray-400 hover:text-rose-700 hover:bg-pink-50 rounded transition-colors cursor-pointer">
+                        <button className="w-7 h-7 flex items-center justify-center text-gray-400 hover:text-navy hover:bg-rose-light rounded transition-colors cursor-pointer">
                           <i className="ri-file-copy-line"></i>
                         </button>
                       </div>
@@ -229,7 +229,7 @@ export default function AdminCouponsPage() {
                       {coupon.usageLimit && (
                         <div className="w-24 h-2 bg-gray-200 rounded-full mt-2">
                           <div
-                            className="h-full bg-rose-500 rounded-full"
+                            className="h-full bg-rose-light0 rounded-full"
                             style={{ width: `${Math.min((coupon.usedCount / coupon.usageLimit) * 100, 100)}%` }}
                           ></div>
                         </div>
@@ -248,7 +248,7 @@ export default function AdminCouponsPage() {
                       <div className="flex items-center space-x-2">
                         <button
                           onClick={() => handleEdit(coupon)}
-                          className="w-8 h-8 flex items-center justify-center text-gray-600 hover:text-rose-700 hover:bg-pink-50 rounded-lg transition-colors cursor-pointer"
+                          className="w-8 h-8 flex items-center justify-center text-gray-600 hover:text-navy hover:bg-rose-light rounded-lg transition-colors cursor-pointer"
                         >
                           <i className="ri-edit-line text-lg"></i>
                         </button>
@@ -289,7 +289,7 @@ export default function AdminCouponsPage() {
                   value={form.code}
                   onChange={e => setForm(f => ({ ...f, code: e.target.value.toUpperCase() }))}
                   placeholder="e.g. SAVE20"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-rose-400 focus:border-rose-400 font-mono uppercase"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-navy focus:border-rose-primary font-mono uppercase"
                 />
               </div>
 
@@ -298,7 +298,7 @@ export default function AdminCouponsPage() {
                 <select
                   value={form.discount_type}
                   onChange={e => setForm(f => ({ ...f, discount_type: e.target.value as any }))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-rose-400 focus:border-rose-400 cursor-pointer"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-navy focus:border-rose-primary cursor-pointer"
                 >
                   <option value="percent">Percentage (%)</option>
                   <option value="fixed">Fixed Amount (GH₵)</option>
@@ -317,7 +317,7 @@ export default function AdminCouponsPage() {
                     value={form.value}
                     onChange={e => setForm(f => ({ ...f, value: e.target.value }))}
                     placeholder="0"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-rose-400 focus:border-rose-400"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-navy focus:border-rose-primary"
                   />
                 </div>
               )}
@@ -331,7 +331,7 @@ export default function AdminCouponsPage() {
                     value={form.min_spend}
                     onChange={e => setForm(f => ({ ...f, min_spend: e.target.value }))}
                     placeholder="No minimum"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-rose-400 focus:border-rose-400"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-navy focus:border-rose-primary"
                   />
                 </div>
                 <div>
@@ -342,7 +342,7 @@ export default function AdminCouponsPage() {
                     value={form.max_uses}
                     onChange={e => setForm(f => ({ ...f, max_uses: e.target.value }))}
                     placeholder="Unlimited"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-rose-400 focus:border-rose-400"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-navy focus:border-rose-primary"
                   />
                 </div>
               </div>
@@ -354,7 +354,7 @@ export default function AdminCouponsPage() {
                     type="date"
                     value={form.starts_at}
                     onChange={e => setForm(f => ({ ...f, starts_at: e.target.value }))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-rose-400 focus:border-rose-400"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-navy focus:border-rose-primary"
                   />
                 </div>
                 <div>
@@ -363,7 +363,7 @@ export default function AdminCouponsPage() {
                     type="date"
                     value={form.ends_at}
                     onChange={e => setForm(f => ({ ...f, ends_at: e.target.value }))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-rose-400 focus:border-rose-400"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-navy focus:border-rose-primary"
                   />
                 </div>
               </div>
@@ -374,7 +374,7 @@ export default function AdminCouponsPage() {
                   id="is_active"
                   checked={form.is_active}
                   onChange={e => setForm(f => ({ ...f, is_active: e.target.checked }))}
-                  className="w-4 h-4 text-rose-500 border-gray-300 rounded focus:ring-rose-400 cursor-pointer"
+                  className="w-4 h-4 text-rose-primary border-gray-300 rounded focus:ring-navy cursor-pointer"
                 />
                 <label htmlFor="is_active" className="text-sm font-semibold text-gray-700 cursor-pointer">Active</label>
               </div>
@@ -390,7 +390,7 @@ export default function AdminCouponsPage() {
               <button
                 onClick={saveCoupon}
                 disabled={saving}
-                className="px-5 py-2 bg-rose-500 hover:bg-rose-600 text-white rounded-lg font-semibold transition-colors disabled:opacity-60 cursor-pointer"
+                className="px-5 py-2 bg-rose-light0 hover:bg-navy text-white rounded-lg font-semibold transition-colors disabled:opacity-60 cursor-pointer"
               >
                 {saving ? 'Saving…' : showEditModal ? 'Save Changes' : 'Create Coupon'}
               </button>

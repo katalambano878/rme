@@ -31,14 +31,14 @@ const iconMap: Record<string, typeof Briefcase> = {
 }
 
 const gradientMap: Record<string, string> = {
-  work: "from-slate-700 via-slate-600 to-slate-500",
-  wedding: "from-rose-400 via-pink-400 to-fuchsia-300",
-  weekend: "from-amber-400 via-orange-300 to-yellow-300",
-  gifting: "from-violet-500 via-purple-400 to-indigo-400",
-  "morning-routine": "from-amber-400 via-orange-300 to-yellow-300",
-  "night-repair": "from-indigo-600 via-violet-500 to-purple-400",
-  "body-care": "from-teal-500 via-emerald-400 to-green-300",
-  "lip-care": "from-rose-400 via-pink-400 to-fuchsia-300",
+  work: "from-[#1c3a2c] via-[#244b39] to-[#2f5f49]",
+  wedding: "from-[#244b39] via-[#b6946d] to-[#f7f3ed]",
+  weekend: "from-[#b6946d] via-[#c9ae8f] to-[#e4d5c3]",
+  gifting: "from-[#244b39] via-[#5a8a70] to-[#b6946d]",
+  "morning-routine": "from-[#b6946d] via-[#c9ae8f] to-[#f7f3ed]",
+  "night-repair": "from-[#10231a] via-[#244b39] to-[#2f5f49]",
+  "body-care": "from-[#244b39] via-[#2f5f49] to-teal-light",
+  "lip-care": "from-[#244b39] via-[#b6946d] to-[#c9ae8f]",
 }
 
 const stagger = {

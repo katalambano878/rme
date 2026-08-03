@@ -292,7 +292,7 @@ export default function AdminLayout({
                   href={item.path}
                   onClick={() => window.innerWidth < 1024 && setIsSidebarOpen(false)} // Close on mobile click
                   className={`flex items-center justify-between px-3 py-2 rounded-lg transition-colors cursor-pointer ${isActive
-                    ? 'bg-pink-50 text-rose-800 font-semibold'
+                    ? 'bg-rose-light text-navy font-semibold'
                     : 'text-gray-700 hover:bg-gray-50'
                     }`}
                 >
@@ -352,7 +352,7 @@ export default function AdminLayout({
                   onClick={() => setShowUserMenu(!showUserMenu)}
                   className="flex items-center gap-2 px-2 py-1.5 hover:bg-gray-100 rounded-lg transition-colors cursor-pointer"
                 >
-                  <div className="w-8 h-8 flex items-center justify-center bg-rose-100 text-rose-800 rounded-full text-xs font-semibold">
+                  <div className="w-8 h-8 flex items-center justify-center bg-rose-light text-navy rounded-full text-xs font-semibold">
                     {user?.email?.charAt(0).toUpperCase() || 'A'}
                   </div>
                   <div className="text-left hidden md:block min-w-0">

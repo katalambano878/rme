@@ -3,12 +3,12 @@ export const BRAND_NAME = "Trust Ecom"
 export const BRAND_LEGAL_NAME = "Trust Ecom"
 export const BRAND_TAGLINE = "Shop with confidence"
 
-/** Logo — `public/brand/logo.png` (nav, favicon, OG/Twitter via root metadata). */
-export const BRAND_LOGO_SRC = "/brand/logo.png"
-export const BRAND_LOGO_ALT = `${BRAND_NAME}`
+/** Logo — transparent PNG in `public/brand/`. */
+export const BRAND_LOGO_SRC = "/brand/trustlink-mall-logo.png"
+export const BRAND_LOGO_ALT = "Trust Link Mall"
 
-/** Public site / policy references (update when you have a live domain) */
-export const SITE_DOMAIN = "trustecom.com"
+/** Public site / policy references */
+export const SITE_DOMAIN = "store.trustlinksusu.com"
 export const CONTACT_EMAIL = `hello@${SITE_DOMAIN}`
 
 /** Phone & WhatsApp — fill in real numbers before launch */

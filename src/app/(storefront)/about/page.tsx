@@ -18,6 +18,8 @@ import { Heading } from "@/components/shared/heading"
 import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
 import { BRAND_NAME, BRAND_TAGLINE } from "@/lib/brand"
+import { HERO_IMAGES } from "@/lib/hero-images"
+import { PageHero } from "@/components/shared/page-hero"
 
 const values = [
   {
@@ -81,28 +83,19 @@ const fadeUp = {
 export default function AboutPage() {
   return (
     <>
-      {/* Hero */}
-      <Section className="relative overflow-hidden bg-gradient-to-b from-rose-light to-white">
-        <Container className="text-center">
-          <motion.div
-            initial={{ opacity: 0, y: 24 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] as const }}
-          >
-            <p className="text-sm font-medium uppercase tracking-widest text-rose-primary">
-              Our Story
-            </p>
-            <h1 className="mt-4 font-heading text-4xl font-semibold tracking-tight text-navy sm:text-5xl lg:text-6xl">
-              Welcome to
-              <br />
-              <span className="text-rose-primary">{BRAND_NAME}</span>
-            </h1>
-            <p className="mx-auto mt-6 max-w-2xl text-lg text-muted-foreground">
-              {BRAND_TAGLINE}. We make online shopping simple, secure, and accessible for everyone.
-            </p>
-          </motion.div>
-        </Container>
-      </Section>
+      <PageHero
+        imageSrc={HERO_IMAGES.ladiesBag.src}
+        imageAlt={HERO_IMAGES.ladiesBag.alt}
+        eyebrow="Our Story"
+        title={
+          <>
+            Welcome to
+            <br />
+            <span className="text-rose-soft">{BRAND_NAME}</span>
+          </>
+        }
+        subtitle={`${BRAND_TAGLINE}. We make online shopping simple, secure, and accessible for everyone.`}
+      />
 
       {/* Brand Story */}
       <Section>
@@ -116,8 +109,8 @@ export default function AboutPage() {
             >
               <div className="aspect-[4/5] overflow-hidden rounded-3xl">
                 <img
-                  src="/images/store-front.png"
-                  alt={`${BRAND_NAME} online store`}
+                  src="/images/home/hero-purse.png"
+                  alt={`${BRAND_NAME} collection`}
                   className="h-full w-full object-cover object-center"
                 />
               </div>
@@ -178,7 +171,7 @@ export default function AboutPage() {
                 viewport={{ once: true, margin: "-60px" }}
                 className="group text-center"
               >
-                <div className="mx-auto flex size-16 items-center justify-center rounded-2xl bg-rose-light transition-colors group-hover:bg-rose-100/80">
+                <div className="mx-auto flex size-16 items-center justify-center rounded-2xl bg-rose-light transition-colors group-hover:bg-rose-light/80">
                   <value.icon className="size-7 text-rose-primary" />
                 </div>
                 <h3 className="mt-5 font-heading text-lg font-semibold text-navy">
@@ -245,7 +238,7 @@ export default function AboutPage() {
               Explore our product categories — all chosen with you in mind.
             </p>
             <Button
-              className="mt-8 rounded-xl bg-rose-100 px-8 py-3 text-navy hover:bg-rose-200"
+              className="mt-8 rounded-xl bg-rose-light px-8 py-3 text-navy hover:bg-rose-border"
               size="lg"
               render={<Link href="/shop" />}
             >

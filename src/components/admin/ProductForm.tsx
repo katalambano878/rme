@@ -497,7 +497,7 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
                     <button
                         onClick={handleSubmit}
                         disabled={loading}
-                        className={`px-6 py-3 bg-rose-600 hover:bg-rose-700 text-white rounded-lg font-semibold transition-colors whitespace-nowrap cursor-pointer flex items-center ${loading ? 'opacity-70 cursor-not-allowed' : ''}`}
+                        className={`px-6 py-3 bg-navy hover:bg-navy text-white rounded-lg font-semibold transition-colors whitespace-nowrap cursor-pointer flex items-center ${loading ? 'opacity-70 cursor-not-allowed' : ''}`}
                     >
                         {loading ? (
                             <>
@@ -522,7 +522,7 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
                                 key={tab.id}
                                 onClick={() => setActiveTab(tab.id)}
                                 className={`flex items-center space-x-2 px-6 py-4 font-semibold whitespace-nowrap transition-colors border-b-2 cursor-pointer ${activeTab === tab.id
-                                    ? 'border-rose-400 text-rose-900 bg-[#FFF5F5]'
+                                    ? 'border-rose-primary text-navy bg-rose-light'
                                     : 'border-transparent text-gray-600 hover:text-gray-900 hover:bg-gray-50'
                                     }`}
                             >
@@ -544,7 +544,7 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
                                     type="text"
                                     value={productName}
                                     onChange={(e) => setProductName(e.target.value)}
-                                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-rose-400 focus:border-rose-400"
+                                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-navy focus:border-rose-primary"
                                     placeholder="Enter product name"
                                 />
                             </div>
@@ -558,7 +558,7 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
                                     onChange={(e) => setDescription(e.target.value)}
                                     rows={6}
                                     maxLength={500}
-                                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-rose-400 focus:border-rose-400 resize-none"
+                                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-navy focus:border-rose-primary resize-none"
                                     placeholder="Describe your product..."
                                 />
                                 <p className="text-sm text-gray-500 mt-2">{description.length}/500 characters</p>
@@ -572,7 +572,7 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
                                     <select
                                         value={categoryId}
                                         onChange={(e) => setCategoryId(e.target.value)}
-                                        className="w-full px-4 py-3 pr-8 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-rose-400 focus:border-rose-400 cursor-pointer"
+                                        className="w-full px-4 py-3 pr-8 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-navy focus:border-rose-primary cursor-pointer"
                                     >
                                         {categories.length === 0 && <option value="">Loading categories...</option>}
                                         {categories.length > 0 && <option value="">Select a category</option>}
@@ -594,7 +594,7 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
                                     <select
                                         value={status}
                                         onChange={(e) => setStatus(e.target.value)}
-                                        className="w-full px-4 py-3 pr-8 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-rose-400 focus:border-rose-400 cursor-pointer"
+                                        className="w-full px-4 py-3 pr-8 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-navy focus:border-rose-primary cursor-pointer"
                                     >
                                         <option>Active</option>
                                         <option>Draft</option>
@@ -608,7 +608,7 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
                                     type="checkbox"
                                     checked={featured}
                                     onChange={(e) => setFeatured(e.target.checked)}
-                                    className="w-5 h-5 text-rose-700 border-gray-300 rounded focus:ring-rose-400 cursor-pointer"
+                                    className="w-5 h-5 text-navy border-gray-300 rounded focus:ring-navy cursor-pointer"
                                 />
                                 <label className="text-gray-900 font-medium">
                                     Feature this product on homepage
@@ -624,7 +624,7 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
                                     value={preorderShipping}
                                     onChange={(e) => setPreorderShipping(e.target.value)}
                                     placeholder="e.g., Ships in 14 days, Available March 15"
-                                    className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-rose-400 focus:border-transparent transition-all"
+                                    className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-navy focus:border-transparent transition-all"
                                 />
                                 <p className="text-xs text-gray-500 mt-1">Leave empty if product ships immediately. Otherwise, enter estimated shipping time.</p>
                             </div>
@@ -635,7 +635,7 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
                         <div className="space-y-6 max-w-5xl">
                             <p className="text-xs text-gray-600">
                                 Store-wide <strong>Sale / promotion</strong> is managed on the{' '}
-                                <Link href="/admin/sales" className="text-rose-700 font-medium hover:underline">
+                                <Link href="/admin/sales" className="text-navy font-medium hover:underline">
                                     Sales
                                 </Link>{' '}
                                 page. Here you set the list price, optional compare-at, and an optional sales reference amount.
@@ -652,7 +652,7 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
                                             type="number"
                                             value={regularPrice}
                                             onChange={(e) => setRegularPrice(e.target.value)}
-                                            className="input-no-spinner w-full pl-16 pr-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-rose-400 focus:border-rose-400"
+                                            className="input-no-spinner w-full pl-16 pr-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-navy focus:border-rose-primary"
                                             step="0.01"
                                             min="0"
                                             placeholder="0.00"
@@ -670,7 +670,7 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
                                             type="number"
                                             value={compareAtOptional}
                                             onChange={(e) => setCompareAtOptional(e.target.value)}
-                                            className="input-no-spinner w-full pl-16 pr-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-rose-400 focus:border-rose-400"
+                                            className="input-no-spinner w-full pl-16 pr-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-navy focus:border-rose-primary"
                                             step="0.01"
                                             min="0"
                                             placeholder="Optional"
@@ -690,7 +690,7 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
                                             type="number"
                                             value={salePrice}
                                             onChange={(e) => setSalePrice(e.target.value)}
-                                            className="input-no-spinner w-full pl-16 pr-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-rose-400 focus:border-rose-400"
+                                            className="input-no-spinner w-full pl-16 pr-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-navy focus:border-rose-primary"
                                             step="0.01"
                                             min="0"
                                             placeholder="Optional"
@@ -702,14 +702,14 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
                                 </div>
                             </div>
 
-                            <div className="p-4 bg-[#FFF5F5] border border-rose-100 rounded-lg">
+                            <div className="p-4 bg-rose-light border border-rose-border rounded-lg">
                                 <p className="text-rose-950 font-semibold mb-1">Discount preview</p>
                                 {regularPrice &&
                                 salePrice &&
                                 parseFloat(regularPrice) > 0 &&
                                 parseFloat(salePrice) > 0 &&
                                 parseFloat(regularPrice) > parseFloat(salePrice) ? (
-                                    <p className="text-rose-900">
+                                    <p className="text-navy">
                                         vs Sales: GH₵ {(parseFloat(regularPrice) - parseFloat(salePrice)).toFixed(2)} off
                                         <span className="ml-2">
                                             (
@@ -723,7 +723,7 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
                                 ) : regularPrice &&
                                   compareAtOptional &&
                                   parseFloat(compareAtOptional) > parseFloat(regularPrice) ? (
-                                    <p className="text-rose-900">
+                                    <p className="text-navy">
                                         Savings vs compare-at: GH₵{' '}
                                         {(parseFloat(compareAtOptional) - parseFloat(regularPrice)).toFixed(2)}
                                         <span className="ml-2">
@@ -737,7 +737,7 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
                                         </span>
                                     </p>
                                 ) : (
-                                    <p className="text-rose-800 text-sm">
+                                    <p className="text-navy text-sm">
                                         Add an optional compare-at above price for a strikethrough, and/or a Sales amount lower than price for promo tracking.
                                     </p>
                                 )}
@@ -756,14 +756,14 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
                                                 type="text"
                                                 value={sku}
                                                 onChange={(e) => setSku(e.target.value)}
-                                                className="flex-1 px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-rose-400 focus:border-rose-400 font-mono bg-gray-50"
+                                                className="flex-1 px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-navy focus:border-rose-primary font-mono bg-gray-50"
                                                 placeholder="Auto-generated"
                                                 readOnly
                                             />
                                             <button
                                                 type="button"
                                                 onClick={() => setSku(generateSku())}
-                                                className="px-4 py-3 border-2 border-gray-300 rounded-lg hover:border-rose-400 hover:bg-[#FFF5F5] transition-colors cursor-pointer"
+                                                className="px-4 py-3 border-2 border-gray-300 rounded-lg hover:border-rose-primary hover:bg-rose-light transition-colors cursor-pointer"
                                                 title="Generate new SKU"
                                             >
                                                 <i className="ri-refresh-line text-lg"></i>
@@ -785,7 +785,7 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
                                                     updateVariantField(variantCombinations[0].key, 'stock', e.target.value);
                                                     setStock(e.target.value);
                                                 }}
-                                                className="input-no-spinner w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-rose-400 focus:border-rose-400"
+                                                className="input-no-spinner w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-navy focus:border-rose-primary"
                                                 placeholder="0"
                                                 min="0"
                                             />
@@ -816,7 +816,7 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
                                             value={moq}
                                             onChange={(e) => setMoq(e.target.value)}
                                             min="1"
-                                            className="input-no-spinner w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-rose-400 focus:border-rose-400"
+                                            className="input-no-spinner w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-navy focus:border-rose-primary"
                                             placeholder="1"
                                         />
                                         <p className="text-sm text-gray-500 mt-1">Minimum quantity customers must order</p>
@@ -830,7 +830,7 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
                                             type="number"
                                             value={lowStockThreshold}
                                             onChange={(e) => setLowStockThreshold(e.target.value)}
-                                            className="input-no-spinner w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-rose-400 focus:border-rose-400"
+                                            className="input-no-spinner w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-navy focus:border-rose-primary"
                                         />
                                         <p className="text-sm text-gray-500 mt-1">Get notified when stock falls below this number</p>
                                     </div>
@@ -849,10 +849,10 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
                             {/* STEP 1: Colors */}
                             <div className="bg-gray-50 rounded-xl p-6 border border-gray-200">
                                 <h4 className="text-sm font-bold text-gray-900 mb-1 flex items-center">
-                                    <i className="ri-palette-line mr-2 text-lg text-rose-700"></i>
+                                    <i className="ri-palette-line mr-2 text-lg text-navy"></i>
                                     Step 1: Select Colors
                                     {selectedColors.length > 0 && (
-                                        <span className="ml-2 bg-rose-100 text-rose-900 text-xs font-semibold px-2 py-0.5 rounded-full">
+                                        <span className="ml-2 bg-rose-light text-navy text-xs font-semibold px-2 py-0.5 rounded-full">
                                             {selectedColors.length} selected
                                         </span>
                                     )}
@@ -867,7 +867,7 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
                                                 key={color.name}
                                                 onClick={() => toggleColor(color)}
                                                 className={`flex items-center space-x-2 px-3 py-2 rounded-lg border-2 transition-all text-sm font-medium ${isSelected
-                                                        ? 'border-rose-500 bg-[#FFF5F5] ring-1 ring-rose-400'
+                                                        ? 'border-navy bg-rose-light ring-1 ring-navy'
                                                         : 'border-gray-200 hover:border-gray-300 bg-white'
                                                     }`}
                                                 title={color.name}
@@ -876,8 +876,8 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
                                                     className="w-5 h-5 rounded-full border border-gray-300 flex-shrink-0"
                                                     style={{ backgroundColor: color.hex }}
                                                 ></span>
-                                                <span className={isSelected ? 'text-rose-900' : 'text-gray-700'}>{color.name}</span>
-                                                {isSelected && <i className="ri-check-line text-rose-700"></i>}
+                                                <span className={isSelected ? 'text-navy' : 'text-gray-700'}>{color.name}</span>
+                                                {isSelected && <i className="ri-check-line text-navy"></i>}
                                             </button>
                                         );
                                     })}
@@ -928,10 +928,10 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
                             {/* STEP 2: Sizes */}
                             <div className="bg-gray-50 rounded-xl p-6 border border-gray-200">
                                 <h4 className="text-sm font-bold text-gray-900 mb-1 flex items-center">
-                                    <i className="ri-ruler-line mr-2 text-lg text-rose-600"></i>
+                                    <i className="ri-ruler-line mr-2 text-lg text-navy"></i>
                                     Step 2: Select Sizes
                                     {selectedSizes.length > 0 && (
-                                        <span className="ml-2 bg-rose-100 text-rose-900 text-xs font-semibold px-2 py-0.5 rounded-full">
+                                        <span className="ml-2 bg-rose-light text-navy text-xs font-semibold px-2 py-0.5 rounded-full">
                                             {selectedSizes.length} selected
                                         </span>
                                     )}
@@ -946,12 +946,12 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
                                                 key={size}
                                                 onClick={() => toggleSize(size)}
                                                 className={`px-5 py-2.5 rounded-lg border-2 font-semibold text-sm transition-all ${isSelected
-                                                        ? 'border-rose-500 bg-[#FFF5F5] text-rose-900 ring-1 ring-rose-400'
+                                                        ? 'border-navy bg-rose-light text-navy ring-1 ring-navy'
                                                         : 'border-gray-200 hover:border-gray-300 bg-white text-gray-700'
                                                     }`}
                                             >
                                                 {size}
-                                                {isSelected && <i className="ri-check-line ml-1.5 text-rose-600"></i>}
+                                                {isSelected && <i className="ri-check-line ml-1.5 text-navy"></i>}
                                             </button>
                                         );
                                     })}
@@ -1075,7 +1075,7 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
                                                                     type="number"
                                                                     value={d.price}
                                                                     onChange={(e) => updateVariantField(combo.key, 'price', e.target.value)}
-                                                                    className="w-28 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-1 focus:ring-rose-400 focus:border-rose-400"
+                                                                    className="w-28 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-1 focus:ring-navy focus:border-rose-primary"
                                                                     step="0.01"
                                                                     placeholder={regularPrice?.toString() || '0'}
                                                                 />
@@ -1095,7 +1095,7 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
                                                                     type="number"
                                                                     value={d.stock}
                                                                     onChange={(e) => updateVariantField(combo.key, 'stock', e.target.value)}
-                                                                    className="w-24 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-1 focus:ring-rose-400 focus:border-rose-400"
+                                                                    className="w-24 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-1 focus:ring-navy focus:border-rose-primary"
                                                                     placeholder="0"
                                                                 />
                                                             </td>
@@ -1106,8 +1106,8 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
                                         </table>
                                     </div>
 
-                                    <div className="p-3 bg-[#FFF5F5] border-t border-rose-100">
-                                        <p className="text-xs text-rose-900 flex items-center">
+                                    <div className="p-3 bg-rose-light border-t border-rose-border">
+                                        <p className="text-xs text-navy flex items-center">
                                             <i className="ri-information-line mr-1.5"></i>
                                             Total stock across all variants: <strong className="ml-1">{variants.reduce((sum, v) => sum + (parseInt(v.stock) || 0), 0)}</strong>
                                         </p>
@@ -1140,7 +1140,7 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
                                             <img src={img.url} alt={`Product ${index + 1}`} className="w-full h-full object-cover" />
                                         </div>
                                         {index === 0 && (
-                                            <span className="absolute top-2 left-2 bg-rose-600 text-white px-2 py-1 rounded text-xs font-semibold whitespace-nowrap">
+                                            <span className="absolute top-2 left-2 bg-navy text-white px-2 py-1 rounded text-xs font-semibold whitespace-nowrap">
                                                 Primary
                                             </span>
                                         )}
@@ -1158,7 +1158,7 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
                                     </div>
                                 ))}
 
-                                <label className={`aspect-square border-2 border-dashed border-gray-300 rounded-xl hover:border-rose-500 hover:bg-[#FFF5F5] transition-colors flex flex-col items-center justify-center space-y-2 text-gray-600 hover:text-rose-800 cursor-pointer ${uploading ? 'opacity-50 cursor-not-allowed' : ''}`}>
+                                <label className={`aspect-square border-2 border-dashed border-gray-300 rounded-xl hover:border-navy hover:bg-rose-light transition-colors flex flex-col items-center justify-center space-y-2 text-gray-600 hover:text-navy cursor-pointer ${uploading ? 'opacity-50 cursor-not-allowed' : ''}`}>
                                     {uploading ? (
                                         <i className="ri-loader-4-line animate-spin text-3xl"></i>
                                     ) : (
@@ -1212,7 +1212,7 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
                                             setSeoTitle(productName ? `${productName} | ${BRAND_NAME}` : '');
                                             setSeoTitleTouched(false);
                                         }}
-                                        className="text-sm font-medium text-rose-600 hover:text-rose-700 underline-offset-2 hover:underline"
+                                        className="text-sm font-medium text-navy hover:text-navy underline-offset-2 hover:underline"
                                     >
                                         Sync with product name
                                     </button>
@@ -1224,7 +1224,7 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
                                         setSeoTitleTouched(true);
                                         setSeoTitle(e.target.value);
                                     }}
-                                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-rose-400 focus:border-rose-400"
+                                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-navy focus:border-rose-primary"
                                     placeholder="Seo friendly title"
                                 />
                                 <p className={`text-sm mt-2 ${seoTitle.length > 60 ? 'text-amber-600' : 'text-gray-500'}`}>
@@ -1244,7 +1244,7 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
                                         setMetaDescTouched(true);
                                         setMetaDescription(e.target.value);
                                     }}
-                                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-rose-400 focus:border-rose-400 resize-none"
+                                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-navy focus:border-rose-primary resize-none"
                                     placeholder="Seo friendly description"
                                 />
                                 <p className={`text-sm mt-2 ${metaDescription.length > 160 ? 'text-amber-600' : 'text-gray-500'}`}>
@@ -1260,7 +1260,7 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
                                     <button
                                         type="button"
                                         onClick={syncSlugFromTitle}
-                                        className="text-sm font-medium text-rose-600 hover:text-rose-700 underline-offset-2 hover:underline"
+                                        className="text-sm font-medium text-navy hover:text-navy underline-offset-2 hover:underline"
                                     >
                                         Sync with product name
                                     </button>
@@ -1276,7 +1276,7 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
                                             setSlugTouched(true);
                                             setUrlSlug(e.target.value);
                                         }}
-                                        className="min-w-0 flex-1 px-4 py-3 border-2 border-gray-300 rounded-r-lg focus:ring-2 focus:ring-rose-400 focus:border-rose-400"
+                                        className="min-w-0 flex-1 px-4 py-3 border-2 border-gray-300 rounded-r-lg focus:ring-2 focus:ring-navy focus:border-rose-primary"
                                         placeholder="product-slug"
                                         autoComplete="off"
                                         spellCheck={false}
@@ -1295,7 +1295,7 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
                                     type="text"
                                     value={keywords}
                                     onChange={(e) => setKeywords(e.target.value)}
-                                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-rose-400 focus:border-rose-400"
+                                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-navy focus:border-rose-primary"
                                     placeholder="keyword1, keyword2"
                                 />
                                 <p className="text-sm text-gray-500 mt-2">Separate keywords with commas</p>

@@ -7,17 +7,9 @@ import { motion } from "framer-motion"
 import { ArrowRight, Star } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { BRAND_NAME, BRAND_TAGLINE } from "@/lib/brand"
+import { HOME_HERO_SLIDES } from "@/lib/hero-images"
 
-const HERO_SLIDES = [
-  {
-    src: "/images/home/hero-pink-studio.png",
-    alt: "Curated products displayed in a bright studio setting",
-  },
-  {
-    src: "/images/home/hero-marble-garden.png",
-    alt: "Featured products arranged on a clean marble surface",
-  },
-] as const
+const HERO_SLIDES = HOME_HERO_SLIDES
 
 const SLIDE_INTERVAL_MS = 3000
 
@@ -92,7 +84,7 @@ export function HeroSection() {
             transition={{ duration: 0.55 }}
             className="inline-flex items-center gap-2 rounded-full border border-gray-200/90 bg-white px-4 py-2.5 shadow-sm sm:px-5 sm:py-2"
           >
-            <Star className="size-[1.125rem] shrink-0 fill-teal-500 text-teal-500 sm:size-5" aria-hidden />
+            <Star className="size-[1.125rem] shrink-0 fill-navy text-navy sm:size-5" aria-hidden />
             <span className="font-sans text-[14px] font-semibold tracking-normal text-navy sm:text-[15px]">
               {BRAND_NAME}
             </span>
@@ -124,7 +116,7 @@ export function HeroSection() {
           >
             <Link
               href="/shop"
-              className="inline-flex items-center gap-2 rounded-full bg-white px-6 py-3 font-sans text-sm font-semibold tracking-tight text-navy transition-colors hover:bg-teal-100 sm:px-8 sm:py-3.5 sm:text-base"
+              className="inline-flex items-center gap-2 rounded-full bg-white px-6 py-3 font-sans text-sm font-semibold tracking-tight text-navy transition-colors hover:bg-teal-light sm:px-8 sm:py-3.5 sm:text-base"
             >
               Shop Now
               <ArrowRight className="size-[1.125rem] sm:size-5" aria-hidden />

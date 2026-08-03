@@ -1,4 +1,4 @@
-export type ProductBadge = "New" | "Best Seller" | "Limited" | "Sale"
+export type ProductBadge = "New" | "Best Seller" | "Limited" | "Sale" | "Pre-Order"
 
 export type Variant = {
   id: string

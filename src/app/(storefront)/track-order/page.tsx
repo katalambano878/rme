@@ -15,13 +15,14 @@ import {
 } from "lucide-react"
 import { Container } from "@/components/shared/container"
 import { Section } from "@/components/shared/section"
-import { Heading } from "@/components/shared/heading"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
 import { cn } from "@/lib/utils"
+import { HERO_IMAGES } from "@/lib/hero-images"
+import { PageHero } from "@/components/shared/page-hero"
 
 const STATUS_STEPS = [
   { key: "pending",          label: "Order Placed", description: "Your order has been received.", icon: ClipboardCheck },
@@ -114,17 +115,16 @@ function TrackOrderContent() {
   const trackingNumber = ""
 
   return (
-    <Section className="min-h-screen bg-gradient-to-b from-rose-light/50 to-white">
-      <Container>
-        <Heading
-          as="h1"
-          align="center"
-          subtitle="Enter your order number and email to see real-time updates on your delivery."
-        >
-          Track Your Order
-        </Heading>
+    <>
+      <PageHero
+        imageSrc={HERO_IMAGES.ladiesBag.src}
+        imageAlt={HERO_IMAGES.ladiesBag.alt}
+        title="Track Your Order"
+        subtitle="Enter your order number and email to see real-time updates on your delivery."
+      />
 
-        {/* Search Form */}
+      <Section className="min-h-screen bg-white">
+        <Container>
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -189,8 +189,8 @@ function TrackOrderContent() {
             >
               {/* Status Header */}
               <div className="mb-8 text-center">
-                <div className="mx-auto flex size-16 items-center justify-center rounded-full bg-rose-100">
-                  <Truck className="size-7 text-rose-600" />
+                <div className="mx-auto flex size-16 items-center justify-center rounded-full bg-rose-light">
+                  <Truck className="size-7 text-navy" />
                 </div>
                 <h2 className="mt-4 font-heading text-xl font-semibold text-navy">
                   Order {order.order_number}
@@ -226,7 +226,7 @@ function TrackOrderContent() {
                             <div
                               className={cn(
                                 "absolute left-5 top-10 h-[calc(100%-20px)] w-0.5",
-                                completed ? "bg-rose-300" : "bg-rose-border/60"
+                                completed ? "bg-rose-border" : "bg-rose-border/60"
                               )}
                             />
                           )}
@@ -234,7 +234,7 @@ function TrackOrderContent() {
                             className={cn(
                               "relative z-10 flex size-10 shrink-0 items-center justify-center rounded-full",
                               completed
-                                ? "bg-rose-200 text-navy"
+                                ? "bg-rose-border text-navy"
                                 : "border-2 border-rose-border bg-white text-muted-foreground"
                             )}
                           >
@@ -284,7 +284,7 @@ function TrackOrderContent() {
                         {order.items.map((item: any) => (
                           <div key={item.id} className="flex items-center justify-between">
                             <div className="flex items-center gap-3">
-                              <div className="flex size-10 items-center justify-center rounded-xl bg-gradient-to-br from-rose-100 to-pink-50">
+                              <div className="flex size-10 items-center justify-center rounded-xl bg-gradient-to-br from-rose-light to-teal-light">
                                 <Package className="size-4 text-rose-primary/50" />
                               </div>
                               <div>
@@ -323,6 +323,7 @@ function TrackOrderContent() {
         </AnimatePresence>
       </Container>
     </Section>
+    </>
   )
 }
 

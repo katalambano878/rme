@@ -107,7 +107,7 @@ export default function SmsDebuggerPage() {
                 <input
                   id="sms-phone"
                   type="text"
-                  className="w-full rounded-lg border border-gray-200 bg-[#F3F4F6] px-3 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 outline-none transition-colors focus:border-rose-400 focus:bg-white focus:ring-2 focus:ring-rose-400/25"
+                  className="w-full rounded-lg border border-gray-200 bg-[#F3F4F6] px-3 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 outline-none transition-colors focus:border-rose-primary focus:bg-white focus:ring-2 focus:ring-navy"
                   placeholder="024"
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
@@ -122,7 +122,7 @@ export default function SmsDebuggerPage() {
                 <div
                   className={`rounded-lg border px-3 py-2 text-xs ${
                     liveNorm.looksValidGh
-                      ? 'border-rose-200 bg-pink-50/90 text-rose-800'
+                      ? 'border-rose-border bg-rose-light text-navy'
                       : 'border-amber-200 bg-amber-50/80 text-amber-900'
                   }`}
                 >
@@ -137,7 +137,7 @@ export default function SmsDebuggerPage() {
                 </label>
                 <textarea
                   id="sms-message"
-                  className="w-full min-h-[120px] resize-y rounded-lg border border-gray-200 bg-[#F3F4F6] px-3 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 outline-none transition-colors focus:border-rose-400 focus:bg-white focus:ring-2 focus:ring-rose-400/25"
+                  className="w-full min-h-[120px] resize-y rounded-lg border border-gray-200 bg-[#F3F4F6] px-3 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 outline-none transition-colors focus:border-rose-primary focus:bg-white focus:ring-2 focus:ring-navy"
                   value={message}
                   onChange={(e) => setMessage(e.target.value)}
                   maxLength={1000}
@@ -149,7 +149,7 @@ export default function SmsDebuggerPage() {
                 type="button"
                 onClick={handleSend}
                 disabled={isPending}
-                className="w-full rounded-lg bg-rose-500 py-3 text-center text-sm font-semibold text-white shadow-sm transition-colors hover:bg-rose-600 disabled:cursor-not-allowed disabled:opacity-60"
+                className="w-full rounded-lg bg-rose-light0 py-3 text-center text-sm font-semibold text-white shadow-sm transition-colors hover:bg-navy disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {isPending ? 'Sending…' : 'Send SMS'}
               </button>
@@ -173,7 +173,7 @@ export default function SmsDebuggerPage() {
                 <button
                   type="button"
                   onClick={() => handleCopy('all', { dryRun: dryResult, send: sendResult })}
-                  className="text-xs font-medium text-rose-600 hover:text-rose-700 hover:underline"
+                  className="text-xs font-medium text-navy hover:text-navy hover:underline"
                 >
                   {copied === 'all' ? 'Copied' : 'Copy all'}
                 </button>
@@ -194,7 +194,7 @@ export default function SmsDebuggerPage() {
                         <button
                           type="button"
                           onClick={() => handleCopy('dry', dryResult)}
-                          className="text-xs text-rose-600 hover:underline"
+                          className="text-xs text-navy hover:underline"
                         >
                           {copied === 'dry' ? 'Copied' : 'Copy'}
                         </button>
@@ -211,7 +211,7 @@ export default function SmsDebuggerPage() {
                         <button
                           type="button"
                           onClick={() => handleCopy('send', sendResult)}
-                          className="text-xs text-rose-600 hover:underline"
+                          className="text-xs text-navy hover:underline"
                         >
                           {copied === 'send' ? 'Copied' : 'Copy'}
                         </button>
@@ -249,7 +249,7 @@ export default function SmsDebuggerPage() {
                     <div className="flex flex-wrap items-center gap-2">
                       <span
                         className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${
-                          status.smsVas.configured ? 'bg-pink-100 text-rose-800' : 'bg-red-100 text-red-800'
+                          status.smsVas.configured ? 'bg-rose-light text-navy' : 'bg-red-100 text-red-800'
                         }`}
                       >
                         {status.smsVas.configured ? 'Configured' : 'Missing'}
@@ -272,7 +272,7 @@ export default function SmsDebuggerPage() {
                 <button
                   type="button"
                   onClick={() => void loadStatus()}
-                  className="text-sm font-medium text-rose-600 hover:text-rose-700"
+                  className="text-sm font-medium text-navy hover:text-navy"
                 >
                   Refresh status
                 </button>

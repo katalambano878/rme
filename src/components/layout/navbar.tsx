@@ -22,7 +22,7 @@ import { cn } from "@/lib/utils"
 const leftNavLinks = [
   { href: "/shop", label: "Shop" },
   { href: "/collections", label: "Categories" },
-  { href: "/shop", label: "Sale" },
+  { href: "/shop?category=preorders", label: "Preorders" },
 ]
 
 /** Mobile drawer — full primary destinations */
@@ -60,11 +60,11 @@ export function Navbar() {
     onDarkHero
       ? "text-white [text-shadow:0_1px_6px_rgba(0,0,0,0.45)] hover:bg-white/15"
       : "text-navy hover:bg-rose-light",
-    isHome && heroSolid && "hover:bg-rose-100/90"
+    isHome && heroSolid && "hover:bg-rose-light/90"
   )
   const badge = cn(
     "absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] font-semibold",
-    onDarkHero ? "bg-white text-navy shadow-sm" : "bg-rose-200 text-navy"
+    onDarkHero ? "bg-white text-navy shadow-sm" : "bg-rose-border text-navy"
   )
   const editorialNavLink = cn(
     "font-sans text-[11px] font-semibold uppercase tracking-[0.18em] transition-colors",
@@ -120,13 +120,14 @@ export function Navbar() {
               <Image
                 src={BRAND_LOGO_SRC}
                 alt={BRAND_LOGO_ALT}
-                width={160}
-                height={48}
+                width={168}
+                height={140}
                 className={cn(
-                  "h-8 w-auto max-w-[min(42vw,10rem)] object-contain sm:h-9",
+                  "h-10 w-auto max-w-[min(42vw,11rem)] object-contain sm:h-11",
                   onDarkHero && "drop-shadow-[0_2px_14px_rgba(0,0,0,0.5)]"
                 )}
                 priority
+                unoptimized
               />
             </Link>
 
@@ -187,13 +188,14 @@ export function Navbar() {
                 <Image
                   src={BRAND_LOGO_SRC}
                   alt={BRAND_LOGO_ALT}
-                  width={180}
-                  height={54}
+                  width={200}
+                  height={168}
                   className={cn(
-                    "h-10 w-auto max-w-[14rem] object-contain xl:h-11",
+                    "h-11 w-auto max-w-[15rem] object-contain xl:h-12",
                     onDarkHero && "drop-shadow-[0_2px_14px_rgba(0,0,0,0.5)]"
                   )}
                   priority
+                  unoptimized
                 />
               </Link>
             </div>
@@ -235,9 +237,10 @@ export function Navbar() {
                 <Image
                   src={BRAND_LOGO_SRC}
                   alt=""
-                  width={140}
-                  height={42}
-                  className="h-8 w-auto max-w-[10rem] object-contain"
+                  width={168}
+                  height={140}
+                  className="h-10 w-auto max-w-[11rem] object-contain"
+                  unoptimized
                 />
               </span>
             </SheetTitle>

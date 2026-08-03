@@ -3,7 +3,6 @@
 import { motion } from "framer-motion"
 import { Container } from "@/components/shared/container"
 import { Section } from "@/components/shared/section"
-import { Heading } from "@/components/shared/heading"
 import { Separator } from "@/components/ui/separator"
 import {
   BRAND_LEGAL_NAME,
@@ -11,6 +10,8 @@ import {
   CONTACT_EMAIL,
   PHONE_DISPLAY_PRIMARY,
 } from "@/lib/brand"
+import { HERO_IMAGES } from "@/lib/hero-images"
+import { PageHero } from "@/components/shared/page-hero"
 
 const contactLine = PHONE_DISPLAY_PRIMARY
   ? `For privacy-related questions or requests, contact us at ${CONTACT_EMAIL} or ${PHONE_DISPLAY_PRIMARY}.`
@@ -78,23 +79,23 @@ const fadeUp = {
 
 export default function PrivacyPolicyPage() {
   return (
-    <Section className="bg-gradient-to-b from-rose-light/50 to-white">
-      <Container>
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] as const }}
-          className="mx-auto max-w-3xl"
-        >
-          <Heading
-            as="h1"
-            align="center"
-            subtitle={`At ${BRAND_NAME}, we value your privacy and are committed to protecting your personal information.`}
-          >
-            Privacy Policy
-          </Heading>
+    <>
+      <PageHero
+        imageSrc={HERO_IMAGES.purse.src}
+        imageAlt={HERO_IMAGES.purse.alt}
+        title="Privacy Policy"
+        subtitle={`At ${BRAND_NAME}, we value your privacy and are committed to protecting your personal information.`}
+      />
 
-          <p className="mt-6 text-center text-sm text-muted-foreground">
+      <Section className="bg-white">
+        <Container>
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] as const }}
+            className="mx-auto max-w-3xl"
+          >
+          <p className="text-center text-sm text-muted-foreground">
             Effective Date: 1 January 2026 · Last Updated: March 2026
           </p>
 
@@ -151,5 +152,6 @@ export default function PrivacyPolicyPage() {
         </motion.div>
       </Container>
     </Section>
+    </>
   )
 }

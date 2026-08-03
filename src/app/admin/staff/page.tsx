@@ -215,7 +215,7 @@ export default function AdminStaffPage() {
   const roleBadge = (role: string) => {
     const map: Record<string, string> = {
       superadmin: 'bg-violet-100 text-violet-900',
-      admin: 'bg-rose-100 text-rose-900',
+      admin: 'bg-rose-light text-navy',
       staff: 'bg-blue-100 text-blue-900',
       customer: 'bg-gray-100 text-gray-700',
     };
@@ -247,7 +247,7 @@ export default function AdminStaffPage() {
               setAddPerms(defaultStaffPermissions());
               setShowAdd(true);
             }}
-            className="inline-flex items-center justify-center gap-2 rounded-lg bg-rose-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-rose-700 cursor-pointer"
+            className="inline-flex items-center justify-center gap-2 rounded-lg bg-navy px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-navy cursor-pointer"
           >
             <i className="ri-user-add-line text-lg" aria-hidden />
             Add staff
@@ -263,7 +263,7 @@ export default function AdminStaffPage() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search by name, email, or role…"
-            className="w-full pl-10 pr-4 py-2.5 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-rose-400 focus:border-rose-400 text-sm"
+            className="w-full pl-10 pr-4 py-2.5 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-navy focus:border-rose-primary text-sm"
           />
         </div>
         <label className="inline-flex items-center gap-2 text-sm text-gray-700 cursor-pointer select-none">
@@ -271,7 +271,7 @@ export default function AdminStaffPage() {
             type="checkbox"
             checked={includeCustomers}
             onChange={(e) => setIncludeCustomers(e.target.checked)}
-            className="w-4 h-4 text-rose-600 border-gray-300 rounded focus:ring-rose-400"
+            className="w-4 h-4 text-navy border-gray-300 rounded focus:ring-navy"
           />
           Include customers
         </label>
@@ -330,7 +330,7 @@ export default function AdminStaffPage() {
                           <button
                             type="button"
                             onClick={() => openPermModal(r)}
-                            className="text-sm font-medium text-rose-700 hover:text-rose-900 underline-offset-2 hover:underline cursor-pointer"
+                            className="text-sm font-medium text-navy hover:text-navy underline-offset-2 hover:underline cursor-pointer"
                           >
                             Permissions
                           </button>
@@ -340,7 +340,7 @@ export default function AdminStaffPage() {
                             value={r.role}
                             disabled={savingId === r.id}
                             onChange={(e) => updateRole(r.id, e.target.value)}
-                            className="px-3 py-2 border-2 border-gray-300 rounded-lg text-sm font-medium focus:ring-2 focus:ring-rose-400 focus:border-rose-400 cursor-pointer disabled:opacity-50"
+                            className="px-3 py-2 border-2 border-gray-300 rounded-lg text-sm font-medium focus:ring-2 focus:ring-navy focus:border-rose-primary cursor-pointer disabled:opacity-50"
                           >
                             {ROLE_OPTIONS.map((o) => (
                               <option key={o.value} value={o.value}>
@@ -400,7 +400,7 @@ export default function AdminStaffPage() {
                   required
                   value={addEmail}
                   onChange={(e) => setAddEmail(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-rose-400 focus:border-rose-400"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-navy focus:border-rose-primary"
                   autoComplete="off"
                 />
               </div>
@@ -412,7 +412,7 @@ export default function AdminStaffPage() {
                   minLength={12}
                   value={addPassword}
                   onChange={(e) => setAddPassword(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-rose-400 focus:border-rose-400"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-navy focus:border-rose-primary"
                   autoComplete="new-password"
                 />
                 <p className="text-xs text-gray-500 mt-1">At least 12 characters. They can change it after signing in.</p>
@@ -423,7 +423,7 @@ export default function AdminStaffPage() {
                   type="text"
                   value={addName}
                   onChange={(e) => setAddName(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-rose-400 focus:border-rose-400"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-navy focus:border-rose-primary"
                 />
               </div>
               <div>
@@ -431,7 +431,7 @@ export default function AdminStaffPage() {
                 <select
                   value={addRole}
                   onChange={(e) => setAddRole(e.target.value as 'staff' | 'admin')}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-rose-400 focus:border-rose-400"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-navy focus:border-rose-primary"
                 >
                   <option value="staff">Staff</option>
                   {myRole === 'superadmin' && <option value="admin">Admin</option>}
@@ -451,7 +451,7 @@ export default function AdminStaffPage() {
                           type="checkbox"
                           checked={addPerms[key] ?? false}
                           onChange={(e) => setAddPerms((prev) => ({ ...prev, [key]: e.target.checked }))}
-                          className="w-4 h-4 text-rose-600 border-gray-300 rounded focus:ring-rose-400"
+                          className="w-4 h-4 text-navy border-gray-300 rounded focus:ring-navy"
                         />
                         {label}
                       </label>
@@ -466,7 +466,7 @@ export default function AdminStaffPage() {
                 <button
                   type="submit"
                   disabled={addSubmitting}
-                  className="px-4 py-2 text-sm font-semibold text-white bg-rose-600 hover:bg-rose-700 rounded-lg disabled:opacity-50 cursor-pointer"
+                  className="px-4 py-2 text-sm font-semibold text-white bg-navy hover:bg-navy rounded-lg disabled:opacity-50 cursor-pointer"
                 >
                   {addSubmitting ? 'Creating…' : 'Create account'}
                 </button>
@@ -499,7 +499,7 @@ export default function AdminStaffPage() {
                       type="checkbox"
                       checked={permDraft[key] ?? false}
                       onChange={(e) => setPermDraft((prev) => ({ ...prev, [key]: e.target.checked }))}
-                      className="w-4 h-4 text-rose-600 border-gray-300 rounded focus:ring-rose-400"
+                      className="w-4 h-4 text-navy border-gray-300 rounded focus:ring-navy"
                     />
                     {label}
                   </label>
@@ -513,7 +513,7 @@ export default function AdminStaffPage() {
                   type="button"
                   onClick={savePermModal}
                   disabled={permSaving}
-                  className="px-4 py-2 text-sm font-semibold text-white bg-rose-600 hover:bg-rose-700 rounded-lg disabled:opacity-50 cursor-pointer"
+                  className="px-4 py-2 text-sm font-semibold text-white bg-navy hover:bg-navy rounded-lg disabled:opacity-50 cursor-pointer"
                 >
                   {permSaving ? 'Saving…' : 'Save'}
                 </button>

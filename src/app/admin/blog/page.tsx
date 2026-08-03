@@ -56,7 +56,7 @@ export default function AdminBlogPage() {
   };
 
   const statusColors: Record<string, string> = {
-    Published: 'bg-rose-100 text-rose-800',
+    Published: 'bg-rose-light text-navy',
     Draft: 'bg-gray-100 text-gray-700',
   };
 
@@ -87,7 +87,7 @@ export default function AdminBlogPage() {
         </div>
         <Link
           href="/admin/blog/new"
-          className="bg-rose-500 hover:bg-rose-600 text-white px-6 py-3 rounded-lg font-semibold transition-colors whitespace-nowrap"
+          className="bg-rose-light0 hover:bg-navy text-white px-6 py-3 rounded-lg font-semibold transition-colors whitespace-nowrap"
         >
           <i className="ri-add-line mr-2"></i>
           New Post
@@ -101,7 +101,7 @@ export default function AdminBlogPage() {
         </div>
         <div className="bg-white rounded-xl border-2 border-gray-200 p-4">
           <p className="text-sm text-gray-600 mb-1">Published</p>
-          <p className="text-2xl font-bold text-rose-700">{publishedCount}</p>
+          <p className="text-2xl font-bold text-navy">{publishedCount}</p>
         </div>
         <div className="bg-white rounded-xl border-2 border-gray-200 p-4">
           <p className="text-sm text-gray-600 mb-1">Drafts</p>
@@ -122,7 +122,7 @@ export default function AdminBlogPage() {
                 type="button"
                 onClick={() => setViewMode('grid')}
                 className={`w-10 h-10 flex items-center justify-center transition-colors ${
-                  viewMode === 'grid' ? 'bg-rose-500 text-white' : 'bg-white text-gray-700 hover:bg-gray-50'
+                  viewMode === 'grid' ? 'bg-rose-light0 text-white' : 'bg-white text-gray-700 hover:bg-gray-50'
                 }`}
               >
                 <i className="ri-grid-line text-xl"></i>
@@ -131,7 +131,7 @@ export default function AdminBlogPage() {
                 type="button"
                 onClick={() => setViewMode('list')}
                 className={`w-10 h-10 flex items-center justify-center border-l-2 border-gray-300 transition-colors ${
-                  viewMode === 'list' ? 'bg-rose-500 text-white' : 'bg-white text-gray-700 hover:bg-gray-50'
+                  viewMode === 'list' ? 'bg-rose-light0 text-white' : 'bg-white text-gray-700 hover:bg-gray-50'
                 }`}
               >
                 <i className="ri-list-check text-xl"></i>
@@ -148,7 +148,7 @@ export default function AdminBlogPage() {
         ) : posts.length === 0 ? (
           <div className="p-12 text-center text-gray-500">
             <p className="text-lg mb-2">No blog posts yet</p>
-            <Link href="/admin/blog/new" className="text-rose-700 font-semibold hover:underline">
+            <Link href="/admin/blog/new" className="text-navy font-semibold hover:underline">
               Create your first post
             </Link>
           </div>
@@ -161,7 +161,7 @@ export default function AdminBlogPage() {
                     type="checkbox"
                     checked={selectedPosts.includes(post.id)}
                     onChange={() => handleSelectPost(post.id)}
-                    className="absolute top-3 left-3 w-5 h-5 text-rose-700 border-gray-300 rounded focus:ring-rose-400 cursor-pointer z-10"
+                    className="absolute top-3 left-3 w-5 h-5 text-navy border-gray-300 rounded focus:ring-navy cursor-pointer z-10"
                   />
                   <div className="aspect-video bg-gray-100 overflow-hidden">
                     {post.image
@@ -172,7 +172,7 @@ export default function AdminBlogPage() {
                 </div>
                 <div className="p-4">
                   <div className="flex items-center justify-between mb-3">
-                    <span className="text-xs font-semibold text-rose-700 truncate max-w-[50%]">{post.category}</span>
+                    <span className="text-xs font-semibold text-navy truncate max-w-[50%]">{post.category}</span>
                     <span className={`px-2 py-1 rounded-full text-xs font-semibold shrink-0 ${statusColors[post.status]}`}>
                       {post.status}
                     </span>
@@ -185,14 +185,14 @@ export default function AdminBlogPage() {
                   <div className="flex items-center space-x-2">
                     <Link
                       href={`/admin/blog/${post.id}`}
-                      className="flex-1 bg-rose-500 hover:bg-rose-600 text-white py-2 rounded-lg text-sm font-medium text-center transition-colors whitespace-nowrap"
+                      className="flex-1 bg-rose-light0 hover:bg-navy text-white py-2 rounded-lg text-sm font-medium text-center transition-colors whitespace-nowrap"
                     >
                       Edit Post
                     </Link>
                     <Link
                       href={`/blog/${post.slug}`}
                       target="_blank"
-                      className="w-9 h-9 flex items-center justify-center border-2 border-gray-300 text-gray-700 hover:border-rose-400 hover:text-rose-600 rounded-lg transition-colors"
+                      className="w-9 h-9 flex items-center justify-center border-2 border-gray-300 text-gray-700 hover:border-rose-primary hover:text-navy rounded-lg transition-colors"
                       title="View on site"
                     >
                       <i className="ri-eye-line"></i>
@@ -212,7 +212,7 @@ export default function AdminBlogPage() {
                       type="checkbox"
                       checked={posts.length > 0 && selectedPosts.length === posts.length}
                       onChange={handleSelectAll}
-                      className="w-4 h-4 text-rose-700 border-gray-300 rounded focus:ring-rose-400 cursor-pointer"
+                      className="w-4 h-4 text-navy border-gray-300 rounded focus:ring-navy cursor-pointer"
                     />
                   </th>
                   <th className="text-left py-4 px-4 text-sm font-semibold text-gray-700">Post</th>
@@ -230,7 +230,7 @@ export default function AdminBlogPage() {
                         type="checkbox"
                         checked={selectedPosts.includes(post.id)}
                         onChange={() => handleSelectPost(post.id)}
-                        className="w-4 h-4 text-rose-700 border-gray-300 rounded focus:ring-rose-400 cursor-pointer"
+                        className="w-4 h-4 text-navy border-gray-300 rounded focus:ring-navy cursor-pointer"
                       />
                     </td>
                     <td className="py-4 px-4">
@@ -242,7 +242,7 @@ export default function AdminBlogPage() {
                           }
                         </div>
                         <div className="min-w-0">
-                          <Link href={`/admin/blog/${post.id}`} className="font-semibold text-gray-900 hover:text-rose-700 line-clamp-2">
+                          <Link href={`/admin/blog/${post.id}`} className="font-semibold text-gray-900 hover:text-navy line-clamp-2">
                             {post.title}
                           </Link>
                           <p className="text-sm text-gray-500 mt-1">{post.publishDate}</p>
@@ -260,7 +260,7 @@ export default function AdminBlogPage() {
                       <div className="flex items-center space-x-2">
                         <Link
                           href={`/admin/blog/${post.id}`}
-                          className="w-8 h-8 flex items-center justify-center text-gray-600 hover:text-rose-700 hover:bg-pink-50 rounded-lg transition-colors"
+                          className="w-8 h-8 flex items-center justify-center text-gray-600 hover:text-navy hover:bg-rose-light rounded-lg transition-colors"
                           title="Edit"
                         >
                           <i className="ri-edit-line text-lg"></i>
@@ -268,7 +268,7 @@ export default function AdminBlogPage() {
                         <Link
                           href={`/blog/${post.slug}`}
                           target="_blank"
-                          className="w-8 h-8 flex items-center justify-center text-gray-600 hover:text-rose-700 hover:bg-pink-50 rounded-lg transition-colors"
+                          className="w-8 h-8 flex items-center justify-center text-gray-600 hover:text-navy hover:bg-rose-light rounded-lg transition-colors"
                           title="View"
                         >
                           <i className="ri-eye-line text-lg"></i>
