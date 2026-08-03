@@ -12,12 +12,17 @@ import { cn } from "@/lib/utils"
 
 export type TrendingCarouselProps = {
   products: Product[]
+  limit?: number
   className?: string
 }
 
-export function TrendingCarousel({ products, className }: TrendingCarouselProps) {
+export function TrendingCarousel({
+  products,
+  limit = 8,
+  className,
+}: TrendingCarouselProps) {
   const scrollRef = useRef<HTMLDivElement>(null)
-  const trending = products.slice(0, 6)
+  const trending = products.slice(0, limit)
 
   function scroll(direction: "left" | "right") {
     if (!scrollRef.current) return

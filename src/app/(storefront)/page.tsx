@@ -40,12 +40,14 @@ import {
   fetchStorefrontCategoriesWithCounts,
 } from "@/lib/data/storefront-products"
 
+const HOME_PRODUCT_LIMIT = 8
+
 export default async function HomePage() {
   const [newArrivals, curatedPicks, featuredProducts, allCategories, homeCategoryLimit] =
     await Promise.all([
-      fetchNewArrivals(4),
-      fetchBestSellers(4),
-      fetchTrendingProducts(6),
+      fetchNewArrivals(HOME_PRODUCT_LIMIT),
+      fetchBestSellers(HOME_PRODUCT_LIMIT),
+      fetchTrendingProducts(HOME_PRODUCT_LIMIT),
       fetchStorefrontCategoriesWithCounts(),
       fetchHomepageCategoryLimit(),
     ])
@@ -60,18 +62,23 @@ export default async function HomePage() {
 
       <CategoriesRow categories={categories} />
 
-      {featuredProducts.length > 0 && (
-        <TrendingCarousel products={featuredProducts} className="pt-0 sm:pt-4" />
-      )}
-
-      <Section className="bg-rose-light pt-12 sm:pt-16">
+      <Section className="bg-rose-light pt-8 sm:pt-12">
         <Container>
           <FeaturedCollections
             newArrivals={newArrivals}
             curatedPicks={curatedPicks}
+            limit={HOME_PRODUCT_LIMIT}
           />
         </Container>
       </Section>
+
+      {featuredProducts.length > 0 && (
+        <TrendingCarousel
+          products={featuredProducts}
+          limit={HOME_PRODUCT_LIMIT}
+          className="pt-0 sm:pt-4"
+        />
+      )}
 
       <PromoBannersSection />
 

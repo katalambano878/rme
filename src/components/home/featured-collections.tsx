@@ -15,17 +15,19 @@ const tabs = [
 export type FeaturedCollectionsProps = {
   newArrivals: Product[]
   curatedPicks: Product[]
+  limit?: number
 }
 
 function getTabProducts(
   id: string,
   data: FeaturedCollectionsProps,
+  limit: number,
 ): Product[] {
   switch (id) {
     case "new-arrivals":
-      return data.newArrivals.slice(0, 4)
+      return data.newArrivals.slice(0, limit)
     case "best-sellers":
-      return data.curatedPicks.slice(0, 4)
+      return data.curatedPicks.slice(0, limit)
     default:
       return []
   }
@@ -34,12 +36,13 @@ function getTabProducts(
 export function FeaturedCollections({
   newArrivals,
   curatedPicks,
+  limit = 8,
 }: FeaturedCollectionsProps) {
   const [activeTab, setActiveTab] = useState<string>("new-arrivals")
   const activeProducts = getTabProducts(activeTab, {
     newArrivals,
     curatedPicks,
-  })
+  }, limit)
 
   return (
     <>
