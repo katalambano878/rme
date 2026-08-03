@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import Link from 'next/link';
-import { supabase } from '@/lib/supabase';
+import { api } from '@/lib/api';
 
 export default function ConversationsPage() {
   const [conversations, setConversations] = useState<any[]>([]);
@@ -32,37 +32,26 @@ export default function ConversationsPage() {
     setLoading(true);
     const offset = (page - 1) * limit;
 
-    let query = supabase
-      .from('chat_conversations')
-      .select('*', { count: 'exact' });
+    const params = new URLSearchParams({
+      page: String(page),
+      limit: String(limit),
+    })
+    if (debouncedSearch) params.set('search', debouncedSearch)
+    if (sentimentFilter) params.set('sentiment', sentimentFilter)
+    if (resolvedFilter === 'true') params.set('resolved', 'true')
+    else if (resolvedFilter === 'false') params.set('resolved', 'false')
+    else if (resolvedFilter === 'escalated') params.set('resolved', 'escalated')
 
-    if (debouncedSearch) {
-      query = query.or(
-        `customer_name.ilike.%${debouncedSearch}%,customer_email.ilike.%${debouncedSearch}%,summary.ilike.%${debouncedSearch}%,session_id.ilike.%${debouncedSearch}%`
-      );
-    }
-    if (sentimentFilter) {
-      query = query.eq('sentiment', sentimentFilter);
-    }
-    if (resolvedFilter === 'true') {
-      query = query.eq('is_resolved', true);
-    } else if (resolvedFilter === 'false') {
-      query = query.or('is_resolved.eq.false,is_resolved.is.null');
-    } else if (resolvedFilter === 'escalated') {
-      query = query.eq('is_escalated', true);
-    }
-
-    const { data, count, error } = await query
-      .order('updated_at', { ascending: false })
-      .range(offset, offset + limit - 1);
-
-    if (error) {
-      console.error('Search error:', error);
-      setConversations([]);
-      setTotal(0);
-    } else {
-      setConversations(data || []);
-      setTotal(count ?? data?.length ?? 0);
+    try {
+      const { data, total } = await api<{ data: any[]; total: number }>(
+        `/api/support/conversations?${params}`,
+      )
+      setConversations(data || [])
+      setTotal(total ?? data?.length ?? 0)
+    } catch (error) {
+      console.error('Search error:', error)
+      setConversations([])
+      setTotal(0)
     }
     setLoading(false);
   }, [page, debouncedSearch, sentimentFilter, resolvedFilter]);

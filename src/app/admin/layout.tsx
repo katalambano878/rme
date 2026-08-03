@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname, useRouter } from 'next/navigation';
-import { supabase } from '@/lib/supabase';
+import { api } from '@/lib/api';
 import { BRAND_LOGO_ALT, BRAND_LOGO_SRC, BRAND_NAME } from '@/lib/brand';
 import { canAccessAdminPanel, canManageStaffRoles } from '@/lib/admin-role-access';
 import { firstAccessibleAdminPath, staffCanAccessPath } from '@/lib/staff-permissions';
@@ -29,70 +29,35 @@ export default function AdminLayout({
 
   useEffect(() => {
     async function checkAuth() {
-      const { data: { session } } = await supabase.auth.getSession();
-
       if (pathname === '/admin/login') {
         setIsLoading(false);
         return;
       }
 
-      if (!session) {
+      try {
+        const data = await api<{
+          user: { id: string; email: string; role: string; full_name?: string | null };
+          profile: { role?: string; permissions?: Record<string, unknown> | null };
+        }>('/api/auth/me');
+
+        const role = data.profile?.role || data.user.role;
+        if (!canAccessAdminPanel(role)) {
+          await api('/api/auth/logout', { method: 'POST' });
+          router.push('/admin/login?error=unauthorized');
+          return;
+        }
+
+        setUser(data.user);
+        setUserRole(role);
+        setUserPermissions(data.profile?.permissions ?? null);
+        setIsAuthenticated(true);
+        setIsLoading(false);
+      } catch {
         router.push('/admin/login');
-        return;
       }
-
-      // Ensure auth cookie is set (in case user already had a session from before)
-      document.cookie = `sb-access-token=${session.access_token}; path=/; max-age=${60 * 60 * 24 * 7}; SameSite=Lax; Secure`;
-
-      // Role + optional permissions (fallback if permissions column missing in DB)
-      const first = await supabase
-        .from('profiles')
-        .select('role, permissions')
-        .eq('id', session.user.id)
-        .single();
-      const profileRes =
-        first.error && /permissions|schema cache|PGRST204/i.test(String(first.error.message))
-          ? await supabase.from('profiles').select('role').eq('id', session.user.id).single()
-          : first;
-      const profile = profileRes.data as { role?: string; permissions?: Record<string, unknown> | null } | null;
-      const profileError = profileRes.error;
-
-      if (profileError || !profile?.role) {
-        console.error('Failed to fetch user profile', profileError);
-        router.push('/admin/login');
-        return;
-      }
-
-      // Staff, admin, or superadmin may use the admin app
-      if (!canAccessAdminPanel(profile.role)) {
-        console.warn('User does not have a staff/admin role');
-        document.cookie = 'sb-access-token=; path=/; max-age=0; SameSite=Lax; Secure';
-        await supabase.auth.signOut();
-        router.push('/admin/login?error=unauthorized');
-        return;
-      }
-
-      setUser(session.user);
-      setUserRole(profile.role);
-      setUserPermissions(profile.permissions ?? null);
-      setIsAuthenticated(true);
-      setIsLoading(false);
     }
 
     checkAuth();
-
-    // Keep cookie in sync when session refreshes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === 'TOKEN_REFRESHED' && session) {
-        document.cookie = `sb-access-token=${session.access_token}; path=/; max-age=${60 * 60 * 24 * 7}; SameSite=Lax; Secure`;
-      }
-      if (event === 'SIGNED_OUT') {
-        document.cookie = 'sb-access-token=; path=/; max-age=0; SameSite=Lax; Secure';
-        document.cookie = 'sb-refresh-token=; path=/; max-age=0; SameSite=Lax; Secure';
-      }
-    });
-
-    return () => subscription.unsubscribe();
   }, [pathname, router]);
 
   /** Block direct URL access to admin sections staff accounts are not allowed to use. */
@@ -116,28 +81,9 @@ export default function AdminLayout({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [showUserMenu]);
 
-  // Fetch Modules Effect
+  // Modules table may not exist on plain Postgres — keep core links visible.
   useEffect(() => {
-    async function fetchModules() {
-      try {
-        const { data, error } = await supabase.from('store_modules').select('id, enabled');
-        if (error) {
-          // Current project schema does not include store_modules; keep module links visible.
-          if ((error as any)?.code === 'PGRST205') {
-            setEnabledModules(['customer-insights', 'notifications', 'blog']);
-            return;
-          }
-          console.warn('Error fetching modules:', error);
-          return;
-        }
-        if (data) {
-          setEnabledModules(data.filter((m: any) => m.enabled).map((m: any) => m.id));
-        }
-      } catch (err) {
-        console.warn('Fetch modules failed:', err);
-      }
-    }
-    fetchModules();
+    setEnabledModules(['customer-insights', 'notifications', 'blog']);
   }, []);
 
   // Screen size check for initial state
@@ -158,10 +104,11 @@ export default function AdminLayout({
   }, []);
 
   const handleLogout = async () => {
-    // Clear auth cookies set during login
-    document.cookie = 'sb-access-token=; path=/; max-age=0; SameSite=Lax; Secure';
-    document.cookie = 'sb-refresh-token=; path=/; max-age=0; SameSite=Lax; Secure';
-    await supabase.auth.signOut();
+    try {
+      await api('/api/auth/logout', { method: 'POST' });
+    } catch {
+      /* ignore */
+    }
     router.push('/admin/login');
   };
 

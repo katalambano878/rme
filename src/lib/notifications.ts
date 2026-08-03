@@ -1,5 +1,5 @@
 import { Resend } from 'resend';
-import { supabaseAdmin } from '@/lib/supabase-admin';
+import { query } from '@/lib/db';
 import { escapeHtml } from '@/lib/sanitize';
 import { BRAND_NAME, BRAND_TAGLINE, CONTACT_EMAIL, SITE_DOMAIN } from '@/lib/brand';
 
@@ -195,12 +195,12 @@ export async function sendOrderConfirmation(order: any) {
 
     let shippingNotes: string[] = [];
     try {
-        const { data: items } = await supabaseAdmin
-            .from('order_items')
-            .select('name_snapshot')
-            .eq('order_id', id);
+        const items = await query<{ name_snapshot: string }>(
+            `SELECT name_snapshot FROM order_items WHERE order_id = $1`,
+            [id],
+        );
         // No preorder notes without a metadata column — kept for future use
-        void items;
+        void items.rows;
     } catch {
         console.warn('[Notification] Could not fetch order items for shipping notes');
     }

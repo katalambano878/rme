@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { createAdminClient } from "@/lib/supabase/admin"
+import { query, queryOne } from "@/lib/db"
 import { checkRateLimit, getClientIdentifier } from "@/lib/rate-limit"
 
 /**
@@ -16,8 +16,6 @@ import { checkRateLimit, getClientIdentifier } from "@/lib/rate-limit"
 
 export async function POST(req: NextRequest) {
   const ip = getClientIdentifier(req)
-  // Tight limit: order tracking is a low-frequency action, and this endpoint
-  // must not become an order-number/email enumeration oracle.
   const rate = checkRateLimit(`track-order:${ip}`, { maxRequests: 10, windowSeconds: 60 })
   if (!rate.success) {
     return NextResponse.json(
@@ -43,50 +41,42 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Please enter a valid email address." }, { status: 400 })
   }
 
-  const supabase = createAdminClient()
+  const order = await queryOne<{
+    id: string
+    order_number: string
+    status: string
+    grand_total: number
+    guest_email: string | null
+    user_id: string | null
+    created_at: string
+    shipping_address: Record<string, unknown> | null
+  }>(
+    `SELECT id, order_number, status, grand_total, guest_email, user_id, created_at, shipping_address
+     FROM orders
+     WHERE order_number = $1
+     LIMIT 1`,
+    [orderNumber],
+  )
 
-  const { data: order, error } = await supabase
-    .from("orders")
-    .select(
-      `
-      id,
-      order_number,
-      status,
-      grand_total,
-      guest_email,
-      user_id,
-      created_at,
-      shipping_address,
-      payments(status),
-      order_items(id, name_snapshot, sku_snapshot, quantity, unit_price)
-    `,
-    )
-    .eq("order_number", orderNumber)
-    .maybeSingle()
-
-  if (error || !order) {
+  if (!order) {
     return NextResponse.json(
       { error: "Order not found. Please check your order number and try again." },
       { status: 404 },
     )
   }
 
-  // Verify ownership: the supplied email must match how the order was placed.
-  // Guest checkouts store it in guest_email; the storefront also snapshots it
-  // inside shipping_address; account orders resolve via the profile email.
   const guestEmail = (order.guest_email || "").toLowerCase()
   const shippingEmail = (
-    (order.shipping_address as Record<string, unknown> | null)?.email as string | undefined || ""
+    (order.shipping_address?.email as string | undefined) || ""
   ).toLowerCase()
 
   let emailMatches = (!!guestEmail && guestEmail === email) || (!!shippingEmail && shippingEmail === email)
 
   if (!emailMatches && order.user_id) {
-    const { data: ownerProfile } = await supabase
-      .from("profiles")
-      .select("email")
-      .eq("id", order.user_id)
-      .maybeSingle()
+    const ownerProfile = await queryOne<{ email: string | null }>(
+      `SELECT email FROM profiles WHERE id = $1 LIMIT 1`,
+      [order.user_id],
+    )
     const ownerEmail = (ownerProfile?.email || "").toLowerCase()
     emailMatches = !!ownerEmail && ownerEmail === email
   }
@@ -98,12 +88,25 @@ export async function POST(req: NextRequest) {
     )
   }
 
-  const isPaid = ((order.payments as { status: string }[] | null) || []).some(
-    (p) => p.status === "paid" || p.status === "completed",
+  const paymentsResult = await query<{ status: string }>(
+    `SELECT status FROM payments WHERE order_id = $1`,
+    [order.id],
+  )
+  const isPaid = paymentsResult.rows.some((p) => p.status === "paid" || p.status === "completed")
+
+  const itemsResult = await query<{
+    id: string
+    name_snapshot: string
+    sku_snapshot: string | null
+    quantity: number
+    unit_price: number
+  }>(
+    `SELECT id, name_snapshot, sku_snapshot, quantity, unit_price
+     FROM order_items
+     WHERE order_id = $1`,
+    [order.id],
   )
 
-  // Return only what the tracking page needs — never the full address or
-  // payment internals.
   return NextResponse.json({
     order: {
       order_number: order.order_number,
@@ -111,7 +114,7 @@ export async function POST(req: NextRequest) {
       grand_total: order.grand_total,
       created_at: order.created_at,
       is_paid: isPaid,
-      items: ((order.order_items as any[]) || []).map((i) => ({
+      items: itemsResult.rows.map((i) => ({
         id: i.id,
         name: i.name_snapshot,
         sku: i.sku_snapshot,

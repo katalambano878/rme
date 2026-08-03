@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { use, useEffect, useState } from 'react';
-import { supabase } from '@/lib/supabase';
+import { api } from '@/lib/api';
 import BlogPostForm from '@/components/admin/BlogPostForm';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -21,11 +21,9 @@ export default function AdminEditBlogPostPage({ params }: { params: Promise<{ id
         setLoading(false);
         return;
       }
-      const { data, error: qErr } = await supabase.from('blog_posts').select('*').eq('id', id).maybeSingle();
+      const data = await api<Record<string, unknown>>(`/api/admin/blog/${id}`);
       if (cancelled) return;
-      if (qErr) {
-        setError(qErr.message);
-      } else if (!data) {
+      if (!data) {
         setError('not-found');
       } else {
         setRow(data);

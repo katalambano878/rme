@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { supabase } from '@/lib/supabase';
+import { api } from '@/lib/api';
 
 export default function NotificationsPage() {
     const [loading, setLoading] = useState(false);
@@ -23,16 +23,7 @@ export default function NotificationsPage() {
 
         try {
             // 1. Get auth token for admin verification
-            const { data: { session } } = await supabase.auth.getSession();
-            if (!session?.access_token) {
-                throw new Error('You must be logged in as admin to send campaigns');
-            }
-
-            const { data: profiles, error: fetchError } = await supabase
-                .from('profiles')
-                .select('email, phone, full_name');
-
-            if (fetchError) throw fetchError;
+            const { profiles } = await api<{ profiles: { email: string; phone: string; full_name: string }[] }>('/api/admin/customers');
 
             const seenPhones = new Set<string>();
             const seenEmails = new Set<string>();
@@ -85,12 +76,8 @@ export default function NotificationsPage() {
             for (let i = 0; i < recipients.length; i += BATCH_SIZE) {
                 const batch = recipients.slice(i, i + BATCH_SIZE);
 
-                const res = await fetch('/api/notifications', {
+                const data = await api<{ message?: string; error?: string }>('/api/notifications', {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${session.access_token}`
-                    },
                     body: JSON.stringify({
                         type: 'campaign',
                         payload: {
@@ -99,20 +86,8 @@ export default function NotificationsPage() {
                             message: form.message,
                             channels: form.channels,
                         }
-                    })
+                    }),
                 });
-
-                // Handle non-JSON responses (e.g. timeouts, server errors)
-                let data;
-                const contentType = res.headers.get('content-type') || '';
-                if (contentType.includes('application/json')) {
-                    data = await res.json();
-                } else {
-                    const text = await res.text();
-                    throw new Error(`Server error (batch ${Math.floor(i / BATCH_SIZE) + 1}): ${text.slice(0, 100)}`);
-                }
-
-                if (!res.ok) throw new Error(data.error || 'Failed to send');
 
                 // Parse results from response
                 const msg = data.message || '';

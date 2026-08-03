@@ -1,71 +1,73 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { createServerClient } from "@supabase/ssr"
+import { AUTH_COOKIE_NAME, isStaffRole, verifySessionToken } from "@/lib/auth/token"
 
-/**
- * Single Supabase server client with full cookie read/write so sessions refresh correctly.
- * Previously a second client used setAll() {} which broke getUser() after login.
- */
+const COOKIE_NAME = AUTH_COOKIE_NAME()
+
+/** Public payment/SMS callbacks must never be blocked by auth middleware. */
+const PUBLIC_API_PREFIXES = [
+  "/api/health",
+  "/api/paystack/webhook",
+  "/api/paystack/verify",
+  "/api/paystack/initialize",
+  "/api/payment/moolre",
+  "/api/orders/track",
+  "/api/settings/delivery-fee",
+  "/api/products/search",
+  "/api/auth/login",
+  "/api/auth/signup",
+  "/api/auth/logout",
+  "/api/recaptcha",
+  "/api/chat",
+  "/api/uploads/",
+]
+
 export async function middleware(request: NextRequest) {
-  let response = NextResponse.next({ request })
+  const { pathname } = request.nextUrl
+  const response = NextResponse.next()
 
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-  if (!url || !key) {
-    return response
-  }
-
-  const supabase = createServerClient(url, key, {
-    cookies: {
-      getAll() {
-        return request.cookies.getAll()
-      },
-      setAll(cookiesToSet) {
-        cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value))
-        response = NextResponse.next({ request })
-        cookiesToSet.forEach(({ name, value, options }) =>
-          response.cookies.set(name, value, options),
-        )
-      },
-    },
-  })
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  const pathname = request.nextUrl.pathname
+  response.headers.set("X-Content-Type-Options", "nosniff")
+  response.headers.set("Referrer-Policy", "strict-origin-when-cross-origin")
 
   if (pathname.startsWith("/admin") || pathname.startsWith("/superadmin")) {
-    /** Allow signing in without already having a session */
+    response.headers.set("X-Robots-Tag", "noindex, nofollow")
+    response.headers.set("Cache-Control", "no-store, no-cache, must-revalidate")
+
     if (pathname === "/admin/login") {
       return response
     }
 
-    if (!user) {
+    const token = request.cookies.get(COOKIE_NAME)?.value
+    if (!token) {
       const loginUrl = new URL("/admin/login", request.url)
       loginUrl.searchParams.set("next", pathname)
-      const redirect = NextResponse.redirect(loginUrl)
-      response.cookies.getAll().forEach((c) => {
-        redirect.cookies.set(c.name, c.value, c)
-      })
-      return redirect
+      return NextResponse.redirect(loginUrl)
     }
 
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("role")
-      .eq("id", user.id)
-      .single()
+    try {
+      const session = await verifySessionToken(token)
+      if (!session || !isStaffRole(session.role)) {
+        const loginUrl = new URL("/admin/login", request.url)
+        loginUrl.searchParams.set("error", session ? "unauthorized" : "session_expired")
+        return NextResponse.redirect(loginUrl)
+      }
 
-    const role = profile?.role
+      if (pathname.startsWith("/superadmin") && session.role !== "superadmin") {
+        return NextResponse.redirect(new URL("/", request.url))
+      }
 
-    if (pathname.startsWith("/superadmin") && role !== "superadmin") {
-      return NextResponse.redirect(new URL("/", request.url))
+      response.headers.set("x-user-id", session.sub)
+      response.headers.set("x-user-role", session.role)
+    } catch {
+      const loginUrl = new URL("/admin/login", request.url)
+      loginUrl.searchParams.set("error", "session_expired")
+      return NextResponse.redirect(loginUrl)
     }
+  }
 
-    if (pathname.startsWith("/admin") && !["admin", "superadmin", "staff"].includes(role ?? "")) {
-      return NextResponse.redirect(new URL("/", request.url))
-    }
+  if (pathname.startsWith("/api/")) {
+    response.headers.set("Cache-Control", "no-store")
+    // Callbacks and public APIs: pass through (auth checked inside routes when needed)
+    void PUBLIC_API_PREFIXES
   }
 
   return response
@@ -73,6 +75,8 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+    "/admin/:path*",
+    "/superadmin/:path*",
+    "/api/:path*",
   ],
 }

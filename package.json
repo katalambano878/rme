@@ -13,11 +13,11 @@
   "dependencies": {
     "@base-ui/react": "^1.3.0",
     "@paystack/inline-js": "^2.22.2",
-    "@supabase/ssr": "^0.9.0",
-    "@supabase/supabase-js": "^2.100.0",
+    "bcryptjs": "^3.0.3",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "framer-motion": "^12.38.0",
+    "jose": "^6.2.7",
     "lucide-react": "^1.6.0",
     "next": "16.2.1",
     "pg": "^8.20.0",
@@ -32,6 +32,7 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
+    "@types/bcryptjs": "^2.4.6",
     "@types/node": "^20",
     "@types/pg": "^8.20.3",
     "@types/react": "^19",

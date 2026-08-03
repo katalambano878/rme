@@ -3,7 +3,7 @@
 
 import Link from 'next/link';
 import { useState, useEffect, useMemo } from 'react';
-import { supabase } from '@/lib/supabase';
+import { api } from '@/lib/api';
 
 // Customer segmentation thresholds — edit here or override in site_settings.feature_flags
 const VIP_THRESHOLD = 1000  // GH₵ lifetime spend to qualify as VIP
@@ -35,16 +35,7 @@ export default function AdminCustomersPage() {
   // Fallback for when customers table doesn't exist
   const fetchCustomersFromProfiles = async () => {
     try {
-      const { data: profiles, error: pError } = await supabase
-        .from('profiles')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      if (pError) throw pError;
-
-      const { data: orders } = await supabase
-        .from('orders')
-        .select('id, user_id, guest_email, grand_total, created_at, status, shipping_address');
+      const { profiles, orders } = await api<{ profiles: any[]; orders: any[] }>('/api/admin/customers');
 
       // Process registered users
       const registeredCustomers = (profiles || []).map((profile: any) => {

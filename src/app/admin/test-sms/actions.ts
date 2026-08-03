@@ -1,6 +1,7 @@
 'use server';
 
-import { verifyAdminToken } from '@/lib/auth';
+import { verifyAdminToken, verifyAuth } from '@/lib/auth';
+import { cookies } from 'next/headers';
 import { normalizeSmsRecipient } from '@/lib/sms-debug';
 
 const SMS_ENDPOINT = 'https://api.moolre.com/open/sms/send';
@@ -20,8 +21,22 @@ function getSmsVasKey(): { key: string | null; source: 'MOOLRE_SMS_API_KEY' | 'M
   return { key: null, source: null };
 }
 
-export async function getSmsDebuggerStatus(authToken: string) {
-  const auth = await verifyAdminToken(authToken);
+async function requireAdmin(authToken?: string) {
+  if (authToken?.trim()) {
+    return verifyAdminToken(authToken);
+  }
+  const jar = await cookies();
+  const cookieHeader = jar.getAll().map((c) => `${c.name}=${c.value}`).join('; ');
+  if (!cookieHeader) {
+    return { authenticated: false as const, error: 'Unauthorized' };
+  }
+  return verifyAuth(new Request('http://local/auth', { headers: { cookie: cookieHeader } }), {
+    requireAdmin: true,
+  });
+}
+
+export async function getSmsDebuggerStatus(authToken?: string) {
+  const auth = await requireAdmin(authToken);
   if (!auth.authenticated) {
     return { ok: false as const, error: auth.error || 'Unauthorized' };
   }
@@ -45,8 +60,8 @@ export async function getSmsDebuggerStatus(authToken: string) {
   };
 }
 
-export async function dryRunSmsDebug(phone: string, message: string, authToken: string) {
-  const auth = await verifyAdminToken(authToken);
+export async function dryRunSmsDebug(phone: string, message: string, authToken?: string) {
+  const auth = await requireAdmin(authToken);
   if (!auth.authenticated) {
     return { success: false as const, error: auth.error || 'Unauthorized' };
   }
@@ -79,8 +94,8 @@ export async function dryRunSmsDebug(phone: string, message: string, authToken: 
   };
 }
 
-export async function testSmsAction(phone: string, message: string, authToken: string) {
-  const auth = await verifyAdminToken(authToken);
+export async function testSmsAction(phone: string, message: string, authToken?: string) {
+  const auth = await requireAdmin(authToken);
   if (!auth.authenticated) {
     return {
       success: false,

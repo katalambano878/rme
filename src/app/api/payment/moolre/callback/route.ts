@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { supabaseAdmin } from '@/lib/supabase-admin';
+import { query, queryOne } from '@/lib/db';
 import { checkRateLimit, getClientIdentifier, RATE_LIMITS } from '@/lib/rate-limit';
 import { fulfillPaidOrder } from '@/lib/payments/fulfill-paid-order';
 import { normalizeMoolreStatus } from '@/lib/payments/status';
@@ -68,22 +68,20 @@ export async function POST(req: Request) {
         console.log('[Callback] Body keys:', Object.keys(body).join(', '));
         console.log('[Callback] Data keys:', body.data ? Object.keys(body.data).join(', ') : 'no data object');
 
-        // Log every incoming callback to webhook_logs for diagnostics
         try {
-            await supabaseAdmin.from('webhook_logs').insert({
-                provider: 'moolre',
-                event_type: 'callback',
-                payload: body,
-                headers: { 'content-type': contentType, 'x-forwarded-for': req.headers.get('x-forwarded-for') },
-                status_code: 0, // will be updated below if needed
-            });
+            await query(
+                `INSERT INTO webhook_logs (provider, event_type, payload, headers, status_code)
+                 VALUES ('moolre', 'callback', $1::jsonb, $2::jsonb, 0)`,
+                [
+                    JSON.stringify(body),
+                    JSON.stringify({
+                        'content-type': contentType,
+                        'x-forwarded-for': req.headers.get('x-forwarded-for'),
+                    }),
+                ],
+            );
         } catch { /* non-fatal */ }
 
-        // ============================================================
-        // SECURITY: Callback secret — always required on both sides.
-        // Never accept callbacks when MOOLRE_CALLBACK_SECRET is unset,
-        // or when the payload secret is missing/mismatched.
-        // ============================================================
         const expectedSecret = process.env.MOOLRE_CALLBACK_SECRET?.trim();
         if (!expectedSecret) {
             console.error('[Callback] MOOLRE_CALLBACK_SECRET is not configured — rejecting all callbacks');
@@ -94,9 +92,6 @@ export async function POST(req: Request) {
             return NextResponse.json({ error: 'Invalid callback secret' }, { status: 403 });
         }
 
-        // ============================================================
-        // EXTRACT FIELDS — Moolre nests payment data inside body.data
-        // ============================================================
         const data = body.data || {};
 
         const rawExternalRef =
@@ -107,7 +102,6 @@ export async function POST(req: Request) {
             body.orderRef ||
             body.external_reference;
 
-        // Strip retry suffix: "ORD-123-R1770000000" → "ORD-123"
         const merchantOrderRef = rawExternalRef
             ? rawExternalRef.replace(/-R\d+$/, '')
             : (data.metadata?.original_order_number || body.metadata?.original_order_number);
@@ -118,8 +112,6 @@ export async function POST(req: Request) {
             body.reference ||
             'callback';
 
-        // body.status === 1   → API call succeeded
-        // data.txstatus === 1 → transaction was successful (actual Moolre field name)
         const apiStatus = body.status;
         const txStatus  = data.txstatus ?? data.txtstatus;
 
@@ -144,14 +136,23 @@ export async function POST(req: Request) {
         if (isSuccess) {
             console.log(`[Callback] Payment SUCCESS for Order ${merchantOrderRef}`);
 
-            const { data: existingOrder, error: fetchError } = await supabaseAdmin
-                .from('orders')
-                .select('id, order_number, grand_total, guest_email, guest_phone, shipping_address, payments(status)')
-                .eq('order_number', merchantOrderRef)
-                .single();
+            const existingOrder = await queryOne<{
+                id: string
+                order_number: string
+                grand_total: number
+                guest_email: string | null
+                guest_phone: string | null
+                shipping_address: unknown
+            }>(
+                `SELECT id, order_number, grand_total, guest_email, guest_phone, shipping_address
+                 FROM orders
+                 WHERE order_number = $1
+                 LIMIT 1`,
+                [merchantOrderRef],
+            );
 
-            if (fetchError || !existingOrder) {
-                console.error('[Callback] Order not found or query error:', merchantOrderRef, fetchError?.message);
+            if (!existingOrder) {
+                console.error('[Callback] Order not found:', merchantOrderRef);
                 return NextResponse.json({ success: false, message: 'Order not found' }, { status: 404 });
             }
 
@@ -165,7 +166,7 @@ export async function POST(req: Request) {
             }
             const callbackAmount = parseFloat(String(rawAmount));
 
-            const result = await fulfillPaidOrder(supabaseAdmin, {
+            const result = await fulfillPaidOrder({
                 orderId: existingOrder.id,
                 orderNumber: existingOrder.order_number,
                 provider: 'moolre',
@@ -191,16 +192,12 @@ export async function POST(req: Request) {
             });
 
         } else {
-            // Payment failed
             console.log(`[Callback] Payment FAILED for ${merchantOrderRef} | Status: ${apiStatus} | TX: ${txStatus}`);
 
-            await supabaseAdmin
-                .from('orders')
-                .update({
-                    status: 'pending',
-                    updated_at: new Date().toISOString(),
-                })
-                .eq('order_number', merchantOrderRef);
+            await query(
+                `UPDATE orders SET status = 'pending', updated_at = now() WHERE order_number = $1`,
+                [merchantOrderRef],
+            );
 
             return NextResponse.json({ success: false, message: 'Payment not successful' });
         }

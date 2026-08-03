@@ -5,7 +5,7 @@ import Link from "next/link"
 import { ArrowRight, Store } from "lucide-react"
 import { Container } from "@/components/shared/container"
 import { Heading } from "@/components/shared/heading"
-import type { StorefrontCategory } from "@/lib/supabase/storefront-products"
+import type { StorefrontCategory } from "@/lib/data/storefront-products"
 import { MOCK_PRODUCT_IMAGE } from "@/lib/product-image"
 
 export type CollectionsPageClientProps = {

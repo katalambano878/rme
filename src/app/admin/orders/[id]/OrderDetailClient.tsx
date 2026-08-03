@@ -3,7 +3,7 @@
 
 import Link from 'next/link';
 import { useState, useEffect } from 'react';
-import { supabase } from '@/lib/supabase';
+import { api } from '@/lib/api';
 import FraudDetectionAlert from '@/components/FraudDetectionAlert';
 import { BRAND_NAME } from '@/lib/brand';
 import { buildDisplaySku } from '@/lib/sku-display';
@@ -60,47 +60,10 @@ export default function OrderDetailClient({ orderId }: OrderDetailClientProps) {
     try {
       setLoading(true);
       // Try to fetch by ID or order_number
-      const orderSelect = `
-        *,
-        payments(status, provider, provider_ref),
-        order_items (
-          id,
-          product_id,
-          name_snapshot,
-          sku_snapshot,
-          options_snapshot,
-          quantity,
-          unit_price,
-          line_total,
-          products (
-            product_images (url)
-          )
-        )
-      `;
-
-      let query = supabase
-        .from('orders')
-        .select(orderSelect)
-        .eq('id', orderId);
-
-      let { data, error } = await query.single();
-
-      if (error && error.code === 'PGRST116') {
-        const { data: dataByNum, error: errorByNum } = await supabase
-          .from('orders')
-          .select(orderSelect)
-          .eq('order_number', orderId)
-          .single();
-
-        if (dataByNum) {
-          data = dataByNum;
-          error = null;
-        } else {
-          error = errorByNum;
-        }
+      let data = await api<any>(`/api/admin/orders/${orderId}`).catch(() => null);
+      if (!data) {
+        data = await api<any>(`/api/admin/orders/${orderId}`);
       }
-
-      if (error) throw error;
 
       const paidPayment = data.payments?.find((p: any) => p.status === 'completed' || p.status === 'paid');
       const normalizedOrder = {
@@ -129,13 +92,11 @@ export default function OrderDetailClient({ orderId }: OrderDetailClientProps) {
       // Fraud signals: check for repeat orders from the same email in the last 48h
       let recentOrderCount = 0;
       if (data.guest_email) {
-        const since48h = new Date(Date.now() - 48 * 3600 * 1000).toISOString();
-        const { count } = await supabase
-          .from('orders')
-          .select('id', { count: 'exact', head: true })
-          .eq('guest_email', data.guest_email)
-          .gte('created_at', since48h);
-        recentOrderCount = count ?? 0;
+        const allOrders = await api<any[]>('/api/admin/orders');
+        const since48h = Date.now() - 48 * 3600 * 1000;
+        recentOrderCount = (allOrders || []).filter(
+          (o) => o.guest_email === data.guest_email && new Date(o.created_at).getTime() >= since48h,
+        ).length;
       }
       normalizedOrder._recentOrderCount = recentOrderCount;
 
@@ -156,15 +117,10 @@ export default function OrderDetailClient({ orderId }: OrderDetailClientProps) {
       setStatusUpdating(true);
       const statusToUpdate = newStatus || order.status;
 
-      const { error } = await supabase
-        .from('orders')
-        .update({
-          status: statusToUpdate,
-          notes: adminNotes,
-        })
-        .eq('id', order.id);
-
-      if (error) throw error;
+      await api(`/api/admin/orders/${order.id}`, {
+        method: 'PATCH',
+        json: { status: statusToUpdate, notes: adminNotes },
+      });
 
       setOrder({
         ...order,
@@ -176,26 +132,22 @@ export default function OrderDetailClient({ orderId }: OrderDetailClientProps) {
       const trackingChanged = false;
 
       if (statusChanged || (trackingChanged && trackingNumber)) {
-        // Get auth token for notification API
-        const { data: { session } } = await supabase.auth.getSession();
-        const authToken = session?.access_token;
-
+        const addr = normalizeShippingAddress(order.shipping_address);
+        const name = addr.fullName || order.email?.split('@')[0] || 'Customer';
         fetch('/api/notifications', {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            ...(authToken && { 'Authorization': `Bearer ${authToken}` })
-          },
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
           body: JSON.stringify({
             type: 'order_status',
             payload: {
               email: order.email,
-              name: customerName,
+              name,
               orderId: orderId,
               orderNumber: order.order_number || orderId,
               status: statusToUpdate,
               trackingNumber: trackingNumber,
-              phone: shippingAddress.phone || order.phone // Ensure phone is passed for SMS
+              phone: addr.phone || order.phone
             }
           })
         }).catch(err => console.error('Notification error:', err));
@@ -220,9 +172,6 @@ export default function OrderDetailClient({ orderId }: OrderDetailClientProps) {
       setResendingNotification(true);
 
       // Get auth token
-      const { data: { session } } = await supabase.auth.getSession();
-      const authToken = session?.access_token;
-
       const shippingAddress = normalizeShippingAddress(order.shipping_address);
       const customerName =
         shippingAddress.fullName ||
@@ -231,10 +180,8 @@ export default function OrderDetailClient({ orderId }: OrderDetailClientProps) {
 
       const response = await fetch('/api/notifications', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(authToken && { 'Authorization': `Bearer ${authToken}` })
-        },
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({
           type: 'order_status',
           payload: {

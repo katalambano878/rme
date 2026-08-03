@@ -5,11 +5,17 @@ import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { motion } from "framer-motion"
 import { Eye, EyeOff, LogIn, Loader2 } from "lucide-react"
-import { createClient } from "@/lib/supabase/client"
+import { api } from "@/lib/api"
+import { canAccessAdminPanel } from "@/lib/admin-role-access"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { BRAND_NAME } from "@/lib/brand"
+
+type AuthResponse = {
+  user: { id: string; email: string; role: string; full_name?: string | null }
+  access_token: string
+}
 
 export default function LoginPage() {
   const router = useRouter()
@@ -24,35 +30,22 @@ export default function LoginPage() {
     setLoading(true)
     setError("")
 
-    const supabase = createClient()
-    const { error: authError } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    })
+    try {
+      const data = await api<AuthResponse>("/api/auth/login", {
+        method: "POST",
+        json: { email, password },
+      })
 
-    if (authError) {
-      setError(authError.message)
-      setLoading(false)
-      return
-    }
-
-    const { data: { user } } = await supabase.auth.getUser()
-    if (user) {
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("role")
-        .eq("id", user.id)
-        .single()
-
-      if (profile?.role === "superadmin" || profile?.role === "admin" || profile?.role === "staff") {
+      if (canAccessAdminPanel(data.user.role)) {
         router.push("/admin")
       } else {
         router.push("/account")
       }
-    } else {
-      router.push("/")
+      router.refresh()
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Login failed")
+      setLoading(false)
     }
-    router.refresh()
   }
 
   return (

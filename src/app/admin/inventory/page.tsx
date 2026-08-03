@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { supabase } from '@/lib/supabase';
+import { api } from '@/lib/api';
 import { buildDisplaySku } from '@/lib/sku-display';
 import { listPriceFromProduct, listSkuRaw, listStockFromProduct } from '@/lib/product-metrics';
 
@@ -22,21 +22,7 @@ export default function InventoryManagementPage() {
   const fetchInventory = async () => {
     try {
       setLoading(true);
-      const { data, error } = await supabase
-        .from('products')
-        .select(`
-          id,
-          name,
-          slug,
-          sku,
-          price,
-          quantity,
-          categories(name),
-          variants(sku, price, stock_quantity)
-        `)
-        .order('name');
-
-      if (error) throw error;
+      const data = await api<any[]>('/api/catalog/products');
 
       if (data) {
         const mapped = data.map((p: any) => {

@@ -17,7 +17,7 @@
  *   for existing movement rows for that order and skip if any are found.
  */
 
-import type { SupabaseClient } from "@supabase/supabase-js"
+import { query, queryOne } from "@/lib/db"
 
 export interface StockReductionResult {
   skipped?: boolean
@@ -35,70 +35,91 @@ export interface StockReductionResult {
   errors: string[]
 }
 
-export async function reduceOrderStock(
-  supabase: SupabaseClient,
-  orderId: string,
-): Promise<StockReductionResult> {
+type OrderItemRow = {
+  id: string
+  quantity: number
+  variant_id: string | null
+  product_id: string | null
+  name_snapshot: string
+}
+
+type VariantRow = {
+  id: string
+  price: number
+  stock_quantity: number
+}
+
+export async function reduceOrderStock(orderId: string): Promise<StockReductionResult> {
   const errors: string[] = []
   const items: NonNullable<StockReductionResult["items"]> = []
 
-  const { data: existing, error: existingErr } = await supabase
-    .from("inventory_movements")
-    .select("id")
-    .eq("reference_type", "order")
-    .eq("reference_id", orderId)
-    .limit(1)
-  if (existingErr) {
-    errors.push(`inventory_movements lookup failed: ${existingErr.message}`)
-  }
-  if (existing && existing.length > 0) {
-    return { skipped: true, reason: "already_reduced", errors }
-  }
-
-  const { data: orderItems, error: itemsErr } = await supabase
-    .from("order_items")
-    .select(
-      `
-      id,
-      quantity,
-      variant_id,
-      product_id,
-      name_snapshot,
-      products(id, quantity, variants(id, price, stock_quantity))
-    `,
+  try {
+    const existing = await queryOne<{ id: string }>(
+      `SELECT id FROM inventory_movements
+       WHERE reference_type = 'order' AND reference_id = $1
+       LIMIT 1`,
+      [orderId],
     )
-    .eq("order_id", orderId)
+    if (existing) {
+      return { skipped: true, reason: "already_reduced", errors }
+    }
+  } catch (e) {
+    errors.push(
+      `inventory_movements lookup failed: ${e instanceof Error ? e.message : String(e)}`,
+    )
+  }
 
-  if (itemsErr) {
-    errors.push(`order_items lookup failed: ${itemsErr.message}`)
+  let orderItems: OrderItemRow[] = []
+  try {
+    const itemsResult = await query<OrderItemRow>(
+      `SELECT id, quantity, variant_id, product_id, name_snapshot
+       FROM order_items
+       WHERE order_id = $1`,
+      [orderId],
+    )
+    orderItems = itemsResult.rows
+  } catch (e) {
+    errors.push(`order_items lookup failed: ${e instanceof Error ? e.message : String(e)}`)
     return { errors }
   }
-  if (!orderItems || orderItems.length === 0) {
+
+  if (orderItems.length === 0) {
     errors.push(`no order_items found for order ${orderId}`)
     return { errors }
   }
 
-  for (const it of orderItems as unknown as Array<{
-    id: string
-    quantity: number
-    variant_id: string | null
-    product_id: string | null
-    name_snapshot: string
-    products: {
-      id: string
-      quantity: number | null
-      variants: Array<{ id: string; price: number; stock_quantity: number }> | null
-    } | null
-  }>) {
+  for (const it of orderItems) {
     const qty = Number(it.quantity) || 0
     if (qty <= 0) {
       items.push({ name: it.name_snapshot, target: "none", quantity: qty })
       continue
     }
 
-    const productVariants = (it.products?.variants || []).slice().sort(
-      (a, b) => Number(a.price) - Number(b.price),
-    )
+    let productVariants: VariantRow[] = []
+    let productQuantity: number | null = null
+
+    if (it.product_id) {
+      try {
+        const productRow = await queryOne<{ quantity: number | null }>(
+          `SELECT quantity FROM products WHERE id = $1`,
+          [it.product_id],
+        )
+        productQuantity = productRow?.quantity ?? null
+
+        const variantsResult = await query<VariantRow>(
+          `SELECT id, price, stock_quantity
+           FROM variants
+           WHERE product_id = $1
+           ORDER BY price ASC`,
+          [it.product_id],
+        )
+        productVariants = variantsResult.rows
+      } catch (e) {
+        errors.push(
+          `product/variants lookup failed for "${it.name_snapshot}": ${e instanceof Error ? e.message : String(e)}`,
+        )
+      }
+    }
 
     let variantId = it.variant_id ?? null
     if (!variantId && productVariants.length > 0) {
@@ -106,19 +127,12 @@ export async function reduceOrderStock(
     }
 
     if (variantId) {
-      const matched =
+      let matched =
         productVariants.find((v) => v.id === variantId) ||
-        // Fallback fetch in case the embedded variants don't include it.
-        (await (async () => {
-          const { data } = await supabase
-            .from("variants")
-            .select("id, stock_quantity")
-            .eq("id", variantId!)
-            .maybeSingle()
-          return data
-            ? { id: data.id, price: 0, stock_quantity: Number(data.stock_quantity) }
-            : null
-        })())
+        (await queryOne<VariantRow>(
+          `SELECT id, price, stock_quantity FROM variants WHERE id = $1`,
+          [variantId],
+        ))
 
       if (!matched) {
         const msg = `variant ${variantId} not found for item "${it.name_snapshot}"`
@@ -136,31 +150,38 @@ export async function reduceOrderStock(
       const before = Number(matched.stock_quantity) || 0
       const after = Math.max(0, before - qty)
 
-      const { error: vErr } = await supabase
-        .from("variants")
-        .update({ stock_quantity: after, updated_at: new Date().toISOString() })
-        .eq("id", variantId)
-      if (vErr) {
-        errors.push(`variant update failed for ${it.name_snapshot}: ${vErr.message}`)
+      try {
+        await query(
+          `UPDATE variants
+           SET stock_quantity = $2, updated_at = now()
+           WHERE id = $1`,
+          [variantId, after],
+        )
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e)
+        errors.push(`variant update failed for ${it.name_snapshot}: ${msg}`)
         items.push({
           name: it.name_snapshot,
           target: "variant",
           variantId,
           quantity: qty,
           before,
-          error: vErr.message,
+          error: msg,
         })
         continue
       }
 
-      const { error: mErr } = await supabase.from("inventory_movements").insert({
-        variant_id: variantId,
-        quantity_delta: -qty,
-        reason: "order_paid",
-        reference_type: "order",
-        reference_id: orderId,
-      })
-      if (mErr) errors.push(`inventory_movements insert failed: ${mErr.message}`)
+      try {
+        await query(
+          `INSERT INTO inventory_movements (variant_id, quantity_delta, reason, reference_type, reference_id)
+           VALUES ($1, $2, 'order_paid', 'order', $3)`,
+          [variantId, -qty, orderId],
+        )
+      } catch (e) {
+        errors.push(
+          `inventory_movements insert failed: ${e instanceof Error ? e.message : String(e)}`,
+        )
+      }
 
       items.push({
         name: it.name_snapshot,
@@ -174,21 +195,25 @@ export async function reduceOrderStock(
     }
 
     if (it.product_id) {
-      const before = Number(it.products?.quantity) || 0
+      const before = Number(productQuantity) || 0
       const after = Math.max(0, before - qty)
-      const { error: pErr } = await supabase
-        .from("products")
-        .update({ quantity: after, updated_at: new Date().toISOString() })
-        .eq("id", it.product_id)
-      if (pErr) {
-        errors.push(`product quantity update failed for ${it.name_snapshot}: ${pErr.message}`)
+      try {
+        await query(
+          `UPDATE products
+           SET quantity = $2, updated_at = now()
+           WHERE id = $1`,
+          [it.product_id, after],
+        )
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e)
+        errors.push(`product quantity update failed for ${it.name_snapshot}: ${msg}`)
         items.push({
           name: it.name_snapshot,
           target: "product",
           productId: it.product_id,
           quantity: qty,
           before,
-          error: pErr.message,
+          error: msg,
         })
         continue
       }

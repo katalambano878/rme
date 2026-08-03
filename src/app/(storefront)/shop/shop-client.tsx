@@ -15,7 +15,7 @@ import {
 } from "lucide-react"
 import { cn, formatPrice } from "@/lib/utils"
 import type { Product } from "@/types/product"
-import type { StorefrontCategory } from "@/lib/supabase/storefront-products"
+import type { StorefrontCategory } from "@/lib/data/storefront-products"
 import { Container } from "@/components/shared/container"
 import { Heading } from "@/components/shared/heading"
 import { QuickViewModal } from "@/components/shared/quick-view-modal"

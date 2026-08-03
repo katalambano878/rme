@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { supabase } from '@/lib/supabase';
+import { api } from '@/lib/api';
 import { listPriceFromProduct, listSkuRaw, listStockFromProduct } from '@/lib/product-metrics';
 
 interface Product {
@@ -68,18 +68,7 @@ export default function POSPage() {
     const fetchData = async () => {
         try {
             setLoading(true);
-            const { data: prodData } = await supabase
-                .from('products')
-                .select(`
-          id, name, slug,
-          sku, price, quantity,
-          categories(name),
-          variants(sku, price, stock_quantity),
-          product_images(url, sort_order)
-        `)
-                .eq('status', 'active')
-                .order('name');
-
+            const prodData = await api<any[]>('/api/catalog/products?status=active');
             if (prodData) {
                 const formatted: Product[] = prodData.map((p: any) => {
                     const computedPrice = listPriceFromProduct(p);
@@ -102,13 +91,8 @@ export default function POSPage() {
                 setCategories(['All', ...cats]);
             }
 
-            const { data: custData } = await supabase
-                .from('profiles')
-                .select('id, full_name, email, phone')
-                .order('full_name')
-                .limit(200);
-
-            if (custData) setCustomers(custData);
+            const staffRows = await api<any[]>('/api/admin/staff?includeCustomers=1');
+            if (staffRows) setCustomers(staffRows.filter((c) => c.role === 'customer').slice(0, 200));
 
         } catch (error) {
             console.error('Error fetching POS data:', error);
@@ -270,106 +254,41 @@ export default function POSPage() {
                 pos_sale: true
             };
 
-            const { data: order, error: orderError } = await supabase
-                .from('orders')
-                .insert([{
-                    order_number: orderNumber,
-                    user_id: null,
-                    guest_email: customerEmail,
-                    guest_phone: customerPhone,
-                    status: isInPersonPayment ? 'processing' : 'pending',
-                    currency: 'GHS',
+            const order = await api<any>('/api/admin/pos/checkout', {
+                method: 'POST',
+                json: {
+                    orderNumber,
+                    customerEmail,
+                    customerPhone,
+                    paymentMethod,
+                    deliveryMethod,
+                    cart,
+                    addressData,
                     subtotal: cartTotal,
-                    tax_total: tax,
-                    shipping_total: 0,
-                    discount_total: 0,
-                    grand_total: grandTotal,
-                    shipping_address: addressData,
-                    billing_address: addressData,
-                    notes: `POS sale — ${deliveryMethod}`,
-                }])
-                .select()
-                .single();
-
-            if (orderError) throw orderError;
-
-            const orderItems = cart.map(item => ({
-                order_id: order.id,
-                product_id: item.id,
-                name_snapshot: item.name,
-                sku_snapshot: item.sku || null,
-                quantity: item.cartQuantity,
-                unit_price: item.price,
-                line_total: item.price * item.cartQuantity,
-            }));
-
-            const { error: itemsError } = await supabase
-                .from('order_items')
-                .insert(orderItems);
-
-            if (itemsError) throw itemsError;
+                    tax,
+                    grandTotal,
+                },
+            });
 
             if (isInPersonPayment) {
-                // Write the paid payments row. Surface any failure to the
-                // cashier (previously this was silent, which is how earlier POS
-                // orders ended up with payment_count = 0 in the database and
-                // showing as "abandoned" in the orders list).
-                const paymentRef = `POS-${paymentMethod.toUpperCase()}-${Date.now()}`;
-                // The `payment_status` enum is { pending, authorized, paid,
-                // failed, refunded } — DO NOT use 'completed' here, it will
-                // raise an enum-cast error (which is what was breaking every
-                // historical POS sale silently).
-                const { error: paymentError } = await supabase.from('payments').insert({
-                    order_id: order.id,
-                    provider: paymentMethod,
-                    amount: grandTotal,
-                    currency: 'GHS',
-                    status: 'paid',
-                    provider_ref: paymentRef,
-                });
-
-                if (paymentError) {
-                    console.error('POS payment row insert failed:', paymentError);
-                    throw new Error(
-                        `Order ${orderNumber} created but payment record failed: ${paymentError.message}. Please contact support to reconcile.`,
-                    );
-                }
-
-                // Reduce stock via the RPC. Non-fatal: the order is recorded
-                // and paid even if stock adjustment fails; the admin can
-                // reconcile inventory afterwards.
-                try {
-                    await supabase.rpc('mark_order_paid', {
-                        order_ref: orderNumber,
-                        moolre_ref: paymentRef,
-                    });
-                } catch (stockErr) {
-                    console.error('Stock reduction error (non-fatal):', stockErr);
-                }
-
-                // Success — show completed
                 setCompletedOrder({ id: order.id, orderNumber, total: grandTotal, items: cart });
                 setCart([]);
 
-                // Send notification
                 if (customerEmail && customerEmail !== 'pos-walkin@store.local') {
-                    const { data: { session } } = await supabase.auth.getSession();
                     fetch('/api/notifications', {
                         method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            ...(session?.access_token && { 'Authorization': `Bearer ${session.access_token}` })
-                        },
+                        headers: { 'Content-Type': 'application/json' },
+                        credentials: 'include',
                         body: JSON.stringify({
                             type: 'order_created',
                             payload: {
                                 ...order,
                                 order_number: orderNumber,
                                 email: customerEmail,
-                                shipping_address: addressData
-                            }
-                        })
-                    }).catch(err => console.error('POS Notification error:', err));
+                                shipping_address: addressData,
+                            },
+                        }),
+                    }).catch((err) => console.error('POS Notification error:', err));
                 }
             } else {
                 // Future: any non-in-person POS payment method (e.g. "send a

@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { motion } from "framer-motion"
 import { Eye, EyeOff, UserPlus, Loader2 } from "lucide-react"
-import { createClient } from "@/lib/supabase/client"
+import { api } from "@/lib/api"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -19,7 +19,6 @@ export default function SignupPage() {
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
-  const [success, setSuccess] = useState(false)
 
   async function handleSignup(e: React.FormEvent) {
     e.preventDefault()
@@ -32,51 +31,17 @@ export default function SignupPage() {
       return
     }
 
-    const supabase = createClient()
-    const { error: authError } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: { full_name: fullName },
-      },
-    })
-
-    if (authError) {
-      setError(authError.message)
+    try {
+      await api("/api/auth/signup", {
+        method: "POST",
+        json: { email, password, full_name: fullName },
+      })
+      router.push("/account")
+      router.refresh()
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Signup failed")
       setLoading(false)
-      return
     }
-
-    setSuccess(true)
-    setLoading(false)
-  }
-
-  if (success) {
-    return (
-      <div className="flex min-h-[80vh] items-center justify-center px-4 py-12">
-        <motion.div
-          initial={{ opacity: 0, scale: 0.95 }}
-          animate={{ opacity: 1, scale: 1 }}
-          className="w-full max-w-md text-center"
-        >
-          <div className="rounded-2xl border border-rose-border/60 bg-white p-10 luxury-shadow">
-            <div className="mx-auto mb-4 flex size-16 items-center justify-center rounded-full bg-emerald-50">
-              <UserPlus className="size-7 text-emerald-600" />
-            </div>
-            <h2 className="font-heading text-2xl text-navy">Check Your Email</h2>
-            <p className="mt-3 text-sm text-muted-foreground">
-              We sent a confirmation link to <strong>{email}</strong>.
-              Click the link to verify your account, then sign in.
-            </p>
-            <Link href="/auth/login">
-              <Button className="mt-6 rounded-full bg-rose-100 px-8 text-navy hover:bg-rose-200">
-                Go to Sign In
-              </Button>
-            </Link>
-          </div>
-        </motion.div>
-      </div>
-    )
   }
 
   return (

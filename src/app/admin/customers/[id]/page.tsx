@@ -2,7 +2,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { supabase } from '@/lib/supabase';
+import { api } from '@/lib/api';
 import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
 
@@ -25,24 +25,9 @@ export default function CustomerDetailsPage() {
     const fetchCustomerData = async () => {
         try {
             // 1. Fetch Profile
-            const { data: profile, error: profileError } = await supabase
-                .from('profiles')
-                .select('*')
-                .eq('id', customerId)
-                .single();
-
-            if (profileError) throw profileError;
-
-            // 2. Fetch Orders
-            const { data: ordersData, error: ordersError } = await supabase
-                .from('orders')
-                .select('*')
-                .eq('user_id', customerId)
-                .order('created_at', { ascending: false });
-
-            if (ordersError && ordersError.code !== 'PGRST116') { // Ignore not found if simply no orders? No, select returns empty array usually
-                // Actually select returns empty array if no match, not error.
-            }
+            const { profile, orders: ordersData } = await api<{ profile: any; orders: any[] }>(
+              `/api/admin/customers?id=${customerId}`,
+            );
 
             setCustomer(profile);
             setOrders(ordersData || []);

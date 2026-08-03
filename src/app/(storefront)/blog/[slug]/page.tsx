@@ -18,7 +18,6 @@ import { Section } from "@/components/shared/section"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
-import { createClient } from "@/lib/supabase/client"
 
 type BlogPost = {
   id: string
@@ -42,25 +41,15 @@ export default function BlogPostPage({
   const [relatedPosts, setRelatedPosts] = useState<BlogPost[]>([])
 
   useEffect(() => {
-    const supabase = createClient()
-    supabase
-      .from("blog_posts")
-      .select("id, title, slug, excerpt, category, cover_image_url, content, published_at, created_at")
-      .eq("slug", slug)
-      .eq("published", true)
-      .maybeSingle()
-      .then(({ data }) => {
-        setPost(data ?? null)
-        if (data) {
-          supabase
-            .from("blog_posts")
-            .select("id, title, slug, excerpt, category, cover_image_url, published_at, created_at")
-            .eq("published", true)
-            .neq("slug", slug)
-            .order("published_at", { ascending: false })
-            .limit(2)
-            .then(({ data: related }) => setRelatedPosts((related ?? []) as BlogPost[]))
-        }
+    fetch(`/api/blog/${encodeURIComponent(slug)}`)
+      .then((res) => res.json())
+      .then((data: { post?: BlogPost | null; relatedPosts?: BlogPost[] }) => {
+        setPost(data.post ?? null)
+        setRelatedPosts(Array.isArray(data.relatedPosts) ? data.relatedPosts : [])
+      })
+      .catch(() => {
+        setPost(null)
+        setRelatedPosts([])
       })
   }, [slug])
 

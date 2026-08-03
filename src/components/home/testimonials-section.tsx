@@ -8,7 +8,6 @@ import { Section } from "@/components/shared/section"
 import { Heading } from "@/components/shared/heading"
 import { testimonials as staticTestimonials } from "@/lib/mock-data"
 import { cn } from "@/lib/utils"
-import { createClient } from "@/lib/supabase/client"
 
 type Testimonial = {
   id: string
@@ -32,16 +31,12 @@ export function TestimonialsSection() {
   const [testimonials, setTestimonials] = useState<Testimonial[]>(staticTestimonials as Testimonial[])
 
   useEffect(() => {
-    const supabase = createClient()
-    supabase
-      .from("testimonials")
-      .select("id, name, location, content, rating, avatar, product")
-      .eq("is_active", true)
-      .order("sort_order")
-      .limit(6)
-      .then(({ data }) => {
-        if (data && data.length > 0) setTestimonials(data as Testimonial[])
+    fetch("/api/storefront/testimonials")
+      .then((res) => res.json())
+      .then((data: Testimonial[]) => {
+        if (Array.isArray(data) && data.length > 0) setTestimonials(data)
       })
+      .catch(() => {})
   }, [])
 
   return (

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, use } from 'react';
 import Link from 'next/link';
-import { supabase } from '@/lib/supabase';
+import { api } from '@/lib/api';
 import MarkdownMessage from '@/components/MarkdownMessage';
 
 const STATUS_OPTIONS = ['open', 'in_progress', 'waiting_customer', 'resolved', 'closed'];
@@ -24,15 +24,15 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
   async function fetchTicket() {
     setLoading(true);
     const [ticketRes, msgsRes] = await Promise.all([
-      supabase.from('support_tickets').select('*').eq('id', id).single(),
-      fetch(`/api/support/tickets/${id}/messages`).then(r => r.json()),
+      api<{ data: any }>(`/api/support/tickets/${id}`),
+      api<{ data: any[] }>(`/api/support/tickets/${id}/messages`),
     ]);
     setTicket(ticketRes.data);
     setMessages(msgsRes.data || []);
 
     if (ticketRes.data?.conversation_id) {
-      const { data: conv } = await supabase.from('chat_conversations').select('id, session_id, messages, summary, sentiment, customer_name').eq('id', ticketRes.data.conversation_id).single();
-      setConversation(conv);
+      const convRes = await api<{ data: any }>(`/api/support/conversations/${ticketRes.data.conversation_id}`);
+      setConversation(convRes.data);
     }
     setLoading(false);
   }
@@ -45,10 +45,9 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
     e.preventDefault();
     if (!reply.trim()) return;
     setSending(true);
-    await fetch(`/api/support/tickets/${id}/messages`, {
+    await api(`/api/support/tickets/${id}/messages`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ content: reply, sender_type: 'agent', sender_name: 'Admin', is_internal: isInternal }),
+      json: { content: reply, sender_type: 'agent', sender_name: 'Admin', is_internal: isInternal },
     });
     setReply('');
     setIsInternal(false);
@@ -57,10 +56,9 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
   }
 
   async function updateTicket(updates: any) {
-    await fetch('/api/support/tickets', {
+    await api('/api/support/tickets', {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id, ...updates }),
+      json: { id, ...updates },
     });
     setTicket((prev: any) => ({ ...prev, ...updates }));
   }

@@ -1,6 +1,6 @@
 /* eslint-disable react-hooks/exhaustive-deps */
 import { useState, useEffect, Fragment } from 'react';
-import { supabase } from '@/lib/supabase';
+import { api } from '@/lib/api';
 
 interface SalesStat {
     productId: string;
@@ -53,32 +53,18 @@ export default function ProductSalesStats({ isOpen, onClose }: { isOpen: boolean
 
         try {
             // We fetch order_items and filter by the parent order's created_at
-            let query = supabase
-                .from('order_items')
-                .select(`
-          quantity,
-          name_snapshot,
-          sku_snapshot,
-          options_snapshot,
-          product_id,
-          unit_price,
-          line_total,
-          orders!inner (
-            id,
-            created_at,
-            status
-          )
-        `);
-
-            query = query.neq('orders.status', 'cancelled');
-
-            if (startDate) {
-                query = query.gte('orders.created_at', startDate);
+            const orders = await api<any[]>('/api/admin/orders');
+            const data: any[] = [];
+            for (const order of orders || []) {
+              if (order.status === 'cancelled') continue;
+              if (startDate && order.created_at < startDate) continue;
+              for (const item of order.order_items || []) {
+                data.push({
+                  ...item,
+                  orders: { id: order.id, created_at: order.created_at, status: order.status },
+                });
+              }
             }
-
-            const { data, error } = await query;
-
-            if (error) throw error;
 
             if (data) {
                 const map = new Map<string, SalesStat>();

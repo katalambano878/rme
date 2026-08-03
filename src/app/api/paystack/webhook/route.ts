@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createHmac } from "crypto"
-import { createAdminClient } from "@/lib/supabase/admin"
+import { query, queryOne } from "@/lib/db"
 import { fulfillPaidOrder, amountsMatch } from "@/lib/payments/fulfill-paid-order"
 import { normalizePaystackStatus } from "@/lib/payments/status"
 
@@ -29,8 +29,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 })
   }
 
-  const supabase = createAdminClient()
-
   // Record callback event early (idempotent via unique external_event_id when migration applied)
   const eventId = String(
     (event.data as { id?: string | number } | undefined)?.id ??
@@ -38,18 +36,23 @@ export async function POST(req: NextRequest) {
   )
 
   try {
-    await supabase.from("callback_events").insert({
-      gateway: "paystack",
-      event_type: event.event || "unknown",
-      external_event_id: eventId,
-      reference: (event.data as { reference?: string } | undefined)?.reference || null,
-      payload_hash: createHmac("sha256", webhookSecret).update(rawBody).digest("hex"),
-      signature_status: "valid",
-      processing_status: "received",
-      raw_payload: event,
-    })
+    await query(
+      `INSERT INTO callback_events (
+         gateway, event_type, external_event_id, reference,
+         payload_hash, signature_status, processing_status, raw_payload
+       )
+       VALUES ($1, $2, $3, $4, $5, 'valid', 'received', $6::jsonb)`,
+      [
+        "paystack",
+        event.event || "unknown",
+        eventId,
+        (event.data as { reference?: string } | undefined)?.reference || null,
+        createHmac("sha256", webhookSecret).update(rawBody).digest("hex"),
+        JSON.stringify(event),
+      ],
+    )
   } catch {
-    /* table may not exist yet; non-fatal */
+    /* table may not exist yet or duplicate event; non-fatal */
   }
 
   try {
@@ -64,11 +67,21 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ received: true }, { status: 200 })
       }
 
-      const { data: order } = await supabase
-        .from("orders")
-        .select("id, order_number, grand_total, guest_email, guest_phone, shipping_address, currency")
-        .eq("order_number", reference)
-        .maybeSingle()
+      const order = await queryOne<{
+        id: string
+        order_number: string
+        grand_total: number
+        guest_email: string | null
+        guest_phone: string | null
+        shipping_address: unknown
+        currency: string
+      }>(
+        `SELECT id, order_number, grand_total, guest_email, guest_phone, shipping_address, currency
+         FROM orders
+         WHERE order_number = $1
+         LIMIT 1`,
+        [reference],
+      )
 
       if (!order) {
         console.error("[Paystack webhook] order not found", reference)
@@ -81,16 +94,20 @@ export async function POST(req: NextRequest) {
 
       if (!amountsMatch(paidAmount, expected)) {
         console.error("[Paystack webhook] amount mismatch", { reference, paidAmount, expected })
-        await supabase.from("webhook_logs").insert({
-          provider: "paystack",
-          event_type: "charge.success.amount_mismatch",
-          payload: event,
-        })
+        try {
+          await query(
+            `INSERT INTO webhook_logs (provider, event_type, payload)
+             VALUES ('paystack', 'charge.success.amount_mismatch', $1::jsonb)`,
+            [JSON.stringify(event)],
+          )
+        } catch {
+          /* non-fatal */
+        }
         return NextResponse.json({ received: true }, { status: 200 })
       }
 
       if (internal === "successful") {
-        await fulfillPaidOrder(supabase, {
+        await fulfillPaidOrder({
           orderId: order.id,
           orderNumber: order.order_number,
           provider: "paystack",
@@ -105,14 +122,15 @@ export async function POST(req: NextRequest) {
         })
       }
 
-      await supabase
-        .from("webhook_logs")
-        .insert({
-          provider: "paystack",
-          event_type: event.event,
-          payload: event,
-        })
-        .then(() => {})
+      try {
+        await query(
+          `INSERT INTO webhook_logs (provider, event_type, payload)
+           VALUES ('paystack', $1, $2::jsonb)`,
+          [event.event || "unknown", JSON.stringify(event)],
+        )
+      } catch {
+        /* non-fatal */
+      }
     }
   } catch (err) {
     console.error("Paystack webhook processing error:", err)

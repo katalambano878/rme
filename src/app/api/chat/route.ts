@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { query, queryOne } from '@/lib/db';
+import { getSessionFromRequest } from '@/lib/auth';
 import {
   searchProducts,
   getProductForCart,
@@ -32,9 +33,6 @@ import {
 
 // ─── Env ────────────────────────────────────────────────────────────────────
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const groqKey = process.env.GROQ_API_KEY;
 
 // ─── Types ──────────────────────────────────────────────────────────────────
@@ -440,35 +438,13 @@ Address the customer by their first name. You can access their orders and profil
 
 async function detectAuth(request: Request): Promise<{ userId: string | null; email: string | null }> {
   try {
-    const cookieHeader = request.headers.get('cookie') || '';
-    const authToken = cookieHeader
-      .split(';')
-      .map((c) => c.trim())
-      .find((c) => c.startsWith('sb-') && c.includes('-auth-token'))
-      ?.split('=')
-      .slice(1)
-      .join('=');
-
-    if (!authToken) return { userId: null, email: null };
-
-    const decoded = decodeURIComponent(authToken);
-    let tokenData: any;
-    try {
-      tokenData = JSON.parse(decoded);
-    } catch {
-      tokenData = decoded;
-    }
-
-    const accessToken = typeof tokenData === 'string' ? tokenData : tokenData?.[0] || tokenData?.access_token;
-    if (!accessToken) return { userId: null, email: null };
-
-    const supabase = createClient(supabaseUrl, supabaseKey, {
-      global: { headers: { Authorization: `Bearer ${accessToken}` } },
-    });
-
-    const { data: { user } } = await supabase.auth.getUser();
-    if (user) {
-      return { userId: user.id, email: user.email || null };
+    const session = await getSessionFromRequest(request);
+    if (session?.sub) {
+      const profile = await queryOne<{ email: string | null }>(
+        `SELECT email FROM profiles WHERE id = $1::uuid LIMIT 1`,
+        [session.sub],
+      );
+      return { userId: session.sub, email: profile?.email || session.email || null };
     }
   } catch (e) {
     console.error('[Chat API] Auth detection error:', e);
@@ -510,48 +486,51 @@ export async function POST(request: Request) {
 
     const { userId, email: userEmail } = await detectAuth(request);
 
-    // SECURITY: Tools that act on behalf of the (possibly unauthenticated) caller
-    // run with the ANON key so RLS protects other customers' data. Persistence
-    // and any write-only paths use a separate service-role client below.
-    const supabase = createClient(supabaseUrl, supabaseKey);
-    const supabaseWriter = supabaseServiceKey
-      ? createClient(supabaseUrl, supabaseServiceKey)
-      : supabase;
-
     let profile: ChatCustomerProfile | null = null;
     if (userId) {
-      // Profile lookup is keyed on the JWT-verified userId from detectAuth(),
-      // so even with the writer client we only return the caller's own profile.
-      profile = await getCustomerProfile(supabaseWriter, userId);
+      profile = await getCustomerProfile(userId);
     }
 
-    // Fetch AI memories for context (writer needed because ai_memory has RLS)
     let aiMemories: any[] = [];
     if (userId || userEmail) {
       try {
-        const { data: memData } = await supabaseWriter.rpc('get_ai_memories', {
-          p_customer_id: userId || null,
-          p_customer_email: userEmail || null,
-        });
-        aiMemories = Array.isArray(memData) ? memData : [];
-      } catch {}
+        const memResult = userId
+          ? await query(
+              `SELECT id, memory_type AS type, content, importance, created_at
+               FROM ai_memory
+               WHERE customer_id = $1::uuid OR customer_email = $2
+               ORDER BY created_at DESC LIMIT 20`,
+              [userId, userEmail || ''],
+            )
+          : await query(
+              `SELECT id, memory_type AS type, content, importance, created_at
+               FROM ai_memory
+               WHERE customer_email = $1
+               ORDER BY created_at DESC LIMIT 20`,
+              [userEmail],
+            );
+        aiMemories = memResult.rows;
+      } catch {
+        /* ai_memory table may not exist */
+      }
     }
 
-    // Fetch relevant KB articles from Supabase for AI context
     let kbContext = '';
     if (groqKey) {
       try {
         const searchTerms = userText.toLowerCase().split(/\s+/).filter(w => w.length > 3).slice(0, 3);
         if (searchTerms.length > 0) {
-          const { data: kbArticles } = await supabaseWriter
-            .from('support_knowledge_base')
-            .select('title, content')
-            .eq('is_published', true)
-            .or(searchTerms.map(t => `title.ilike.%${t}%,content.ilike.%${t}%`).join(','))
-            .limit(3);
-          if (kbArticles && kbArticles.length > 0) {
+          const params = searchTerms.map((t) => `%${t}%`);
+          const kbArticles = await query<{ title: string; content: string }>(
+            `SELECT title, content FROM support_knowledge_base
+             WHERE is_published = true
+               AND (${searchTerms.map((_, i) => `(title ILIKE $${i + 1} OR content ILIKE $${i + 1})`).join(' OR ')})
+             LIMIT 3`,
+            params,
+          );
+          if (kbArticles.rows.length > 0) {
             kbContext = '\n\nKNOWLEDGE BASE (use these to answer if relevant):\n' +
-              kbArticles.map((a: any) => `- ${a.title}: ${a.content.slice(0, 200)}`).join('\n');
+              kbArticles.rows.map((a) => `- ${a.title}: ${a.content.slice(0, 200)}`).join('\n');
           }
         }
       } catch {}
@@ -566,26 +545,32 @@ export async function POST(request: Request) {
 
     let result: any;
     if (groqKey) {
-      result = await handleWithAI(supabase, supabaseWriter, messages, userText, groqKey, userId, userEmail, profile, pagePath, aiMemories, kbContext, cartItems, clientIp);
+      result = await handleWithAI(messages, userText, groqKey, userId, userEmail, profile, pagePath, aiMemories, kbContext, cartItems, clientIp);
     } else {
-      result = await handleWithoutAI(supabase, supabaseWriter, userText, profile);
+      result = await handleWithoutAI(userText, profile);
     }
 
     if (sessionId) {
-      persistConversation(supabaseWriter, sessionId, userId, userEmail, profile, messages, userText, result, pagePath).catch((e) =>
+      persistConversation(sessionId, userId, userEmail, profile, messages, userText, result, pagePath).catch((e) =>
         console.error('[Chat API] Persistence error:', e)
       );
     }
 
-    // Update customer insights asynchronously (writer client — RLS would block anon)
     if (userId) {
       try {
-        await supabaseWriter.rpc('upsert_customer_insight', {
-          p_customer_id: userId,
-          p_customer_email: userEmail,
-          p_customer_name: profile?.name || null,
-        });
-      } catch {}
+        await query(
+          `INSERT INTO customer_insights (customer_id, customer_email, customer_name, last_seen_at, updated_at)
+           VALUES ($1::uuid, $2, $3, now(), now())
+           ON CONFLICT (customer_id) DO UPDATE SET
+             customer_email = EXCLUDED.customer_email,
+             customer_name = EXCLUDED.customer_name,
+             last_seen_at = now(),
+             updated_at = now()`,
+          [userId, userEmail, profile?.name || null],
+        );
+      } catch {
+        /* table may not exist */
+      }
     }
 
     return NextResponse.json(result);
@@ -601,7 +586,6 @@ export async function POST(request: Request) {
 // ─── Conversation Persistence ───────────────────────────────────────────────
 
 async function persistConversation(
-  supabase: any,
   sessionId: string,
   userId: string | null,
   userEmail: string | null,
@@ -654,74 +638,112 @@ async function persistConversation(
   // Build conversation summary from last exchange
   const summary = `Customer asked about: ${userText.slice(0, 100)}${userText.length > 100 ? '...' : ''}`;
 
-  // Upsert with enhanced metadata (pass raw objects, not JSON.stringify - Supabase handles serialization)
-  await supabase.rpc('upsert_chat_conversation', {
-    p_session_id: sessionId,
-    p_user_id: userId,
-    p_messages: last20,
-    p_metadata: {
-      lastActivity: new Date().toISOString(),
-      lastUserMessage: userText.slice(0, 200),
-      hadProducts: (result.products?.length || 0) > 0,
-      hadOrderCard: !!result.orderCard,
-      hadTicket: !!result.ticketCard,
-    },
-  });
+  const metadata = {
+    lastActivity: new Date().toISOString(),
+    lastUserMessage: userText.slice(0, 200),
+    hadProducts: (result.products?.length || 0) > 0,
+    hadOrderCard: !!result.orderCard,
+    hadTicket: !!result.ticketCard,
+  };
 
-  // Update the enhanced columns directly
-  const { data: existingConv } = await supabase
-    .from('chat_conversations')
-    .select('id, created_at')
-    .eq('session_id', sessionId)
-    .single();
+  const existingConv = await queryOne<{ id: string; created_at: string }>(
+    `SELECT id, created_at FROM chat_conversations WHERE session_id = $1 LIMIT 1`,
+    [sessionId],
+  );
 
   if (existingConv) {
     const durationSeconds = Math.floor((Date.now() - new Date(existingConv.created_at).getTime()) / 1000);
-    await supabase.from('chat_conversations').update({
+    await query(
+      `UPDATE chat_conversations SET
+         messages = $2::jsonb,
+         metadata = $3::jsonb,
+         sentiment = $4,
+         category = $5,
+         intent = $6,
+         summary = $7,
+         message_count = $8,
+         customer_email = $9,
+         customer_name = $10,
+         is_resolved = $11,
+         is_escalated = $12,
+         escalated_at = CASE WHEN $12 THEN now() ELSE escalated_at END,
+         page_context = $13,
+         duration_seconds = $14,
+         updated_at = now()
+       WHERE id = $1::uuid`,
+      [
+        existingConv.id,
+        JSON.stringify(last20),
+        JSON.stringify(metadata),
+        sentiment,
+        category,
+        intent,
+        summary,
+        messageCount,
+        userEmail || profile?.email || null,
+        profile?.name || null,
+        isResolved,
+        isEscalated,
+        pagePath || null,
+        durationSeconds,
+      ],
+    );
+
+    if (sentiment === 'negative' && (userId || userEmail)) {
+      try {
+        await query(
+          `INSERT INTO ai_memory (customer_id, customer_email, memory_type, content, importance, source_conversation_id)
+           VALUES ($1::uuid, $2, 'issue', $3, 'high', $4::uuid)`,
+          [userId, userEmail, `Had a negative experience: "${userText.slice(0, 150)}"`, existingConv.id],
+        );
+      } catch {}
+    }
+
+    if (category === 'product' && result.products?.length > 0 && (userId || userEmail)) {
+      const productNames = result.products.slice(0, 3).map((p: any) => p.name).join(', ');
+      try {
+        await query(
+          `INSERT INTO ai_memory (customer_id, customer_email, memory_type, content, importance, source_conversation_id)
+           VALUES ($1::uuid, $2, 'preference', $3, 'normal', $4::uuid)`,
+          [userId, userEmail, `Interested in: ${productNames}`, existingConv.id],
+        );
+      } catch {}
+    }
+    return;
+  }
+
+  await query(
+    `INSERT INTO chat_conversations (
+       session_id, user_id, messages, metadata, sentiment, category, intent, summary,
+       message_count, customer_email, customer_name, is_resolved, is_escalated,
+       escalated_at, page_context, duration_seconds
+     ) VALUES (
+       $1, $2::uuid, $3::jsonb, $4::jsonb, $5, $6, $7, $8,
+       $9, $10, $11, $12, $13,
+       CASE WHEN $13 THEN now() ELSE NULL END, $14, 0
+     )`,
+    [
+      sessionId,
+      userId,
+      JSON.stringify(last20),
+      JSON.stringify(metadata),
       sentiment,
       category,
       intent,
       summary,
-      message_count: messageCount,
-      customer_email: userEmail || profile?.email || null,
-      customer_name: profile?.name || null,
-      is_resolved: isResolved,
-      is_escalated: isEscalated,
-      escalated_at: isEscalated ? new Date().toISOString() : null,
-      page_context: pagePath || null,
-      duration_seconds: durationSeconds,
-    }).eq('id', existingConv.id);
-
-    // Auto-save AI memory for negative sentiment
-    if (sentiment === 'negative' && (userId || userEmail)) {
-      await supabase.from('ai_memory').insert({
-        customer_id: userId || null,
-        customer_email: userEmail || null,
-        memory_type: 'issue',
-        content: `Had a negative experience: "${userText.slice(0, 150)}"`,
-        importance: 'high',
-        source_conversation_id: existingConv.id,
-      }).then(() => {}).catch(() => {});
-    }
-
-    // Auto-save preference memories from product searches
-    if (category === 'product' && result.products?.length > 0 && (userId || userEmail)) {
-      const productNames = result.products.slice(0, 3).map((p: any) => p.name).join(', ');
-      await supabase.from('ai_memory').insert({
-        customer_id: userId || null,
-        customer_email: userEmail || null,
-        memory_type: 'preference',
-        content: `Interested in: ${productNames}`,
-        importance: 'normal',
-        source_conversation_id: existingConv.id,
-      }).then(() => {}).catch(() => {});
-    }
-  }
+      messageCount,
+      userEmail || profile?.email || null,
+      profile?.name || null,
+      isResolved,
+      isEscalated,
+      pagePath || null,
+    ],
+  );
 }
 
 // ─── Rule-Based Fallback ────────────────────────────────────────────────────
 
-async function handleWithoutAI(supabase: any, _supabaseWriter: any, userText: string, profile: ChatCustomerProfile | null) {
+async function handleWithoutAI(userText: string, profile: ChatCustomerProfile | null) {
   const lower = userText.toLowerCase();
 
   if (/\b(hi|hello|hey|good morning|good afternoon|good evening)\b/i.test(userText)) {
@@ -768,7 +790,7 @@ async function handleWithoutAI(supabase: any, _supabaseWriter: any, userText: st
   }
 
   if (/\b(recommend|popular|bestseller|suggest|trending)\b/i.test(lower)) {
-    const products = await getRecommendations(supabase);
+    const products = await getRecommendations();
     if (products.length > 0) {
       const actions: ChatAction[] = products.filter((p) => p.inStock).map((p) => ({ type: 'add_to_cart' as const, product: p }));
       return {
@@ -803,7 +825,7 @@ async function handleWithoutAI(supabase: any, _supabaseWriter: any, userText: st
       .replace(/\?/g, '')
       .trim() || ' ';
 
-    const products = await searchProducts(supabase, query, 4);
+    const products = await searchProducts(query, 4);
     if (products.length > 0) {
       const actions: ChatAction[] = products.filter((p) => p.inStock).map((p) => ({ type: 'add_to_cart' as const, product: p }));
       return {
@@ -815,7 +837,7 @@ async function handleWithoutAI(supabase: any, _supabaseWriter: any, userText: st
     }
   }
 
-  const fallback = await searchProducts(supabase, userText.slice(0, 50), 3);
+  const fallback = await searchProducts(userText.slice(0, 50), 3);
   if (fallback.length > 0) {
     const actions: ChatAction[] = fallback.filter((p) => p.inStock).map((p) => ({ type: 'add_to_cart' as const, product: p }));
     return {
@@ -827,7 +849,7 @@ async function handleWithoutAI(supabase: any, _supabaseWriter: any, userText: st
   }
 
   // Last resort: show popular products so the customer always sees real options
-  const popular = await getRecommendations(supabase);
+  const popular = await getRecommendations();
   if (popular.length > 0) {
     const actions: ChatAction[] = popular.filter((p) => p.inStock).map((p) => ({ type: 'add_to_cart' as const, product: p }));
     return {
@@ -847,8 +869,6 @@ async function handleWithoutAI(supabase: any, _supabaseWriter: any, userText: st
 // ─── AI Handler with Function Calling (Groq) ───────────────────────────────
 
 async function handleWithAI(
-  supabase: any,
-  supabaseWriter: any,
   messages: ChatMessage[],
   userText: string,
   apiKey: string,
@@ -921,7 +941,7 @@ async function handleWithAI(
 
     if (!res.ok) {
       console.error('[Chat API] Groq error:', await res.text());
-      return await handleWithoutAI(supabase, supabaseWriter, userText, profile);
+      return await handleWithoutAI(userText, profile);
     }
 
     let data = await res.json();
@@ -940,7 +960,7 @@ async function handleWithAI(
         let args: any = {};
         try { args = JSON.parse(tc.function?.arguments || '{}'); } catch {}
 
-        const toolResult = await executeToolCall(supabase, supabaseWriter, fnName, args, userId, userEmail, profile, cartItems, clientIp);
+        const toolResult = await executeToolCall(fnName, args, userId, userEmail, profile, cartItems, clientIp);
 
         if (toolResult.products) allProducts.push(...toolResult.products);
         if (toolResult.orderCard) orderCard = toolResult.orderCard;
@@ -1022,15 +1042,13 @@ async function handleWithAI(
     };
   } catch (err: any) {
     console.error('[Chat API] AI handler error:', err);
-    return await handleWithoutAI(supabase, supabaseWriter, userText, profile);
+    return await handleWithoutAI(userText, profile);
   }
 }
 
 // ─── Tool Call Executor ─────────────────────────────────────────────────────
 
 async function executeToolCall(
-  supabase: any,
-  supabaseWriter: any,
   fnName: string,
   args: any,
   userId: string | null,
@@ -1050,9 +1068,9 @@ async function executeToolCall(
 }> {
   switch (fnName) {
     case 'search_products': {
-      const products = await searchProducts(supabase, args.query, 4);
+      const products = await searchProducts(args.query, 4);
       if (products.length === 0) {
-        const alternatives = await getRecommendations(supabase);
+        const alternatives = await getRecommendations();
         if (alternatives.length > 0) {
           return {
             data: {
@@ -1091,7 +1109,7 @@ async function executeToolCall(
     }
 
     case 'get_product_for_cart': {
-      const product = await getProductForCart(supabase, args.slug_or_id);
+      const product = await getProductForCart(args.slug_or_id);
       return {
         data: product ? { name: product.name, price: product.price, inStock: product.inStock } : { error: 'Product not found' },
         products: product ? [product] : undefined,
@@ -1105,7 +1123,7 @@ async function executeToolCall(
       if (!requesterEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(requesterEmail)) {
         return { data: { error: 'Please provide a valid email address used when placing the order.' }, quickReplies: ['I have my email'] };
       }
-      const order = await trackOrder(supabaseWriter, args.order_number, requesterEmail);
+      const order = await trackOrder(args.order_number, requesterEmail);
       if (!order) {
         return { data: { error: 'Order not found. Please check the order number and email address.' }, quickReplies: ['Try again', 'Contact support'] };
       }
@@ -1127,7 +1145,7 @@ async function executeToolCall(
       if (!userId) {
         return { data: { error: 'You need to be logged in to view your orders. Please sign in first.' }, quickReplies: ['Sign in', 'Track order by number'] };
       }
-      const orders = await getCustomerOrders(supabaseWriter, userId, args.limit || 5);
+      const orders = await getCustomerOrders(userId, args.limit || 5);
       return {
         data: orders.map((o) => ({ order_number: o.order_number, status: o.status, total: o.total, date: o.created_at, items_count: o.items.length })),
         orderCard: orders[0],
@@ -1148,7 +1166,7 @@ async function executeToolCall(
           };
         }
       }
-      const coupon = await checkCoupon(supabaseWriter, args.code, args.cart_total);
+      const coupon = await checkCoupon(args.code, args.cart_total);
       // Strip details that enable enumeration / margin disclosure. Only tell the
       // customer if the code is valid and (when valid) the discount label.
       const safeCoupon = coupon.valid
@@ -1170,7 +1188,7 @@ async function executeToolCall(
           quickReplies: ['I\'ll provide my email'],
         };
       }
-      const ticket = await createSupportTicket(supabaseWriter, {
+      const ticket = await createSupportTicket({
         userId: userId || undefined,
         email,
         subject: args.subject,
@@ -1191,7 +1209,7 @@ async function executeToolCall(
       if (!userId) {
         return { data: { error: 'You need to be logged in to initiate a return. Please sign in first.' }, quickReplies: ['Sign in', 'Contact support'] };
       }
-      const ret = await initiateReturn(supabaseWriter, {
+      const ret = await initiateReturn({
         userId,
         orderId: args.order_id,
         reason: args.reason,
@@ -1208,9 +1226,9 @@ async function executeToolCall(
     }
 
     case 'get_recommendations': {
-      let products = await getRecommendations(supabase, args.context);
+      let products = await getRecommendations(args.context);
       if (products.length === 0 && args.context) {
-        products = await getRecommendations(supabase);
+        products = await getRecommendations();
       }
       if (products.length === 0) {
         return {
@@ -1272,7 +1290,7 @@ async function executeToolCall(
     }
 
     case 'create_order': {
-      const orderResult = await createChatOrder(supabase, {
+      const orderResult = await createChatOrder({
         items: args.items || [],
         shipping: args.shipping || {},
         deliveryMethod: args.delivery_method || 'standard',

@@ -2,10 +2,9 @@
 
 import Link from 'next/link';
 import { useState, useEffect, useCallback } from 'react';
-import { supabase } from '@/lib/supabase';
+import { api } from '@/lib/api';
 import { useRouter } from 'next/navigation';
 import { SITE_DOMAIN, BRAND_NAME } from '@/lib/brand';
-import { SUPABASE_STORAGE_BUCKET } from '@/lib/supabase-storage';
 import { sortCategoriesForDisplay, categoryOptionLabel } from '@/lib/category-tree';
 
 /** URL-safe slug from product title (keeps admin slug in sync until the user edits it). */
@@ -265,14 +264,9 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
     // Fetch categories on mount
     useEffect(() => {
         async function fetchCategories() {
-            let { data, error } = await supabase
-                .from('categories')
-                .select('id, name, parent_id, sort_order')
-                .eq('is_active', true);
-            if (error) {
-                const fallback = await supabase.from('categories').select('id, name, parent_id, sort_order');
-                data = fallback.data;
-                error = fallback.error;
+            let data = await api<any[]>('/api/catalog/categories');
+            if (!data?.length) {
+                data = await api<any[]>('/api/catalog/categories');
             }
             if (data) {
                 const ordered = sortCategoriesForDisplay(data as { id: string; name: string; parent_id?: string | null; sort_order?: number | null }[]);
@@ -322,21 +316,14 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
 
             setUploading(true);
             const file = e.target.files[0];
-            const fileExt = file.name.split('.').pop();
-            const fileName = `${Math.random()}.${fileExt}`;
-            const filePath = `${fileName}`;
+            const formData = new FormData();
+            formData.append('file', file);
+            formData.append('folder', 'products');
+            const uploadRes = await fetch('/api/uploads', { method: 'POST', body: formData, credentials: 'include' });
+            const uploadJson = await uploadRes.json();
+            if (!uploadRes.ok) throw new Error(uploadJson.error || 'Upload failed');
 
-            const { error: uploadError } = await supabase.storage
-                .from(SUPABASE_STORAGE_BUCKET)
-                .upload(filePath, file);
-
-            if (uploadError) throw uploadError;
-
-            const { data: { publicUrl } } = supabase.storage
-                .from(SUPABASE_STORAGE_BUCKET)
-                .getPublicUrl(filePath);
-
-            setImages([...images, { url: publicUrl, position: images.length }]);
+            setImages([...images, { url: uploadJson.url, position: images.length }]);
 
         } catch (error: any) {
             alert('Error uploading image: ' + error.message);
@@ -418,87 +405,51 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
                 }
             };
 
-            let productId = initialData?.id;
-            let error;
+            const imagePayload = images.map((img, idx) => ({
+                url: img.url,
+                sort_order: idx,
+                alt: productName,
+            }));
 
-            if (isEditMode && productId) {
-                // Update existing
-                const { error: updateError } = await supabase
-                    .from('products')
-                    .update(productData)
-                    .eq('id', productId);
-                error = updateError;
-            } else {
-                // Create new
-                const { data: newProduct, error: insertError } = await supabase
-                    .from('products')
-                    .insert([productData])
-                    .select()
-                    .single();
-
-                if (newProduct) productId = newProduct.id;
-                error = insertError;
+            let variantPayload: Record<string, unknown>[] = [];
+            if (variants.length > 0) {
+                const baseProductSku = (sku || generateSku()).trim();
+                const saleRatio =
+                    hasPromoSalesPrice && reg > 0 && sal > 0
+                        ? reg / sal
+                        : strikeout && reg > 0 && cmpOpt > 0
+                          ? cmpOpt / reg
+                          : null;
+                variantPayload = variants.map((v, idx) => {
+                    const colorHex = selectedColors.find(c => c.name === v.color)?.hex || null;
+                    const optionValues: unknown[] = [];
+                    if (v.name) optionValues.push({ name: 'Size', value: v.name });
+                    if (v.color?.trim()) optionValues.push({ name: 'Color', value: v.color.trim(), ...(colorHex ? { hex: colorHex } : {}) });
+                    const rowSku = (v.sku || '').trim();
+                    const resolvedSku =
+                        rowSku ||
+                        (variants.length > 1 ? `${baseProductSku}-${idx + 1}` : baseProductSku);
+                    const vp = parseFloat(String(v.price)) || 0;
+                    const variantCompare =
+                        saleRatio && vp > 0 ? Math.round(vp * saleRatio * 100) / 100 : null;
+                    const vsp = parseFloat(String(v.salePrice)) || 0;
+                    return {
+                        sku: resolvedSku,
+                        price: vp,
+                        compare_at_price: variantCompare,
+                        sale_price: vsp > 0 && vsp < vp ? vsp : null,
+                        stock_quantity: parseInt(String(v.stock), 10) || 0,
+                        option_values: optionValues,
+                    };
+                });
             }
 
-            if (error) throw error;
+            const payload = { ...productData, images: imagePayload, variants: variantPayload };
 
-            // Update Images
-            if (productId) {
-                // Strategy: We will just delete all old images/variants and recreate them for simplicity in this MVP.
-                // In a clearer implementation, we would diff them.
-
-                // 1. Images
-                if (isEditMode) {
-                    await supabase.from('product_images').delete().eq('product_id', productId);
-                }
-                if (images.length > 0) {
-                    const imageInserts = images.map((img, idx) => ({
-                        product_id: productId,
-                        url: img.url,
-                        sort_order: idx,
-                        alt: productName
-                    }));
-                    await supabase.from('product_images').insert(imageInserts);
-                }
-
-                if (isEditMode) {
-                    await supabase.from('variants').delete().eq('product_id', productId);
-                }
-
-                if (variants.length > 0) {
-                    const baseProductSku = (sku || generateSku()).trim();
-                    const saleRatio =
-                        hasPromoSalesPrice && reg > 0 && sal > 0
-                            ? reg / sal
-                            : strikeout && reg > 0 && cmpOpt > 0
-                              ? cmpOpt / reg
-                              : null;
-                    const variantInserts = variants.map((v, idx) => {
-                        const colorHex = selectedColors.find(c => c.name === v.color)?.hex || null;
-                        const optionValues: any[] = [];
-                        if (v.name) optionValues.push({ name: 'Size', value: v.name });
-                        if (v.color?.trim()) optionValues.push({ name: 'Color', value: v.color.trim(), ...(colorHex ? { hex: colorHex } : {}) });
-                        const rowSku = (v.sku || '').trim();
-                        const resolvedSku =
-                            rowSku ||
-                            (variants.length > 1 ? `${baseProductSku}-${idx + 1}` : baseProductSku);
-                        const vp = parseFloat(String(v.price)) || 0;
-                        const variantCompare =
-                            saleRatio && vp > 0 ? Math.round(vp * saleRatio * 100) / 100 : null;
-                        const vsp = parseFloat(String(v.salePrice)) || 0;
-                        return {
-                            product_id: productId,
-                            sku: resolvedSku,
-                            price: vp,
-                            compare_at_price: variantCompare,
-                            sale_price: vsp > 0 && vsp < vp ? vsp : null,
-                            stock_quantity: parseInt(String(v.stock), 10) || 0,
-                            option_values: optionValues,
-                        };
-                    });
-                    const { error: varError } = await supabase.from('variants').insert(variantInserts);
-                    if (varError) throw varError;
-                }
+            if (isEditMode && initialData?.id) {
+                await api(`/api/catalog/products/${initialData.id}`, { method: 'PATCH', json: payload });
+            } else {
+                await api('/api/catalog/products', { method: 'POST', json: payload });
             }
 
             alert(isEditMode ? 'Product updated successfully!' : 'Product created successfully!');

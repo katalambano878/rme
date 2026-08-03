@@ -2,7 +2,7 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { supabase } from '@/lib/supabase';
+import { api } from '@/lib/api';
 import { canManageStaffRoles } from '@/lib/admin-role-access';
 import {
   STAFF_PERMISSION_AREAS,
@@ -60,31 +60,21 @@ export default function AdminStaffPage() {
 
   useEffect(() => {
     (async () => {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-      if (session?.user?.id) setMyId(session.user.id);
-      const { data: profile } = await supabase.from('profiles').select('role').eq('id', session?.user?.id ?? '').maybeSingle();
-      if (profile?.role) setMyRole(profile.role);
+      try {
+        const me = await api<{ user: { id: string; role: string } }>('/api/auth/me');
+        if (me?.user?.id) setMyId(me.user.id);
+        if (me?.user?.role) setMyRole(me.user.role);
+      } catch {
+        /* not signed in */
+      }
     })();
   }, []);
 
   const fetchStaff = async () => {
     try {
       setLoading(true);
-      const first = await supabase
-        .from('profiles')
-        .select('id, email, full_name, role, created_at, updated_at, permissions')
-        .order('created_at', { ascending: false });
-      const res =
-        first.error && /permissions|schema cache/i.test(String(first.error.message))
-          ? await supabase
-              .from('profiles')
-              .select('id, email, full_name, role, created_at, updated_at')
-              .order('created_at', { ascending: false })
-          : first;
-      if (res.error) throw res.error;
-      setRows((res.data as ProfileRow[]) ?? []);
+      const res = await api<ProfileRow[]>('/api/admin/staff');
+      setRows(res ?? []);
     } catch (e) {
       console.error(e);
       setRows([]);
@@ -112,13 +102,6 @@ export default function AdminStaffPage() {
     );
   }, [rows, search, includeCustomers]);
 
-  const getSessionToken = async () => {
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
-    return session?.access_token ?? null;
-  };
-
   const updateRole = async (id: string, newRole: string) => {
     if (!canEditRoles) return;
     if (id === myId && newRole === 'customer') {
@@ -126,8 +109,10 @@ export default function AdminStaffPage() {
     }
     try {
       setSavingId(id);
-      const { error } = await supabase.from('profiles').update({ role: newRole }).eq('id', id);
-      if (error) throw error;
+      await api('/api/admin/staff', {
+        method: 'PATCH',
+        json: { userId: id, role: newRole },
+      });
       setRows((prev) => prev.map((r) => (r.id === id ? { ...r, role: newRole } : r)));
     } catch (e: unknown) {
       alert(e instanceof Error ? e.message : 'Could not update role');
@@ -150,24 +135,10 @@ export default function AdminStaffPage() {
     }
     try {
       setPermSaving(true);
-      const token = await getSessionToken();
-      if (!token) {
-        alert('Not signed in.');
-        return;
-      }
-      const res = await fetch('/api/admin/staff', {
+      await api('/api/admin/staff', {
         method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ userId: permUser.id, permissions: permDraft }),
+        json: { userId: permUser.id, permissions: permDraft },
       });
-      const json = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        alert(typeof json.error === 'string' ? json.error : 'Could not save permissions');
-        return;
-      }
       setRows((prev) =>
         prev.map((r) => (r.id === permUser.id ? { ...r, permissions: permDraft as unknown as Record<string, unknown> } : r)),
       );
@@ -196,30 +167,16 @@ export default function AdminStaffPage() {
     }
     try {
       setAddSubmitting(true);
-      const token = await getSessionToken();
-      if (!token) {
-        alert('Not signed in.');
-        return;
-      }
-      const res = await fetch('/api/admin/staff', {
+      await api('/api/admin/staff', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
+        json: {
           email: addEmail.trim(),
           password: addPassword,
           fullName: addName.trim() || undefined,
           role: addRole,
           permissions: addRole === 'staff' ? addPerms : defaultStaffPermissions(),
-        }),
+        },
       });
-      const json = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        alert(typeof json.error === 'string' ? json.error : 'Could not create staff');
-        return;
-      }
       setShowAdd(false);
       setAddEmail('');
       setAddPassword('');
@@ -243,18 +200,10 @@ export default function AdminStaffPage() {
     if (!confirm(`Delete ${r.email || r.full_name || 'this user'}? This cannot be undone.`)) return;
     try {
       setDeletingId(r.id);
-      const token = await getSessionToken();
-      if (!token) { alert('Not signed in.'); return; }
-      const res = await fetch('/api/admin/staff', {
+      await api('/api/admin/staff', {
         method: 'DELETE',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ userId: r.id }),
+        json: { userId: r.id },
       });
-      const json = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        alert(typeof json.error === 'string' ? json.error : 'Could not delete user');
-        return;
-      }
       setRows((prev) => prev.filter((p) => p.id !== r.id));
     } catch (e) {
       alert(e instanceof Error ? e.message : 'Could not delete user');

@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { supabaseAdmin } from '@/lib/supabase-admin';
+import { queryOne } from '@/lib/db';
 import { verifyAuth } from '@/lib/auth';
 import { escapeHtml } from '@/lib/sanitize';
 import { sendOrderConfirmation, sendOrderStatusUpdate, sendWelcomeMessage, sendContactMessage, sendPaymentLink, sendEmail, sendSMS, emailLayout } from '@/lib/notifications';
@@ -30,9 +30,6 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'Type and payload required' }, { status: 400 });
         }
 
-        // SECURITY: order_created emails are triggered by webhooks server-side
-        // (Paystack/Moolre) and never directly by an unauthenticated client.
-        // Allow only admin callers to manually trigger it (e.g. a resend button).
         const adminOnlyTypes = ['campaign', 'order_updated', 'order_status', 'payment_link', 'welcome', 'order_created'];
         const requiresAdminAuth = adminOnlyTypes.includes(type);
 
@@ -43,8 +40,6 @@ export async function POST(request: Request) {
             }
         }
 
-        // SECURITY: contact form is the only public endpoint here. Apply a tighter
-        // rate limit on top of the global notification limit (3 / 30 min per IP).
         if (type === 'contact') {
             const contactLimit = checkRateLimit(`contact:${clientId}`, { maxRequests: 3, windowSeconds: 30 * 60 });
             if (!contactLimit.success) {
@@ -61,13 +56,15 @@ export async function POST(request: Request) {
             }
 
             const orderRef = payload.order_number || payload.id;
-            const { data: order, error: orderError } = await supabaseAdmin
-                .from('orders')
-                .select('id, order_number, created_at')
-                .or(`order_number.eq.${orderRef},id.eq.${orderRef}`)
-                .single();
+            const order = await queryOne<{ id: string; order_number: string; created_at: string }>(
+                `SELECT id, order_number, created_at
+                 FROM orders
+                 WHERE order_number = $1 OR id::text = $1
+                 LIMIT 1`,
+                [orderRef],
+            );
 
-            if (orderError || !order) {
+            if (!order) {
                 return NextResponse.json({ error: 'Order not found' }, { status: 404 });
             }
 
@@ -96,19 +93,34 @@ export async function POST(request: Request) {
                 return NextResponse.json({ error: 'Missing orderNumber or status' }, { status: 400 });
             }
 
-            const { data: fullOrder } = await supabaseAdmin
-                .from('orders')
-                .select('id, order_number, email, phone, shipping_address, metadata')
-                .eq('order_number', orderNumber)
-                .single();
+            const fullOrder = await queryOne<{
+                id: string
+                order_number: string
+                guest_email: string | null
+                guest_phone: string | null
+                shipping_address: unknown
+            }>(
+                `SELECT id, order_number, guest_email, guest_phone, shipping_address
+                 FROM orders
+                 WHERE order_number = $1
+                 LIMIT 1`,
+                [orderNumber],
+            );
 
-            const orderData = fullOrder || {
-                order_number: orderNumber,
-                email,
-                phone,
-                shipping_address: { firstName: name, phone },
-                metadata: { tracking_number: trackingNumber }
-            };
+            const orderData = fullOrder
+                ? {
+                    ...fullOrder,
+                    email: fullOrder.guest_email,
+                    phone: fullOrder.guest_phone,
+                    metadata: { tracking_number: trackingNumber },
+                }
+                : {
+                    order_number: orderNumber,
+                    email,
+                    phone,
+                    shipping_address: { firstName: name, phone },
+                    metadata: { tracking_number: trackingNumber }
+                };
 
             if (!orderData.phone && phone) orderData.phone = phone;
 

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { supabase } from '@/lib/supabase';
+import { api, ApiError } from '@/lib/api';
 
 interface Module {
   id: string;
@@ -114,18 +114,16 @@ export default function ModulesPage() {
 
   const fetchModuleStates = async () => {
     try {
-      const { data, error } = await supabase.from('store_modules').select('*');
-      if (error) {
-        if (error.code === 'PGRST205' || error.message?.includes('store_modules')) {
-          // Table doesn't exist — use local defaults (all disabled)
-        } else {
-          throw error;
-        }
-      }
-
+      const res = await api<{ data: { module_key: string; enabled: boolean }[] }>('/api/admin/modules').catch(
+        (err) => {
+          if (err instanceof ApiError && err.status === 501) return { data: [] };
+          throw err;
+        },
+      );
+      const data = res.data;
       if (data) {
         setModules(prev => prev.map(m => {
-          const dbState = data.find((d: any) => d.id === m.id);
+          const dbState = data.find((d) => d.module_key === m.id);
           return dbState ? { ...m, enabled: dbState.enabled } : m;
         }));
       }
@@ -144,18 +142,13 @@ export default function ModulesPage() {
     )
 
     try {
-      const { error } = await supabase.from('store_modules').upsert({
-        id,
-        enabled: newState,
-        updated_at: new Date().toISOString(),
-      })
-
-      if (error) {
-        if (error.code === 'PGRST205' || error.message?.includes('store_modules')) {
-          return
-        }
-        throw error
-      }
+      await api('/api/admin/modules', {
+        method: 'POST',
+        json: { module_key: id, enabled: newState },
+      }).catch((err) => {
+        if (err instanceof ApiError && err.status === 501) return;
+        throw err;
+      });
     } catch (err) {
       console.error('Error updating module:', err)
       setModules((prev) =>

@@ -2,7 +2,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { supabase } from '@/lib/supabase';
+import { api } from '@/lib/api';
 import { discountRowToAdminCoupon } from '@/lib/discount-map';
 
 export default function AdminCouponsPage() {
@@ -34,14 +34,8 @@ export default function AdminCouponsPage() {
   const fetchCoupons = async () => {
     try {
       setLoading(true);
-      const { data, error } = await supabase
-        .from('discounts')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      if (error) {
-        console.warn('Discounts table fetch error:', error);
-      } else if (data) {
+      const data = await api<any[]>('/api/admin/coupons');
+      if (data) {
         setCoupons(data.map((row) => ({ ...discountRowToAdminCoupon(row), _raw: row })));
       }
     } catch (err) {
@@ -96,14 +90,18 @@ export default function AdminCouponsPage() {
       ends_at: form.ends_at || null,
       is_active: form.is_active,
     };
-    let error: any = null;
-    if (showEditModal && editingCoupon) {
-      ({ error } = await supabase.from('discounts').update(payload).eq('id', editingCoupon.id));
-    } else {
-      ({ error } = await supabase.from('discounts').insert(payload));
+    try {
+      if (showEditModal && editingCoupon) {
+        await api(`/api/admin/coupons/${editingCoupon.id}`, { method: 'PATCH', json: payload });
+      } else {
+        await api('/api/admin/coupons', { method: 'POST', json: payload });
+      }
+    } catch (err) {
+      setSaving(false);
+      alert('Error saving coupon: ' + (err instanceof Error ? err.message : 'Unknown error'));
+      return;
     }
     setSaving(false);
-    if (error) { alert('Error saving coupon: ' + error.message); return; }
     setShowAddModal(false);
     setShowEditModal(false);
     fetchCoupons();
@@ -112,9 +110,12 @@ export default function AdminCouponsPage() {
   const deleteCoupon = async (id: string, code: string) => {
     if (!confirm(`Delete coupon "${code}"? This cannot be undone.`)) return;
     setDeletingId(id);
-    const { error } = await supabase.from('discounts').delete().eq('id', id);
-    if (error) { alert('Error deleting coupon: ' + error.message); }
-    else { setCoupons(prev => prev.filter(c => c.id !== id)); }
+    try {
+      await api(`/api/admin/coupons/${id}`, { method: 'DELETE' });
+      setCoupons(prev => prev.filter(c => c.id !== id));
+    } catch (err) {
+      alert('Error deleting coupon: ' + (err instanceof Error ? err.message : 'Unknown error'));
+    }
     setDeletingId(null);
   };
 

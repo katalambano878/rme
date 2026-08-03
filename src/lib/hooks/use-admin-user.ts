@@ -2,75 +2,60 @@
 
 import { useCallback, useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
-import type { User } from "@supabase/supabase-js"
-import { createClient } from "@/lib/supabase/client"
+import { api } from "@/lib/api"
 
 export type AdminProfile = {
   id: string
   email: string | null
   full_name: string | null
   role: string
+  permissions?: Record<string, unknown> | null
+}
+
+export type AuthUser = {
+  id: string
+  email: string
+  role: string
+  full_name?: string | null
 }
 
 export function useAdminUser() {
   const router = useRouter()
-  const [user, setUser] = useState<User | null>(null)
+  const [user, setUser] = useState<AuthUser | null>(null)
   const [profile, setProfile] = useState<AdminProfile | null>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    const supabase = createClient()
     let cancelled = false
 
     async function load() {
-      const {
-        data: { user: u },
-      } = await supabase.auth.getUser()
-      if (cancelled) return
-      if (!u) {
+      try {
+        const data = await api<{ user: AuthUser; profile: AdminProfile }>("/api/auth/me")
+        if (cancelled) return
+        setUser(data.user)
+        setProfile(data.profile)
+      } catch {
+        if (cancelled) return
         setUser(null)
         setProfile(null)
-        setLoading(false)
-        return
+      } finally {
+        if (!cancelled) setLoading(false)
       }
-      setUser(u)
-      const { data: row } = await supabase
-        .from("profiles")
-        .select("id, email, full_name, role")
-        .eq("id", u.id)
-        .single()
-      if (cancelled) return
-      if (row) {
-        setProfile({
-          id: row.id,
-          email: row.email,
-          full_name: row.full_name,
-          role: row.role,
-        })
-      } else {
-        setProfile(null)
-      }
-      setLoading(false)
     }
 
     load()
-
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange(() => {
-      load()
-    })
-
     return () => {
       cancelled = true
-      subscription.unsubscribe()
     }
   }, [])
 
   const signOut = useCallback(async () => {
-    const supabase = createClient()
-    await supabase.auth.signOut()
-    router.push("/auth/login")
+    try {
+      await api("/api/auth/logout", { method: "POST" })
+    } catch {
+      /* ignore */
+    }
+    router.push("/admin/login")
     router.refresh()
   }, [router])
 

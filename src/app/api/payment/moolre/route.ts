@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { createAdminClient } from "@/lib/supabase/admin"
+import { query, queryOne } from "@/lib/db"
 import { checkRateLimit, getClientIdentifier, RATE_LIMITS } from "@/lib/rate-limit"
 
 /**
@@ -36,25 +36,30 @@ export async function POST(req: Request) {
       return NextResponse.json({ success: false, message: "Payment gateway configuration error" }, { status: 500 })
     }
 
-    const supabase = createAdminClient()
     const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(orderId)
 
-    const q = supabase
-      .from("orders")
-      .select("id, order_number, grand_total, guest_email, payments(status)")
+    const order = await queryOne<{
+      id: string
+      order_number: string
+      grand_total: number
+      guest_email: string | null
+    }>(
+      isUUID
+        ? `SELECT id, order_number, grand_total, guest_email FROM orders WHERE id = $1 LIMIT 1`
+        : `SELECT id, order_number, grand_total, guest_email FROM orders WHERE order_number = $1 LIMIT 1`,
+      [orderId],
+    )
 
-    const { data: order, error: orderError } = isUUID
-      ? await q.eq("id", orderId).single()
-      : await q.eq("order_number", orderId).single()
-
-    if (orderError || !order) {
+    if (!order) {
       console.error("[Moolre] Order not found:", orderId)
       return NextResponse.json({ success: false, message: "Order not found" }, { status: 404 })
     }
 
-    const paid = (order.payments as { status: string }[] | null)?.some(
-      (p) => p.status === "paid" || p.status === "completed",
+    const paymentsResult = await query<{ status: string }>(
+      `SELECT status FROM payments WHERE order_id = $1`,
+      [order.id],
     )
+    const paid = paymentsResult.rows.some((p) => p.status === "paid" || p.status === "completed")
     if (paid) {
       return NextResponse.json({ success: false, message: "Order is already paid" }, { status: 400 })
     }
@@ -67,7 +72,7 @@ export async function POST(req: Request) {
     const orderRef = order.order_number || orderId
     const requestUrl = new URL(req.url)
     let rawBase = process.env.APP_BASE_URL || process.env.NEXT_PUBLIC_APP_URL || requestUrl.origin
-    if (rawBase && !rawBase.startsWith('http')) rawBase = `https://${rawBase}`
+    if (rawBase && !rawBase.startsWith("http")) rawBase = `https://${rawBase}`
     const baseUrl = rawBase.replace(/\/+$/, "")
 
     const uniqueRef = `${orderRef}-R${Date.now()}`
@@ -88,34 +93,35 @@ export async function POST(req: Request) {
       },
     }
 
-    // Include callback secret so Moolre echoes it back — required for signature verification
     if (process.env.MOOLRE_CALLBACK_SECRET) {
       payload.secret = process.env.MOOLRE_CALLBACK_SECRET
     }
 
-    // Persist pending payment with the exact externalref used for later verify/status
-    const { data: existingPay } = await supabase
-      .from("payments")
-      .select("id")
-      .eq("order_id", order.id)
-      .eq("provider", "moolre")
-      .maybeSingle()
+    const existingPay = await queryOne<{ id: string }>(
+      `SELECT id FROM payments WHERE order_id = $1 AND provider = 'moolre' LIMIT 1`,
+      [order.id],
+    )
 
     const pendingPayload = {
-      order_id: order.id,
-      provider: "moolre" as const,
       provider_ref: uniqueRef,
       amount,
-      currency: "GHS",
-      status: "pending" as const,
-      updated_at: new Date().toISOString(),
       raw_payload: { externalref: uniqueRef, original_order_number: orderRef },
     }
 
     if (existingPay?.id) {
-      await supabase.from("payments").update(pendingPayload).eq("id", existingPay.id).neq("status", "paid")
+      await query(
+        `UPDATE payments
+         SET provider_ref = $2, amount = $3, currency = 'GHS', status = 'pending',
+             updated_at = now(), raw_payload = $4::jsonb
+         WHERE id = $1 AND status <> 'paid'`,
+        [existingPay.id, pendingPayload.provider_ref, pendingPayload.amount, JSON.stringify(pendingPayload.raw_payload)],
+      )
     } else {
-      await supabase.from("payments").insert(pendingPayload)
+      await query(
+        `INSERT INTO payments (order_id, provider, provider_ref, amount, currency, status, updated_at, raw_payload)
+         VALUES ($1, 'moolre', $2, $3, 'GHS', 'pending', now(), $4::jsonb)`,
+        [order.id, pendingPayload.provider_ref, pendingPayload.amount, JSON.stringify(pendingPayload.raw_payload)],
+      )
     }
 
     const controller = new AbortController()

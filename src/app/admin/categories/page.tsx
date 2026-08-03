@@ -1,8 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { supabase } from '@/lib/supabase';
-import { SUPABASE_STORAGE_BUCKET } from '@/lib/supabase-storage';
+import { api } from '@/lib/api';
 import {
   sortCategoriesForDisplay,
   categoryDepth,
@@ -39,9 +38,7 @@ export default function AdminCategoriesPage() {
   const fetchCategories = async () => {
     try {
       setLoading(true);
-      const { data, error } = await supabase.from('categories').select('*');
-
-      if (error) throw error;
+      const data = await api<any[]>('/api/catalog/categories');
       if (data) setCategories(data);
     } catch (err) {
       console.error('Error fetching categories:', err);
@@ -75,9 +72,7 @@ export default function AdminCategoriesPage() {
   const handleDelete = async (categoryId: string) => {
     if (!confirm('Are you sure you want to delete this category? Products in it will have no category.')) return;
     try {
-      await supabase.from('products').update({ category_id: null }).eq('category_id', categoryId);
-      const { error } = await supabase.from('categories').delete().eq('id', categoryId);
-      if (error) throw error;
+      await api(`/api/catalog/categories/${categoryId}`, { method: 'DELETE' });
       setCategories(categories.filter((c) => c.id !== categoryId));
       alert('Category deleted successfully');
     } catch (err: any) {
@@ -91,22 +86,14 @@ export default function AdminCategoriesPage() {
 
       setUploading(true);
       const file = e.target.files[0];
-      const fileExt = file.name.split('.').pop();
-      const fileName = `cat-${Math.random()}.${fileExt}`;
-      const filePath = `${fileName}`;
+      const formDataUpload = new FormData();
+      formDataUpload.append('file', file);
+      formDataUpload.append('folder', 'categories');
+      const uploadRes = await fetch('/api/uploads', { method: 'POST', body: formDataUpload, credentials: 'include' });
+      const uploadJson = await uploadRes.json();
+      if (!uploadRes.ok) throw new Error(uploadJson.error || 'Upload failed');
 
-      // Same public bucket as product images (see supabase/migrations + SUPABASE_STORAGE_BUCKET)
-      const { error: uploadError } = await supabase.storage
-        .from(SUPABASE_STORAGE_BUCKET)
-        .upload(filePath, file);
-
-      if (uploadError) throw uploadError;
-
-      const { data: { publicUrl } } = supabase.storage
-        .from(SUPABASE_STORAGE_BUCKET)
-        .getPublicUrl(filePath);
-
-      setFormData({ ...formData, image_url: publicUrl });
+      setFormData({ ...formData, image_url: uploadJson.url });
 
     } catch (error: any) {
       alert('Error uploading image: ' + error.message);
@@ -134,29 +121,11 @@ export default function AdminCategoriesPage() {
         featured_on_home: formData.featured,
       };
 
-      const save = async (body: Record<string, unknown>) => {
-        if (showEditModal && editingCategory) {
-          return supabase.from('categories').update(body).eq('id', editingCategory.id);
-        }
-        return supabase.from('categories').insert([body]);
-      };
-
-      let { error } = await save(payload);
-      if (
-        error &&
-        typeof error.message === 'string' &&
-        /featured_on_home|parent_id|schema cache/i.test(error.message)
-      ) {
-        const { featured_on_home: _f, parent_id: _p, ...lean } = payload;
-        const second = await save(lean);
-        error = second.error;
-        if (!error) {
-          alert(
-            'Category saved. In Supabase → SQL, run the migration that adds featured_on_home and parent_id (see supabase/migrations/20260413120000_categories_featured_and_parent.sql) to persist “Feature on homepage” and parents.',
-          );
-        }
+      if (showEditModal && editingCategory) {
+        await api(`/api/catalog/categories/${editingCategory.id}`, { method: 'PATCH', json: payload });
+      } else {
+        await api('/api/catalog/categories', { method: 'POST', json: payload });
       }
-      if (error) throw error;
       alert(showEditModal ? 'Category updated' : 'Category created');
 
       setShowAddModal(false);

@@ -3,7 +3,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { supabase } from '@/lib/supabase';
+import { api } from '@/lib/api';
 import { LineChart, Line, BarChart, Bar, PieChart, Pie, AreaChart, Area, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
 export default function AnalyticsPage() {
@@ -55,34 +55,36 @@ export default function AnalyticsPage() {
       const isPaid = (o: any) => o.payments?.some((p: any) => p.status === 'completed' || p.status === 'paid');
 
       // Fetch current + previous period in parallel
-      const [{ data: rawOrders, error: orderError }, { data: rawPrevOrders }] = await Promise.all([
-        supabase
-          .from('orders')
-          .select('id, created_at, grand_total, status, payments(status)')
-          .gte('created_at', isoStart)
-          .neq('status', 'cancelled')
-          .order('created_at'),
-        supabase
-          .from('orders')
-          .select('id, grand_total, payments(status)')
-          .gte('created_at', isoPrevStart)
-          .lt('created_at', isoStart)
-          .neq('status', 'cancelled'),
-      ]);
-
-      if (orderError) throw orderError;
+      const allOrders = await api<any[]>('/api/admin/orders');
+      const rawOrders = (allOrders || []).filter((o) => o.created_at >= isoStart && o.status !== 'cancelled');
+      const rawPrevOrders = (allOrders || []).filter(
+        (o) => o.created_at >= isoPrevStart && o.created_at < isoStart && o.status !== 'cancelled',
+      );
 
       const orders     = (rawOrders     || []).filter(isPaid).map((o: any) => ({ ...o, total: Number(o.grand_total) || 0 }));
       const prevOrders = (rawPrevOrders || []).filter(isPaid).map((o: any) => ({ total: Number(o.grand_total) || 0 }));
 
       let validItems: any[] = [];
       if (orders.length > 0) {
-        const orderIds = orders.map((o: any) => o.id);
-        const { data: fetchedItems } = await supabase
-          .from('order_items')
-          .select('quantity, unit_price, line_total, product_id, products!inner(name, category_id, categories(name))')
-          .in('order_id', orderIds);
-        if (fetchedItems) validItems = fetchedItems;
+        const orderIdSet = new Set(orders.map((o: any) => o.id));
+        const products = await api<any[]>('/api/catalog/products');
+        const productMap = new Map((products || []).map((p) => [p.id, p]));
+        for (const order of allOrders || []) {
+          if (!orderIdSet.has(order.id)) continue;
+          for (const item of order.order_items || []) {
+            const prod = productMap.get(item.product_id);
+            validItems.push({
+              ...item,
+              products: prod
+                ? {
+                    name: prod.name,
+                    category_id: prod.category_id,
+                    categories: prod.categories,
+                  }
+                : null,
+            });
+          }
+        }
       }
 
       // Current period metrics

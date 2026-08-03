@@ -4,7 +4,7 @@ import type { Metadata } from "next"
 import {
   fetchStorefrontProductBySlug,
   fetchRelatedProducts,
-} from "@/lib/supabase/storefront-products"
+} from "@/lib/data/storefront-products"
 import { ProductDetailClient } from "./product-detail-client"
 import { BRAND_NAME, BRAND_LOGO_SRC, SITE_DOMAIN } from "@/lib/brand"
 

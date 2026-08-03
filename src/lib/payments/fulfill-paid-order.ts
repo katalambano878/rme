@@ -1,4 +1,4 @@
-import type { SupabaseClient } from "@supabase/supabase-js"
+import { query, queryOne } from "@/lib/db"
 import { sendOrderConfirmation } from "@/lib/notifications"
 import { reduceOrderStock } from "@/lib/order-stock"
 import { isPaidDb, toDbPaymentStatus, type InternalPaymentStatus } from "@/lib/payments/status"
@@ -33,7 +33,6 @@ const AMOUNT_TOLERANCE = 0.01
  * Marks payment + order paid, reduces stock once, sends confirmation once (best-effort).
  */
 export async function fulfillPaidOrder(
-  supabase: SupabaseClient,
   input: FulfillPaidOrderInput,
   internalStatus: InternalPaymentStatus = "successful",
 ): Promise<FulfillPaidOrderResult> {
@@ -54,74 +53,96 @@ export async function fulfillPaidOrder(
     }
   }
 
-  const { data: payments } = await supabase
-    .from("payments")
-    .select("id, status")
-    .eq("order_id", input.orderId)
+  const paymentsResult = await query<{ id: string; status: string }>(
+    `SELECT id, status FROM payments WHERE order_id = $1`,
+    [input.orderId],
+  )
+  const payments = paymentsResult.rows
 
-  const alreadyPaid = (payments || []).some((p) => isPaidDb(p.status))
+  const alreadyPaid = payments.some((p) => isPaidDb(p.status))
   if (alreadyPaid) {
     return { ok: true, alreadyPaid: true }
   }
 
   const dbStatus = toDbPaymentStatus("successful")
   const now = new Date().toISOString()
-  const payPayload = {
-    order_id: input.orderId,
-    provider: input.provider,
-    provider_ref: input.providerRef,
-    amount: Number(input.expectedAmount),
-    currency: input.currency || "GHS",
-    status: dbStatus,
-    updated_at: now,
-    raw_payload: input.rawPayload ?? null,
-  }
 
-  const existingForProvider = (payments || []).find((p) => p.id)
-  const { data: existingPay } = await supabase
-    .from("payments")
-    .select("id")
-    .eq("order_id", input.orderId)
-    .eq("provider", input.provider)
-    .maybeSingle()
+  const existingPay = await queryOne<{ id: string }>(
+    `SELECT id FROM payments WHERE order_id = $1 AND provider = $2 LIMIT 1`,
+    [input.orderId, input.provider],
+  )
 
   if (existingPay?.id) {
-    const { error } = await supabase
-      .from("payments")
-      .update(payPayload)
-      .eq("id", existingPay.id)
-      .neq("status", "paid")
-    if (error) {
-      console.error("[fulfillPaidOrder] payment update error:", error.message)
+    try {
+      await query(
+        `UPDATE payments
+         SET provider_ref = $2,
+             amount = $3,
+             currency = $4,
+             status = $5,
+             updated_at = $6,
+             raw_payload = $7::jsonb
+         WHERE id = $1 AND status <> 'paid'`,
+        [
+          existingPay.id,
+          input.providerRef,
+          Number(input.expectedAmount),
+          input.currency || "GHS",
+          dbStatus,
+          now,
+          JSON.stringify(input.rawPayload ?? null),
+        ],
+      )
+    } catch (e) {
+      console.error(
+        "[fulfillPaidOrder] payment update error:",
+        e instanceof Error ? e.message : e,
+      )
     }
   } else {
-    const { error } = await supabase.from("payments").insert(payPayload)
-    if (error) {
-      // Unique provider_ref race — treat as already processed if conflict
-      console.error("[fulfillPaidOrder] payment insert error:", error.message)
-      if (!String(error.message).toLowerCase().includes("duplicate")) {
+    try {
+      await query(
+        `INSERT INTO payments (order_id, provider, provider_ref, amount, currency, status, updated_at, raw_payload)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb)`,
+        [
+          input.orderId,
+          input.provider,
+          input.providerRef,
+          Number(input.expectedAmount),
+          input.currency || "GHS",
+          dbStatus,
+          now,
+          JSON.stringify(input.rawPayload ?? null),
+        ],
+      )
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e)
+      console.error("[fulfillPaidOrder] payment insert error:", message)
+      if (!message.toLowerCase().includes("duplicate")) {
         return { ok: false, error: "Failed to record payment", statusCode: 500 }
       }
     }
   }
 
-  // Conditional order update — only from pending-like states
-  const { data: updatedOrders, error: orderErr } = await supabase
-    .from("orders")
-    .update({ status: "paid", updated_at: now })
-    .eq("id", input.orderId)
-    .in("status", ["pending", "awaiting_payment", "processing"])
-    .select("id")
-
-  if (orderErr) {
-    console.error("[fulfillPaidOrder] order update error:", orderErr.message)
+  let updatedOrderCount = 0
+  try {
+    const updatedOrders = await query<{ id: string }>(
+      `UPDATE orders
+       SET status = 'paid', updated_at = $2
+       WHERE id = $1 AND status IN ('pending', 'awaiting_payment', 'processing')
+       RETURNING id`,
+      [input.orderId, now],
+    )
+    updatedOrderCount = updatedOrders.rows.length
+  } catch (e) {
+    console.error(
+      "[fulfillPaidOrder] order update error:",
+      e instanceof Error ? e.message : e,
+    )
   }
 
-  // If another worker already marked paid, stock/notify may still need to run once
-  void existingForProvider
-
   try {
-    const stockResult = await reduceOrderStock(supabase, input.orderId)
+    const stockResult = await reduceOrderStock(input.orderId)
     if (stockResult.errors.length) {
       console.error("[fulfillPaidOrder] stock errors:", stockResult.errors)
     }
@@ -131,7 +152,7 @@ export async function fulfillPaidOrder(
 
   // Only notify when we transitioned (or first success path). Soft: may duplicate under race —
   // notifications should become idempotent via sms_attempts table in a later pass.
-  if (updatedOrders && updatedOrders.length > 0) {
+  if (updatedOrderCount > 0) {
     try {
       await sendOrderConfirmation({
         id: input.orderId,

@@ -3,9 +3,7 @@ import { Pool, type QueryResult, type QueryResultRow, type PoolClient } from "pg
 /**
  * Shared PostgreSQL pool for plain-Postgres runtime (VPS / fleet).
  * Hot-reload safe via globalThis. Prefer this over creating a Pool per request.
- *
- * While Supabase JS still powers most of the app, server routes and scripts
- * can adopt this client incrementally. Set DATABASE_URL to the store_* DB.
+ * Set DATABASE_URL to the store_* database (e.g. store_trustecom).
  */
 
 declare global {

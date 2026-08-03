@@ -1,4 +1,4 @@
-import { createAdminClient } from "@/lib/supabase/admin"
+import { query as dbQuery, queryOne, withTransaction } from "@/lib/db"
 import { listStockFromProduct } from "@/lib/product-metrics"
 import { generateOrderNumber } from "@/lib/utils"
 import { effectivePriceForProduct, effectivePriceForVariant } from "@/lib/effective-price"
@@ -10,8 +10,6 @@ import {
   PHONE_INTERNATIONAL_PRIMARY,
   WHATSAPP_URL,
 } from "@/lib/brand"
-
-// ─── Types ──────────────────────────────────────────────────────────────────
 
 export type ChatProduct = {
   id: string
@@ -49,7 +47,7 @@ export type ChatCoupon = {
 
 export type ChatTicket = {
   id: string
-  ticket_number: number
+  ticket_number: number | string
   status: string
   subject: string
 }
@@ -69,22 +67,26 @@ export type ChatCustomerProfile = {
   last_order_at: string | null
 }
 
-const PRODUCT_SELECT = `
-  id, name, slug, status, description, price, sale_price, compare_at_price, quantity,
-  variants(id, sku, price, sale_price, compare_at_price, stock_quantity),
-  product_images(url, sort_order)
+const PRODUCT_SELECT_SQL = `
+  p.id, p.name, p.slug, p.status, p.description, p.price, p.sale_price, p.compare_at_price, p.quantity,
+  COALESCE(
+    (SELECT jsonb_agg(to_jsonb(v) ORDER BY v.created_at)
+     FROM variants v WHERE v.product_id = p.id),
+    '[]'::jsonb
+  ) AS variants,
+  COALESCE(
+    (SELECT jsonb_agg(jsonb_build_object('url', pi.url, 'sort_order', pi.sort_order) ORDER BY pi.sort_order)
+     FROM product_images pi WHERE pi.product_id = p.id),
+    '[]'::jsonb
+  ) AS product_images
 `
 
-// Chat tool prices are read by anonymous users, so the global "sale promotion
-// enabled" toggle should apply here too — exactly like the storefront.
-async function fetchSaleEnabled(client: any): Promise<boolean> {
+async function fetchSaleEnabled(): Promise<boolean> {
   try {
-    const { data } = await client
-      .from("site_settings")
-      .select("feature_flags")
-      .eq("id", 1)
-      .maybeSingle()
-    const flags = (data?.feature_flags as Record<string, unknown> | null) ?? {}
+    const row = await queryOne<{ feature_flags: unknown }>(
+      `SELECT feature_flags FROM site_settings WHERE id = 1 LIMIT 1`,
+    )
+    const flags = (row?.feature_flags as Record<string, unknown> | null) ?? {}
     return flags.sale_promotion_enabled === true
   } catch {
     return false
@@ -125,138 +127,154 @@ function paidFromPayments(payments: any[] | undefined) {
   return list.some((p) => p.status === "paid" || p.status === "completed")
 }
 
-// ─── 1. Search Products ───────────────────────────────────────────────────────
-
-export async function searchProducts(supabase: any, query: string, limit = 4): Promise<ChatProduct[]> {
-  const term = (query || "").trim()
-  if (!term) return []
-
-  const saleEnabled = await fetchSaleEnabled(supabase)
-
-  // Try exact phrase match first
-  const { data, error } = await supabase
-    .from("products")
-    .select(PRODUCT_SELECT)
-    .eq("status", "active")
-    .or(`name.ilike.%${term}%,description.ilike.%${term}%`)
-    .order("name")
-    .limit(limit)
-
-  if (error) {
-    console.error("[ChatTools] searchProducts error:", error)
-    return []
-  }
-
-  if (data && data.length > 0) {
-    return data.map((p: any) => mapProduct(p, saleEnabled))
-  }
-
-  // No exact match — try individual keywords (e.g. "cerave moisturizer" → search "moisturizer")
-  const words = term.toLowerCase().split(/\s+/).filter((w) => w.length > 2)
-  for (const word of words) {
-    const { data: wordData } = await supabase
-      .from("products")
-      .select(PRODUCT_SELECT)
-      .eq("status", "active")
-      .or(`name.ilike.%${word}%,description.ilike.%${word}%,tags.cs.{${word}}`)
-      .order("name")
-      .limit(limit)
-    if (wordData && wordData.length > 0) {
-      return wordData.map((p: any) => mapProduct(p, saleEnabled))
-    }
-  }
-
-  // Also try matching against category names
-  const { data: catMatch } = await supabase
-    .from("categories")
-    .select("id")
-    .eq("is_active", true)
-    .ilike("name", `%${term}%`)
-    .limit(1)
-
-  if (catMatch && catMatch.length > 0) {
-    const { data: catProducts } = await supabase
-      .from("products")
-      .select(PRODUCT_SELECT)
-      .eq("status", "active")
-      .eq("category_id", catMatch[0].id)
-      .order("name")
-      .limit(limit)
-    if (catProducts && catProducts.length > 0) {
-      return catProducts.map((p: any) => mapProduct(p, saleEnabled))
-    }
-  }
-
-  return []
+async function loadProductsWhere(
+  whereSql: string,
+  params: unknown[],
+  limit: number,
+): Promise<any[]> {
+  const result = await dbQuery(
+    `SELECT ${PRODUCT_SELECT_SQL}
+     FROM products p
+     WHERE p.status = 'active' AND ${whereSql}
+     ORDER BY p.name
+     LIMIT $${params.length + 1}`,
+    [...params, limit],
+  )
+  return result.rows
 }
 
-// ─── 2. Get Product for Cart ────────────────────────────────────────────────
+export async function searchProducts(searchTerm: string, limit = 4): Promise<ChatProduct[]> {
+  const term = (searchTerm || "").trim()
+  if (!term) return []
 
-export async function getProductForCart(supabase: any, slugOrId: string): Promise<ChatProduct | null> {
+  const saleEnabled = await fetchSaleEnabled()
+  const pattern = `%${term}%`
+
+  let rows = await loadProductsWhere(
+    `(p.name ILIKE $1 OR p.description ILIKE $1)`,
+    [pattern],
+    limit,
+  )
+
+  if (rows.length === 0) {
+    const words = term.toLowerCase().split(/\s+/).filter((w) => w.length > 2)
+    for (const word of words) {
+      const wordPattern = `%${word}%`
+      rows = await loadProductsWhere(
+        `(p.name ILIKE $1 OR p.description ILIKE $1 OR $2 = ANY(p.tags))`,
+        [wordPattern, word],
+        limit,
+      )
+      if (rows.length > 0) break
+    }
+  }
+
+  if (rows.length === 0) {
+    const cat = await queryOne<{ id: string }>(
+      `SELECT id FROM categories WHERE is_active = true AND name ILIKE $1 LIMIT 1`,
+      [pattern],
+    )
+    if (cat?.id) {
+      rows = await loadProductsWhere(`p.category_id = $1::uuid`, [cat.id], limit)
+    }
+  }
+
+  return rows.map((p) => mapProduct(p, saleEnabled))
+}
+
+export async function getProductForCart(slugOrId: string): Promise<ChatProduct | null> {
   if (!slugOrId?.trim()) return null
   const trimmed = slugOrId.trim()
   const isId = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(trimmed)
 
-  const q = supabase.from("products").select(PRODUCT_SELECT).eq("status", "active")
-  const { data, error } = isId ? await q.eq("id", trimmed).single() : await q.eq("slug", trimmed).single()
-  if (error || !data) return null
-  const saleEnabled = await fetchSaleEnabled(supabase)
-  return mapProduct(data, saleEnabled)
+  const row = await queryOne(
+    `SELECT ${PRODUCT_SELECT_SQL}
+     FROM products p
+     WHERE p.status = 'active'
+       AND (${isId ? "p.id = $1::uuid" : "p.slug = $1"})
+     LIMIT 1`,
+    [trimmed],
+  )
+  if (!row) return null
+  const saleEnabled = await fetchSaleEnabled()
+  return mapProduct(row, saleEnabled)
 }
 
-// ─── 3. Track Order ───────────────────────────────────────────────────────────
-
-export async function trackOrder(supabase: any, orderNumber: string, email: string): Promise<ChatOrder | null> {
+export async function trackOrder(orderNumber: string, email: string): Promise<ChatOrder | null> {
   if (!orderNumber?.trim() || !email?.trim()) return null
   const num = orderNumber.trim()
   const emailLower = email.trim().toLowerCase()
 
-  const select = `
-    id, order_number, status, grand_total, created_at, guest_email, user_id,
-    payments(status),
-    order_items(name_snapshot, quantity, unit_price, line_total)
-  `
-
-  let { data: row, error } = await supabase.from("orders").select(select).eq("order_number", num).maybeSingle()
+  let row = await queryOne<any>(
+    `SELECT o.id, o.order_number, o.status, o.grand_total, o.created_at, o.guest_email, o.user_id,
+      COALESCE(
+        (SELECT jsonb_agg(jsonb_build_object('status', p.status))
+         FROM payments p WHERE p.order_id = o.id),
+        '[]'::jsonb
+      ) AS payments,
+      COALESCE(
+        (SELECT jsonb_agg(jsonb_build_object(
+           'name_snapshot', oi.name_snapshot, 'quantity', oi.quantity, 'unit_price', oi.unit_price, 'line_total', oi.line_total
+         ))
+         FROM order_items oi WHERE oi.order_id = o.id),
+        '[]'::jsonb
+      ) AS order_items
+     FROM orders o
+     WHERE o.order_number = $1
+     LIMIT 1`,
+    [num],
+  )
 
   if (!row && /^[0-9a-f-]{36}$/i.test(num)) {
-    const r2 = await supabase.from("orders").select(select).eq("id", num).maybeSingle()
-    row = r2.data
-    error = r2.error
+    row = await queryOne(
+      `SELECT o.id, o.order_number, o.status, o.grand_total, o.created_at, o.guest_email, o.user_id,
+        COALESCE(
+          (SELECT jsonb_agg(jsonb_build_object('status', p.status))
+           FROM payments p WHERE p.order_id = o.id),
+          '[]'::jsonb
+        ) AS payments,
+        COALESCE(
+          (SELECT jsonb_agg(jsonb_build_object(
+             'name_snapshot', oi.name_snapshot, 'quantity', oi.quantity, 'unit_price', oi.unit_price, 'line_total', oi.line_total
+           ))
+           FROM order_items oi WHERE oi.order_id = o.id),
+          '[]'::jsonb
+        ) AS order_items
+       FROM orders o
+       WHERE o.id::text = $1
+       LIMIT 1`,
+      [num],
+    )
   }
 
-  if (error || !row) return null
+  if (!row) return null
 
-  // SECURITY: Always verify email. Previous logic skipped the check when
-  // guest_email was null (typical for logged-in customer orders), letting any
-  // anonymous chat user retrieve another customer's order with any email.
   const guest = (row.guest_email || "").toLowerCase()
   let emailMatches = guest && guest === emailLower
 
   if (!emailMatches && row.user_id) {
-    // For accounts: look up profile email and require an exact match.
-    const { data: ownerProfile } = await supabase
-      .from("profiles")
-      .select("email")
-      .eq("id", row.user_id)
-      .maybeSingle()
+    const ownerProfile = await queryOne<{ email: string | null }>(
+      `SELECT email FROM profiles WHERE id = $1::uuid LIMIT 1`,
+      [row.user_id],
+    )
     const ownerEmail = (ownerProfile?.email || "").toLowerCase()
     emailMatches = !!ownerEmail && ownerEmail === emailLower
   }
 
   if (!emailMatches) return null
 
-  const payment_status = paidFromPayments(row.payments) ? "paid" : "pending"
+  const payments = Array.isArray(row.payments) ? row.payments : []
+  const orderItems = Array.isArray(row.order_items) ? row.order_items : []
 
   return {
     id: row.id,
     order_number: row.order_number,
     status: row.status,
-    payment_status,
+    payment_status: paidFromPayments(payments) ? "paid" : "pending",
     total: Number(row.grand_total) || 0,
     created_at: row.created_at,
     tracking_number: undefined,
-    items: (row.order_items || []).map((i: any) => ({
+    items: orderItems.map((i: any) => ({
       name: i.name_snapshot || "Item",
       quantity: i.quantity,
       price: Number(i.unit_price) || 0,
@@ -264,27 +282,31 @@ export async function trackOrder(supabase: any, orderNumber: string, email: stri
   }
 }
 
-// ─── 4. Get Customer Orders ───────────────────────────────────────────────────
-
-export async function getCustomerOrders(supabase: any, userId: string, limit = 5): Promise<ChatOrder[]> {
+export async function getCustomerOrders(userId: string, limit = 5): Promise<ChatOrder[]> {
   if (!userId) return []
 
-  const { data, error } = await supabase
-    .from("orders")
-    .select(
-      `
-      id, order_number, status, grand_total, created_at,
-      payments(status),
-      order_items(name_snapshot, quantity, unit_price, line_total)
-    `,
-    )
-    .eq("user_id", userId)
-    .order("created_at", { ascending: false })
-    .limit(limit)
+  const result = await dbQuery(
+    `SELECT o.id, o.order_number, o.status, o.grand_total, o.created_at,
+      COALESCE(
+        (SELECT jsonb_agg(jsonb_build_object('status', p.status))
+         FROM payments p WHERE p.order_id = o.id),
+        '[]'::jsonb
+      ) AS payments,
+      COALESCE(
+        (SELECT jsonb_agg(jsonb_build_object(
+           'name_snapshot', oi.name_snapshot, 'quantity', oi.quantity, 'unit_price', oi.unit_price, 'line_total', oi.line_total
+         ))
+         FROM order_items oi WHERE oi.order_id = o.id),
+        '[]'::jsonb
+      ) AS order_items
+     FROM orders o
+     WHERE o.user_id = $1::uuid
+     ORDER BY o.created_at DESC
+     LIMIT $2`,
+    [userId, limit],
+  )
 
-  if (error || !data) return []
-
-  return data.map((o: any) => ({
+  return result.rows.map((o: any) => ({
     id: o.id,
     order_number: o.order_number,
     status: o.status,
@@ -300,14 +322,15 @@ export async function getCustomerOrders(supabase: any, userId: string, limit = 5
   }))
 }
 
-// ─── 5. Check Coupon ──────────────────────────────────────────────────────────
-
-export async function checkCoupon(supabase: any, code: string, cartTotal?: number): Promise<ChatCoupon> {
+export async function checkCoupon(code: string, cartTotal?: number): Promise<ChatCoupon> {
   const trimmed = (code || "").trim().toUpperCase()
   if (!trimmed) return { valid: false, code: trimmed, reason: "No code provided." }
 
-  const { data, error } = await supabase.from("discounts").select("*").ilike("code", trimmed).maybeSingle()
-  if (error || !data) {
+  const data = await queryOne<any>(
+    `SELECT * FROM discounts WHERE UPPER(code) = $1 LIMIT 1`,
+    [trimmed],
+  )
+  if (!data) {
     return { valid: false, code: trimmed, reason: "This coupon code does not exist." }
   }
 
@@ -317,13 +340,11 @@ export async function checkCoupon(supabase: any, code: string, cartTotal?: numbe
   const end = data.ends_at ? new Date(data.ends_at) : null
   const usageLimit = data.max_uses
   const usageCount = Number(data.uses_count ?? 0)
-
   const minPurchase = Number(data.min_spend ?? 0) || 0
   const dt = data.discount_type as string
   const type =
     dt === "percent" ? "percentage" : dt === "fixed" ? "fixed" : dt === "free_shipping" ? "free_shipping" : dt || "percentage"
   const value = Number(data.value ?? 0)
-  const maxDisc = undefined
 
   if (!isActive) return { valid: false, code: trimmed, reason: "This coupon is no longer active." }
   if (start && start > now) return { valid: false, code: trimmed, reason: "This coupon is not yet valid." }
@@ -345,46 +366,42 @@ export async function checkCoupon(supabase: any, code: string, cartTotal?: numbe
     type,
     value,
     minimum_purchase: minPurchase || undefined,
-    maximum_discount: maxDisc,
     expires: data.ends_at || undefined,
   }
 }
 
-// ─── 6. Create Support Ticket ────────────────────────────────────────────────
-
-export async function createSupportTicket(
-  supabase: any,
-  params: { userId?: string; email: string; subject: string; description: string; category?: string },
-): Promise<ChatTicket | null> {
+export async function createSupportTicket(params: {
+  userId?: string
+  email: string
+  subject: string
+  description: string
+  category?: string
+}): Promise<ChatTicket | null> {
   const { userId, email, subject, description, category } = params
   if (!email || !subject || !description) return null
 
   try {
-    const { data: ticket, error } = await supabase
-      .from("support_tickets")
-      .insert({
-        user_id: userId || null,
-        email,
-        subject,
-        description,
-        category: category || "other",
-        status: "open",
-        priority: "medium",
-      })
-      .select("id, ticket_number, status, subject")
-      .single()
+    const ticketNum = `TKT-${Date.now()}`
+    const ticket = await queryOne<any>(
+      `INSERT INTO support_tickets (
+         ticket_number, subject, description, customer_id, customer_email,
+         status, priority, category, channel
+       ) VALUES ($1, $2, $3, $4::uuid, $5, 'open', 'medium', $6, 'chat')
+       RETURNING id, ticket_number, status, subject`,
+      [ticketNum, subject, description, userId || null, email, category || "other"],
+    )
 
-    if (error || !ticket) {
-      console.error("[ChatTools] createSupportTicket error:", error)
-      return null
+    if (!ticket) return null
+
+    try {
+      await dbQuery(
+        `INSERT INTO support_ticket_messages (ticket_id, sender_type, sender_name, content)
+         VALUES ($1::uuid, 'customer', $2, $3)`,
+        [ticket.id, email, description],
+      )
+    } catch {
+      /* optional table */
     }
-
-    await supabase.from("support_messages").insert({
-      ticket_id: ticket.id,
-      user_id: userId || null,
-      message: description,
-      is_internal: false,
-    })
 
     return {
       id: ticket.id,
@@ -398,39 +415,33 @@ export async function createSupportTicket(
   }
 }
 
-// ─── 7. Initiate Return ─────────────────────────────────────────────────────
-
-export async function initiateReturn(
-  supabase: any,
-  params: { userId: string; orderId: string; reason: string; description: string },
-): Promise<ChatReturn | null> {
+export async function initiateReturn(params: {
+  userId: string
+  orderId: string
+  reason: string
+  description: string
+}): Promise<ChatReturn | null> {
   const { userId, orderId, reason, description } = params
   if (!userId || !orderId) return null
 
   try {
-    const { data: order } = await supabase.from("orders").select("id, order_number, status, created_at, user_id").eq("id", orderId).single()
+    const order = await queryOne<any>(
+      `SELECT id, order_number, status, created_at, user_id FROM orders WHERE id = $1::uuid LIMIT 1`,
+      [orderId],
+    )
     if (!order || order.user_id !== userId || order.status !== "delivered") return null
 
     const deliveredDate = new Date(order.created_at)
     const daysSince = (Date.now() - deliveredDate.getTime()) / (1000 * 60 * 60 * 24)
     if (daysSince > 30) return null
 
-    const { data: ret, error } = await supabase
-      .from("return_requests")
-      .insert({
-        order_id: orderId,
-        user_id: userId,
-        reason,
-        description,
-        status: "pending",
-      })
-      .select("id, status")
-      .single()
-
-    if (error || !ret) {
-      console.error("[ChatTools] initiateReturn error:", error)
-      return null
-    }
+    const ret = await queryOne<any>(
+      `INSERT INTO return_requests (order_id, user_id, reason, description, status)
+       VALUES ($1::uuid, $2::uuid, $3, $4, 'pending')
+       RETURNING id, status`,
+      [orderId, userId, reason, description],
+    )
+    if (!ret) return null
 
     return { id: ret.id, status: ret.status, order_number: order.order_number, reason }
   } catch (e) {
@@ -439,22 +450,31 @@ export async function initiateReturn(
   }
 }
 
-// ─── 8. Get Recommendations ───────────────────────────────────────────────────
+export async function getRecommendations(context?: string): Promise<ChatProduct[]> {
+  const saleEnabled = await fetchSaleEnabled()
+  const ctx = context?.trim()
 
-export async function getRecommendations(supabase: any, context?: string): Promise<ChatProduct[]> {
-  let q = supabase.from("products").select(PRODUCT_SELECT).eq("status", "active")
-  if (context?.trim()) {
-    q = q.or(`name.ilike.%${context.trim()}%,description.ilike.%${context.trim()}%`)
-  }
-  const { data, error } = await q.order("rating_avg", { ascending: false }).order("review_count", { ascending: false }).limit(8)
+  const result = ctx
+    ? await dbQuery(
+        `SELECT ${PRODUCT_SELECT_SQL}
+         FROM products p
+         WHERE p.status = 'active'
+           AND (p.name ILIKE $1 OR p.description ILIKE $1)
+         ORDER BY p.rating_avg DESC NULLS LAST, p.review_count DESC NULLS LAST
+         LIMIT 8`,
+        [`%${ctx}%`],
+      )
+    : await dbQuery(
+        `SELECT ${PRODUCT_SELECT_SQL}
+         FROM products p
+         WHERE p.status = 'active'
+         ORDER BY p.rating_avg DESC NULLS LAST, p.review_count DESC NULLS LAST
+         LIMIT 8`,
+      )
 
-  if (error || !data) return []
-  const saleEnabled = await fetchSaleEnabled(supabase)
-  const mapped = data.map((p: any) => mapProduct(p, saleEnabled)).filter((p: ChatProduct) => p.inStock)
+  const mapped = result.rows.map((p: any) => mapProduct(p, saleEnabled)).filter((p: ChatProduct) => p.inStock)
   return mapped.slice(0, 4)
 }
-
-// ─── 9. Get Store Info ───────────────────────────────────────────────────────
 
 const STORE_INFO: Record<string, string> = {
   shipping: `We deliver across Ghana. Fees and timing are shown at checkout. See ${CONTACT_EMAIL} or our Shipping policy page for details.`,
@@ -473,24 +493,28 @@ export function getStoreInfo(topic: string): string {
   return Object.values(STORE_INFO).join("\n\n")
 }
 
-// ─── 10. Get Customer Profile ────────────────────────────────────────────────
-
-export async function getCustomerProfile(supabase: any, userId: string): Promise<ChatCustomerProfile | null> {
+export async function getCustomerProfile(userId: string): Promise<ChatCustomerProfile | null> {
   if (!userId) return null
 
-  const { data: profile } = await supabase.from("profiles").select("full_name, email").eq("id", userId).single()
+  const profile = await queryOne<{ full_name: string | null; email: string | null }>(
+    `SELECT full_name, email FROM profiles WHERE id = $1::uuid LIMIT 1`,
+    [userId],
+  )
   if (!profile) return null
 
-  const { data: orders } = await supabase
-    .from("orders")
-    .select("grand_total, created_at, payments(status)")
-    .eq("user_id", userId)
+  const ordersResult = await dbQuery<{ grand_total: string | number; created_at: string; paid: boolean }>(
+    `SELECT o.grand_total, o.created_at,
+      EXISTS(SELECT 1 FROM payments p WHERE p.order_id = o.id AND p.status = 'paid') AS paid
+     FROM orders o
+     WHERE o.user_id = $1::uuid`,
+    [userId],
+  )
 
   let totalSpent = 0
   let orderCount = 0
   let lastAt: string | null = null
-  for (const o of orders || []) {
-    if (paidFromPayments(o.payments)) {
+  for (const o of ordersResult.rows) {
+    if (o.paid) {
       totalSpent += Number(o.grand_total) || 0
       orderCount++
       if (!lastAt || o.created_at > lastAt) lastAt = o.created_at
@@ -505,8 +529,6 @@ export async function getCustomerProfile(supabase: any, userId: string): Promise
     last_order_at: lastAt,
   }
 }
-
-// ─── 11. Create Order from Chat ───────────────────────────────────────────────
 
 export type ChatOrderResult = {
   success: boolean
@@ -569,23 +591,13 @@ function sanitize(input: string): string {
     .slice(0, MAX_FIELD_LENGTH)
 }
 
-export async function createChatOrder(
-  supabaseFallback: any,
-  params: {
-    items: ChatOrderItem[]
-    shipping: ChatShippingInfo
-    deliveryMethod: string
-    paymentMethod: string
-    userId?: string | null
-  },
-): Promise<ChatOrderResult> {
-  let admin: any
-  try {
-    admin = createAdminClient()
-  } catch {
-    admin = supabaseFallback
-  }
-
+export async function createChatOrder(params: {
+  items: ChatOrderItem[]
+  shipping: ChatShippingInfo
+  deliveryMethod: string
+  paymentMethod: string
+  userId?: string | null
+}): Promise<ChatOrderResult> {
   const { items, shipping, deliveryMethod, paymentMethod, userId } = params
 
   if (!items?.length) {
@@ -639,19 +651,19 @@ export async function createChatOrder(
 
   try {
     const productIds = items.map((i) => i.productId)
-    const { data: products, error: prodError } = await admin
-      .from("products")
-      .select(PRODUCT_SELECT)
-      .in("id", productIds)
-      .eq("status", "active")
-
-    if (prodError || !products?.length) {
+    const productsResult = await dbQuery(
+      `SELECT ${PRODUCT_SELECT_SQL}
+       FROM products p
+       WHERE p.id = ANY($1::uuid[]) AND p.status = 'active'`,
+      [productIds],
+    )
+    const products = productsResult.rows
+    if (!products.length) {
       return { success: false, message: "Could not find the requested products. They may no longer be available." }
     }
 
     const productMap = new Map<string, any>(products.map((p: any) => [p.id, p]))
-
-    const saleEnabled = await fetchSaleEnabled(admin)
+    const saleEnabled = await fetchSaleEnabled()
 
     for (const item of items) {
       const p = productMap.get(item.productId)
@@ -666,12 +678,7 @@ export async function createChatOrder(
     }
 
     let subtotal = 0
-    const lineDetails: {
-      product: any
-      variant: any
-      qty: number
-      unit: number
-    }[] = []
+    const lineDetails: { product: any; variant: any; qty: number; unit: number }[] = []
 
     for (const item of items) {
       const p = productMap.get(item.productId)!
@@ -679,8 +686,6 @@ export async function createChatOrder(
       const sorted = [...vars].sort((a: any, b: any) => Number(a.price) - Number(b.price))
       const v = sorted[0]
       if (!v) return { success: false, message: `Product "${p.name}" has no purchasable variant.` }
-      // Honor sale_price / compare_at_price the same way the storefront does,
-      // so the chat customer is charged what they saw — not the original.
       const pricing = effectivePriceForVariant(v, p, saleEnabled)
       const unit = pricing.effective
       if (!Number.isFinite(unit) || unit <= 0) {
@@ -704,48 +709,54 @@ export async function createChatOrder(
       postalCode: "",
     }
 
-    const { data: order, error: orderError } = await admin
-      .from("orders")
-      .insert({
-        order_number: orderNumber,
-        user_id: userId || null,
-        guest_email: sanitizedShipping.email,
-        guest_phone: sanitizedShipping.phone,
-        status: paymentMethod === "paystack" ? "pending" : "pending",
-        subtotal,
-        shipping_total: shippingCost,
-        discount_total: 0,
-        tax_total: 0,
-        grand_total: total,
-        currency: "GHS",
-        shipping_address: shippingAddress,
-        billing_address: shippingAddress,
-        notes: `Chat checkout — delivery: ${deliveryMethod}, pay: ${paymentMethod === "moolre" ? "moolre (MoMo)" : paymentMethod}`,
-      })
-      .select("id")
-      .single()
+    const order = await withTransaction(async (client) => {
+      const inserted = await client.query(
+        `INSERT INTO orders (
+           order_number, user_id, guest_email, guest_phone, status,
+           subtotal, shipping_total, discount_total, tax_total, grand_total, currency,
+           shipping_address, billing_address, notes
+         ) VALUES (
+           $1, $2::uuid, $3, $4, 'pending',
+           $5, $6, 0, 0, $7, 'GHS',
+           $8::jsonb, $9::jsonb, $10
+         ) RETURNING id`,
+        [
+          orderNumber,
+          userId || null,
+          sanitizedShipping.email,
+          sanitizedShipping.phone,
+          subtotal,
+          shippingCost,
+          total,
+          JSON.stringify(shippingAddress),
+          JSON.stringify(shippingAddress),
+          `Chat checkout — delivery: ${deliveryMethod}, pay: ${paymentMethod === "moolre" ? "moolre (MoMo)" : paymentMethod}`,
+        ],
+      )
+      const orderId = inserted.rows[0]?.id
+      if (!orderId) throw new Error("Order insert failed")
 
-    if (orderError || !order) {
-      console.error("[ChatTools] createChatOrder order insert:", orderError)
-      return { success: false, message: "Failed to create order. Please try checkout on the website." }
-    }
+      for (const row of lineDetails) {
+        await client.query(
+          `INSERT INTO order_items (
+             order_id, product_id, variant_id, name_snapshot, sku_snapshot,
+             unit_price, quantity, line_total
+           ) VALUES ($1::uuid, $2::uuid, $3::uuid, $4, $5, $6, $7, $8)`,
+          [
+            orderId,
+            row.product.id,
+            row.variant.id,
+            row.product.name,
+            row.variant.sku || "",
+            row.unit,
+            row.qty,
+            row.unit * row.qty,
+          ],
+        )
+      }
 
-    const orderItems = lineDetails.map((row) => ({
-      order_id: order.id,
-      product_id: row.product.id,
-      variant_id: row.variant.id,
-      name_snapshot: row.product.name,
-      sku_snapshot: row.variant.sku || "",
-      unit_price: row.unit,
-      quantity: row.qty,
-      line_total: row.unit * row.qty,
-    }))
-
-    const { error: itemsError } = await admin.from("order_items").insert(orderItems)
-    if (itemsError) {
-      console.error("[ChatTools] order_items:", itemsError)
-      return { success: false, message: "Failed to add items to order. Please try again." }
-    }
+      return { id: orderId }
+    })
 
     if (paymentMethod === "cod") {
       return {
@@ -771,7 +782,7 @@ export async function createChatOrder(
           success: true,
           orderNumber,
           total,
-          message: `Order ${orderNumber} created (GH₵${total.toFixed(2)}), but Moolre is not configured. Set MOOLRE_API_USER, MOOLRE_API_PUBKEY, and MOOLRE_ACCOUNT_NUMBER.`,
+          message: `Order ${orderNumber} created (GH₵${total.toFixed(2)}), but Moolre is not configured.`,
         }
       }
 
@@ -786,10 +797,7 @@ export async function createChatOrder(
         reusable: "0",
         currency: "GHS",
         accountnumber: moolreAccountNumber,
-        metadata: {
-          customer_email: sanitizedShipping.email,
-          original_order_number: orderNumber,
-        },
+        metadata: { customer_email: sanitizedShipping.email, original_order_number: orderNumber },
       }
       if (process.env.MOOLRE_CALLBACK_SECRET) {
         payload.secret = process.env.MOOLRE_CALLBACK_SECRET
@@ -805,19 +813,13 @@ export async function createChatOrder(
           },
           body: JSON.stringify(payload),
         })
-
         const result = await response.json()
-
         if (result.status === 1 && result.data?.authorization_url) {
-          await admin.from("payments").insert({
-            order_id: order.id,
-            provider: "moolre",
-            provider_ref: result.data.reference || uniqueRef,
-            amount: total,
-            currency: "GHS",
-            status: "pending",
-          })
-
+          await dbQuery(
+            `INSERT INTO payments (order_id, provider, provider_ref, amount, currency, status)
+             VALUES ($1::uuid, 'moolre', $2, $3, 'GHS', 'pending')`,
+            [order.id, result.data.reference || uniqueRef, total],
+          )
           return {
             success: true,
             orderNumber,
@@ -826,12 +828,11 @@ export async function createChatOrder(
             message: `Order ${orderNumber} is ready. Total GH₵${total.toFixed(2)}. Complete Mobile Money payment with the secure Moolre link below.`,
           }
         }
-
         return {
           success: true,
           orderNumber,
           total,
-          message: `Order ${orderNumber} created (GH₵${total.toFixed(2)}), but we could not open Moolre. Try paying from your order email or contact ${CONTACT_EMAIL}.`,
+          message: `Order ${orderNumber} created (GH₵${total.toFixed(2)}), but we could not open Moolre.`,
         }
       } catch (payErr: unknown) {
         console.error("[ChatTools] Moolre payment error:", payErr)
@@ -839,19 +840,18 @@ export async function createChatOrder(
           success: true,
           orderNumber,
           total,
-          message: `Order ${orderNumber} created (GH₵${total.toFixed(2)}), but payment link failed. Use checkout on the site.`,
+          message: `Order ${orderNumber} created (GH₵${total.toFixed(2)}), but payment link failed.`,
         }
       }
     }
 
     const secretKey = process.env.PAYSTACK_SECRET_KEY
-
     if (!secretKey) {
       return {
         success: true,
         orderNumber,
         total,
-        message: `Order ${orderNumber} created (GH₵${total.toFixed(2)}), but Paystack is not configured. Complete payment from your account or contact ${CONTACT_EMAIL}.`,
+        message: `Order ${orderNumber} created (GH₵${total.toFixed(2)}), but Paystack is not configured.`,
       }
     }
 
@@ -868,16 +868,12 @@ export async function createChatOrder(
         currency: "GHS",
         reference: orderNumber,
         callback_url: `${baseUrl}/checkout/callback?reference=${encodeURIComponent(orderNumber)}`,
-        metadata: {
-          order_id: order.id,
-          order_number: orderNumber,
-        },
+        metadata: { order_id: order.id, order_number: orderNumber },
       }),
     })
 
     const paystackData = await paystackRes.json()
     if (!paystackData.status || !paystackData.data?.authorization_url) {
-      console.error("[ChatTools] Paystack init failed:", paystackData)
       return {
         success: true,
         orderNumber,
@@ -886,14 +882,11 @@ export async function createChatOrder(
       }
     }
 
-    await admin.from("payments").insert({
-      order_id: order.id,
-      provider: "paystack",
-      provider_ref: paystackData.data.reference,
-      amount: total,
-      currency: "GHS",
-      status: "pending",
-    })
+    await dbQuery(
+      `INSERT INTO payments (order_id, provider, provider_ref, amount, currency, status)
+       VALUES ($1::uuid, 'paystack', $2, $3, 'GHS', 'pending')`,
+      [order.id, paystackData.data.reference, total],
+    )
 
     return {
       success: true,
@@ -902,7 +895,7 @@ export async function createChatOrder(
       paymentUrl: paystackData.data.authorization_url,
       message: `Order ${orderNumber} is ready. Total GH₵${total.toFixed(2)} (incl. GH₵${shippingCost.toFixed(2)} delivery). Use the secure Paystack link below to pay.`,
     }
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("[ChatTools] createChatOrder:", err)
     return { success: false, message: "Something went wrong. Please use the checkout page on the website." }
   }

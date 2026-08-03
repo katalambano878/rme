@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { createAdminClient } from "@/lib/supabase/admin"
+import { query, queryOne } from "@/lib/db"
 import { checkRateLimit, getClientIdentifier, RATE_LIMITS } from "@/lib/rate-limit"
 import { fulfillPaidOrder, amountsMatch } from "@/lib/payments/fulfill-paid-order"
 import { normalizeMoolreStatus } from "@/lib/payments/status"
@@ -26,20 +26,33 @@ export async function POST(req: Request) {
       return NextResponse.json({ success: false, message: "Invalid order number format" }, { status: 400 })
     }
 
-    const supabase = createAdminClient()
     const cleanOrderNumber = orderNumber.trim().replace(/-R\d+$/, "")
 
-    const { data: order, error: fetchError } = await supabase
-      .from("orders")
-      .select("id, order_number, grand_total, guest_email, guest_phone, shipping_address, payments(id, status, provider_ref)")
-      .eq("order_number", cleanOrderNumber)
-      .single()
+    const order = await queryOne<{
+      id: string
+      order_number: string
+      grand_total: number
+      guest_email: string | null
+      guest_phone: string | null
+      shipping_address: unknown
+    }>(
+      `SELECT id, order_number, grand_total, guest_email, guest_phone, shipping_address
+       FROM orders
+       WHERE order_number = $1
+       LIMIT 1`,
+      [cleanOrderNumber],
+    )
 
-    if (fetchError || !order) {
+    if (!order) {
       return NextResponse.json({ success: false, message: "Order not found" }, { status: 404 })
     }
 
-    const payments = (order.payments as { id: string; status: string; provider_ref: string | null }[] | null) || []
+    const paymentsResult = await query<{ id: string; status: string; provider_ref: string | null }>(
+      `SELECT id, status, provider_ref FROM payments WHERE order_id = $1`,
+      [order.id],
+    )
+    const payments = paymentsResult.rows
+
     if (payments.some((p) => p.status === "paid" || p.status === "completed")) {
       return NextResponse.json({
         success: true,
@@ -102,7 +115,6 @@ export async function POST(req: Request) {
               continue
             }
           } else {
-            // Provider confirmed success without amount — require stored pending amount match later via expected
             paidAmount = Number(order.grand_total)
           }
           moolreApiVerified = true
@@ -121,7 +133,7 @@ export async function POST(req: Request) {
       })
     }
 
-    const result = await fulfillPaidOrder(supabase, {
+    const result = await fulfillPaidOrder({
       orderId: order.id,
       orderNumber: order.order_number,
       provider: "moolre",

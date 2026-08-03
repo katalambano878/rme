@@ -3,7 +3,7 @@
 
 import Link from 'next/link';
 import { useState, useEffect } from 'react';
-import { supabase } from '@/lib/supabase';
+import { api } from '@/lib/api';
 import { deleteProductAndDependencies } from '@/lib/admin-product-delete';
 import { buildDisplaySku } from '@/lib/sku-display';
 import { listSkuRaw, listStockFromProduct } from '@/lib/product-metrics';
@@ -39,41 +39,20 @@ export default function ProductsPage() {
   }, [sortBy]);
 
   const fetchCategories = async () => {
-    const { data } = await supabase.from('categories').select('name');
+    const data = await api<any[]>('/api/catalog/categories');
     if (data) setCategories(data);
   };
 
   const fetchProducts = async () => {
     try {
       setLoading(true);
-      const [{ data, error }, { data: salesData }, { data: settingsRow }] = await Promise.all([
-        supabase
-          .from('products')
-          .select(`
-            *,
-            categories(name),
-            variants(price, sale_price, compare_at_price, stock_quantity, sku),
-            product_images(url, sort_order)
-          `),
-        supabase
-          .from('order_items')
-          .select('product_id, quantity'),
-        // We need the global toggle so the admin list shows the SAME effective
-        // price the customer sees (and that the server actually charges).
-        supabase.from('site_settings').select('feature_flags').eq('id', 1).maybeSingle(),
+      const [data, settingsRow] = await Promise.all([
+        api<any[]>('/api/catalog/products?includeSales=1'),
+        api<{ feature_flags: Record<string, unknown> }>('/api/admin/settings'),
       ]);
-
-      if (error) throw error;
 
       const flags = (settingsRow?.feature_flags as Record<string, unknown> | null) ?? {};
       const saleEnabled = flags.sale_promotion_enabled === true;
-
-      // Build sales count map from order_items
-      const salesMap = new Map<string, number>();
-      for (const item of salesData ?? []) {
-        if (!item.product_id) continue;
-        salesMap.set(item.product_id, (salesMap.get(item.product_id) ?? 0) + (Number(item.quantity) || 0));
-      }
 
       if (data) {
         const transformedProducts = data.map((p: any) => {
@@ -96,7 +75,7 @@ export default function ProductsPage() {
             price: pricing.effective,
             originalPrice: pricing.original,
             onSale: pricing.onSale,
-            sales: salesMap.get(p.id) ?? 0,
+            sales: p.sales_count ?? 0,
             rating: p.rating_avg || 0,
           };
         });
@@ -154,7 +133,7 @@ export default function ProductsPage() {
   const handleDeleteProduct = async (productId: string) => {
     if (!confirm('Are you sure you want to delete this product?')) return;
     try {
-      const { error } = await deleteProductAndDependencies(supabase, productId);
+      const { error } = await deleteProductAndDependencies(productId);
       if (error) throw error;
       setProducts(products.filter((p) => p.id !== productId));
       alert('Product deleted successfully');
@@ -175,7 +154,7 @@ export default function ProductsPage() {
     const failed: string[] = [];
     for (const productId of selectedProducts) {
       try {
-        const { error } = await deleteProductAndDependencies(supabase, productId);
+        const { error } = await deleteProductAndDependencies(productId);
         if (error) throw error;
       } catch {
         failed.push(products.find((p) => p.id === productId)?.name || productId.slice(0, 8));

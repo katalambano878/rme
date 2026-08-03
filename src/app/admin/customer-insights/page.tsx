@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { supabase } from '@/lib/supabase';
+import { api } from '@/lib/api';
 
 // Customer segmentation thresholds — edit these or override in site_settings.feature_flags
 const VIP_THRESHOLD      = 1000  // GH₵ lifetime spend to qualify as VIP
@@ -41,25 +41,16 @@ export default function CustomerInsightsPage() {
       setLoading(true);
 
       // 1. Fetch Profiles
-      const { data: profiles, error: profileError } = await supabase
-        .from('profiles')
-        .select('*');
-
-      if (profileError) throw profileError;
-
-      const { data: rawOrders, error: orderError } = await supabase
-        .from('orders')
-        .select('user_id, grand_total, created_at, status');
-
-      if (orderError) throw orderError;
+      const { profiles, orders: rawOrders } = await api<{ profiles: any[]; orders: any[] }>(
+        '/api/admin/customers',
+      );
 
       const orders = (rawOrders || []).map((o: any) => ({
         ...o,
         total: Number(o.grand_total) || 0,
       }));
 
-      // 3. Aggregate Data
-      const aggregated = profiles.map((profile: any) => {
+      const aggregated = (profiles || []).map((profile: any) => {
         const userOrders = orders?.filter(o => o.user_id === profile.id) || [];
         const totalSpent = userOrders.reduce((sum, o) => sum + (o.total || 0), 0);
         const orderCount = userOrders.length;

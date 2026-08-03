@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { supabase } from '@/lib/supabase';
+import { api } from '@/lib/api';
 import { applyBulkDiscountPercent } from '@/lib/admin-bulk-sale';
 
 type BulkDiscountPanelProps = {
@@ -23,8 +23,7 @@ export default function BulkDiscountPanel({ onApplied }: BulkDiscountPanelProps)
     (async () => {
       try {
         setLoadingList(true);
-        const { data, error } = await supabase.from('products').select('id, name').order('name', { ascending: true });
-        if (error) throw error;
+        const data = await api<{ id: string; name: string }[]>('/api/catalog/products');
         if (!cancelled && data) {
           setProducts(data.map((p) => ({ id: p.id, name: p.name ?? '' })));
         }
@@ -78,7 +77,7 @@ export default function BulkDiscountPanel({ onApplied }: BulkDiscountPanelProps)
     }
     try {
       setBulkDiscountBusy(true);
-      const { updated, errors } = await applyBulkDiscountPercent(supabase, percent, {
+      const { updated, errors } = await applyBulkDiscountPercent(percent, {
         scope,
         selectedIds: scope === 'selected' ? selectedIds : undefined,
       });

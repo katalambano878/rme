@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useState, useEffect } from 'react';
-import { supabase } from '@/lib/supabase';
+import { api } from '@/lib/api';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
 export default function AdminDashboard() {
@@ -61,11 +61,7 @@ export default function AdminDashboard() {
         const priorStartISO  = priorStart.toISOString();
 
         // 1. Fetch ALL Orders for count & customers
-        const { data: allOrdersData, error: ordersError } = await supabase
-          .from('orders')
-          .select('id, order_number, user_id, guest_email, status, grand_total, created_at, shipping_address, payments(status, amount)');
-
-        if (ordersError) throw ordersError;
+        const allOrdersData = await api<any[]>('/api/admin/orders');
 
         const allOrders = allOrdersData || [];
 
@@ -166,81 +162,61 @@ export default function AdminDashboard() {
         ]);
 
         // 3. Fetch Recent Orders (only paid orders)
-        const { data: recentOrdersData } = await supabase
-          .from('orders')
-          .select('id, order_number, user_id, guest_email, created_at, grand_total, status, shipping_address, payments(status)')
-          .order('created_at', { ascending: false })
-          .limit(5);
-
-        if (recentOrdersData) {
-          const formattedRecent = recentOrdersData.map((o: any) => {
-            const addr = o.shipping_address || {};
-            const customerName = (addr.firstName && addr.lastName)
-              ? `${addr.firstName.trim()} ${addr.lastName.trim()}`
-              : addr.full_name || addr.firstName || o.guest_email?.split('@')[0] || 'Customer';
-            const paymentStatus = (o.payments || []).some((p: any) => p.status === 'paid') ? 'paid' : 'pending';
-            return {
-              id: o.id,
-              displayId: o.order_number,
-              customer: customerName,
-              email: o.guest_email || 'Registered user',
-              date: new Date(o.created_at).toLocaleDateString(),
-              total: o.grand_total || 0,
-              status: o.status,
-              paymentStatus,
-              items: 1
-            };
-          });
-          setRecentOrders(formattedRecent);
-        }
+        const recentOrdersData = (allOrdersData || []).slice(0, 5);
+        const formattedRecent = recentOrdersData.map((o: any) => {
+          const addr = o.shipping_address || {};
+          const customerName = (addr.firstName && addr.lastName)
+            ? `${addr.firstName.trim()} ${addr.lastName.trim()}`
+            : addr.full_name || addr.firstName || o.guest_email?.split('@')[0] || 'Customer';
+          const paymentStatus = (o.payments || []).some((p: any) => p.status === 'paid') ? 'paid' : 'pending';
+          return {
+            id: o.id,
+            displayId: o.order_number,
+            customer: customerName,
+            email: o.guest_email || 'Registered user',
+            date: new Date(o.created_at).toLocaleDateString(),
+            total: o.grand_total || 0,
+            status: o.status,
+            paymentStatus,
+            items: 1
+          };
+        });
+        setRecentOrders(formattedRecent);
 
         // 4. Fetch Low Stock Products
-        const { data: lowStockData } = await supabase
-          .from('products')
-          .select('name, variants(stock_quantity)')
-          .limit(5);
+        const productCatalog = await api<any[]>('/api/catalog/products');
+        const lowStockData = (productCatalog || []).slice(0, 20);
+        const normalized = lowStockData
+          .map((p: any) => {
+            const stock = (p.variants || []).reduce(
+              (sum: number, v: any) => sum + (Number(v.stock_quantity) || Number(p.quantity) || 0),
+              0,
+            ) || Number(p.quantity) || 0;
+            return {
+              name: p.name,
+              stock,
+              status: stock === 0 ? 'critical' : 'low',
+            };
+          })
+          .filter((p: any) => p.stock < 10)
+          .slice(0, 5);
+        setLowStockProducts(normalized);
 
-        if (lowStockData) {
-          const normalized = lowStockData
-            .map((p: any) => {
-              const stock = (p.variants || []).reduce(
-                (sum: number, v: any) => sum + (Number(v.stock_quantity) || 0),
-                0,
-              );
-              return {
-                name: p.name,
-                stock,
-                status: stock === 0 ? 'critical' : 'low',
-              };
-            })
-            .filter((p: any) => p.stock < 10)
-            .slice(0, 5);
-          setLowStockProducts(normalized);
-        }
-
-        // 5. Fetch Top Products by aggregating order_items
-        const { data: itemsData } = await supabase
-          .from('order_items')
-          .select('product_id, quantity, line_total');
-
+        // 5. Top products from order items in fetched orders
         const salesMap = new Map<string, { qty: number; revenue: number }>();
-        for (const item of itemsData ?? []) {
-          if (!item.product_id) continue;
-          const prev = salesMap.get(item.product_id) ?? { qty: 0, revenue: 0 };
-          salesMap.set(item.product_id, {
-            qty: prev.qty + (Number(item.quantity) || 0),
-            revenue: prev.revenue + (Number(item.line_total) || 0),
-          });
+        for (const order of allOrdersData || []) {
+          for (const item of order.order_items || []) {
+            if (!item.product_id) continue;
+            const prev = salesMap.get(item.product_id) ?? { qty: 0, revenue: 0 };
+            salesMap.set(item.product_id, {
+              qty: prev.qty + (Number(item.quantity) || 0),
+              revenue: prev.revenue + (Number(item.line_total) || 0),
+            });
+          }
         }
 
-        const { data: productData } = await supabase
-          .from('products')
-          .select('id, slug, name, product_images(url, sort_order), variants(stock_quantity)')
-          .order('created_at', { ascending: false })
-          .limit(10);
-
-        if (productData) {
-          const ranked = productData
+        const productData = productCatalog || [];
+        const ranked = productData
             .map((p: any) => ({
               id: p.id,
               name: p.name,
@@ -251,8 +227,7 @@ export default function AdminDashboard() {
             }))
             .sort((a: any, b: any) => b.sales - a.sales)
             .slice(0, 4);
-          setTopProducts(ranked);
-        }
+        setTopProducts(ranked);
 
       } catch (error) {
         console.error('Error loading dashboard:', error);

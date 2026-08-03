@@ -9,7 +9,6 @@ import { Section } from "@/components/shared/section"
 import { Heading } from "@/components/shared/heading"
 import { occasions as staticOccasions } from "@/lib/mock-data"
 import { cn } from "@/lib/utils"
-import { createClient } from "@/lib/supabase/client"
 
 type Occasion = {
   id: string
@@ -54,15 +53,12 @@ export function ShopByOccasion() {
   const [occasions, setOccasions] = useState<Occasion[]>(staticOccasions as Occasion[])
 
   useEffect(() => {
-    const supabase = createClient()
-    supabase
-      .from("occasions")
-      .select("id, name, slug, image, description")
-      .eq("is_active", true)
-      .order("sort_order")
-      .then(({ data }) => {
-        if (data && data.length > 0) setOccasions(data as Occasion[])
+    fetch("/api/storefront/occasions")
+      .then((res) => res.json())
+      .then((data: Occasion[]) => {
+        if (Array.isArray(data) && data.length > 0) setOccasions(data)
       })
+      .catch(() => {})
   }, [])
 
   return (

@@ -7,15 +7,16 @@ export type EnvClass = "public" | "server" | "optional"
 export type EnvSpec = {
   name: string
   classify: EnvClass
-  requiredFor?: Array<"runtime" | "payments" | "sms" | "email" | "database">
+  requiredFor?: Array<"runtime" | "payments" | "sms" | "email" | "database" | "auth">
 }
 
 export const ENV_SPECS: EnvSpec[] = [
   { name: "NEXT_PUBLIC_APP_URL", classify: "public", requiredFor: ["runtime"] },
-  { name: "NEXT_PUBLIC_SUPABASE_URL", classify: "public", requiredFor: ["runtime"] },
-  { name: "NEXT_PUBLIC_SUPABASE_ANON_KEY", classify: "public", requiredFor: ["runtime"] },
-  { name: "SUPABASE_SERVICE_ROLE_KEY", classify: "server", requiredFor: ["runtime"] },
-  { name: "DATABASE_URL", classify: "server", requiredFor: ["database"] },
+  { name: "DATABASE_URL", classify: "server", requiredFor: ["runtime", "database"] },
+  { name: "AUTH_SECRET", classify: "server", requiredFor: ["runtime", "auth"] },
+  { name: "AUTH_COOKIE_NAME", classify: "optional" },
+  { name: "UPLOAD_DIR", classify: "optional" },
+  { name: "NEXT_PUBLIC_UPLOAD_BASE_URL", classify: "public" },
   { name: "DATABASE_SSL", classify: "optional" },
   { name: "DATABASE_POOL_MAX", classify: "optional" },
   { name: "PAYSTACK_SECRET_KEY", classify: "server", requiredFor: ["payments"] },
@@ -35,7 +36,7 @@ export const ENV_SPECS: EnvSpec[] = [
   { name: "RECAPTCHA_SECRET_KEY", classify: "server" },
 ]
 
-type RequiredScope = "runtime" | "payments" | "sms" | "email" | "database"
+type RequiredScope = "runtime" | "payments" | "sms" | "email" | "database" | "auth"
 
 export function getMissingEnv(requiredFor: RequiredScope) {
   return ENV_SPECS.filter(
@@ -52,6 +53,7 @@ export function healthEnvReport() {
   return {
     ok: getMissingEnv("runtime").length === 0,
     missingRuntime: getMissingEnv("runtime"),
+    missingAuth: getMissingEnv("auth"),
     missingPayments: getMissingEnv("payments"),
     missingSms: getMissingEnv("sms"),
     missingDatabase: getMissingEnv("database"),

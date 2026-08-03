@@ -6,7 +6,6 @@ import {
   getSmsDebuggerStatus,
   dryRunSmsDebug,
 } from './actions';
-import { supabase } from '@/lib/supabase';
 import { normalizeSmsRecipient } from '@/lib/sms-debug';
 
 type StatusState =
@@ -49,9 +48,7 @@ export default function SmsDebuggerPage() {
   }, [phone]);
 
   const loadStatus = useCallback(async () => {
-    const { data: { session } } = await supabase.auth.getSession();
-    const token = session?.access_token || '';
-    const res = await getSmsDebuggerStatus(token);
+    const res = await getSmsDebuggerStatus();
     if (!res.ok) {
       setStatus({ loading: false, error: res.error || 'Failed to load status' });
       return;
@@ -68,23 +65,16 @@ export default function SmsDebuggerPage() {
     void loadStatus();
   }, [loadStatus]);
 
-  const getToken = async () => {
-    const { data: { session } } = await supabase.auth.getSession();
-    return session?.access_token || '';
-  };
-
   const handleDryRun = () => {
     startTransition(async () => {
-      const token = await getToken();
-      const res = await dryRunSmsDebug(phone, message, token);
+      const res = await dryRunSmsDebug(phone, message);
       setDryResult(res);
     });
   };
 
   const handleSend = () => {
     startTransition(async () => {
-      const token = await getToken();
-      const res = await testSmsAction(phone, message, token);
+      const res = await testSmsAction(phone, message);
       setSendResult(res);
     });
   };

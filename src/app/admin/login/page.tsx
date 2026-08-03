@@ -4,9 +4,14 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
-import { supabase } from '@/lib/supabase';
+import { api } from '@/lib/api';
+import { canAccessAdminPanel } from '@/lib/admin-role-access';
 import { useRecaptcha } from '@/hooks/useRecaptcha';
 import { BRAND_LOGO_ALT, BRAND_LOGO_SRC, BRAND_NAME } from '@/lib/brand';
+
+type AuthResponse = {
+  user: { id: string; email: string; role: string; full_name?: string | null };
+};
 
 export default function AdminLoginPage() {
   const router = useRouter();
@@ -22,7 +27,6 @@ export default function AdminLoginPage() {
     setError('');
     setIsLoading(true);
 
-    // reCAPTCHA verification
     const isHuman = await getToken('admin_login');
     if (!isHuman) {
       setError('Security verification failed. Please try again.');
@@ -31,23 +35,20 @@ export default function AdminLoginPage() {
     }
 
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password
+      const data = await api<AuthResponse>('/api/auth/login', {
+        method: 'POST',
+        json: { email, password },
       });
 
-      if (error) throw error;
-
-      if (data.session) {
-        // Set auth cookie so middleware can verify the session server-side
-        document.cookie = `sb-access-token=${data.session.access_token}; path=/; max-age=${60 * 60 * 24 * 7}; SameSite=Lax; Secure`;
-        document.cookie = `sb-refresh-token=${data.session.refresh_token}; path=/; max-age=${60 * 60 * 24 * 30}; SameSite=Lax; Secure`;
-
-        router.push('/admin');
-        router.refresh();
+      if (!canAccessAdminPanel(data.user.role)) {
+        await api('/api/auth/logout', { method: 'POST' });
+        throw new Error('Admin access required');
       }
-    } catch (err: any) {
-      setError(err.message || 'Login failed');
+
+      router.push('/admin');
+      router.refresh();
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Login failed');
     } finally {
       setIsLoading(false);
     }
@@ -132,8 +133,6 @@ export default function AdminLoginPage() {
               )}
             </button>
           </form>
-
-          {/* Admin access is restricted to users with admin/staff role */}
         </div>
 
         <div className="mt-6 text-center">

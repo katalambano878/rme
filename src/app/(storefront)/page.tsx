@@ -38,7 +38,7 @@ import {
   fetchTrendingProducts,
   fetchHomepageCategoryLimit,
   fetchStorefrontCategoriesWithCounts,
-} from "@/lib/supabase/storefront-products"
+} from "@/lib/data/storefront-products"
 
 export default async function HomePage() {
   const [newArrivals, curatedPicks, featuredProducts, allCategories, homeCategoryLimit] =

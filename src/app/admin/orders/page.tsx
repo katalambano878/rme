@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useState, useEffect } from 'react';
-import { supabase } from '@/lib/supabase';
+import { api } from '@/lib/api';
 import ProductSalesStats from './ProductSalesStats';
 
 interface Order {
@@ -122,28 +122,7 @@ export default function AdminOrdersPage() {
     try {
       setLoading(true);
 
-      const { data: ordersData, error } = await supabase
-        .from('orders')
-        .select(`
-          id,
-          order_number,
-          guest_email,
-          grand_total,
-          status,
-          created_at,
-          guest_phone,
-          shipping_address,
-          billing_address,
-          notes,
-          payments(status, provider),
-          order_items (
-            quantity,
-            name_snapshot
-          )
-        `)
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
+      const ordersData = await api<any[]>('/api/admin/orders');
 
       const normalized: Order[] = (ordersData || []).map((o: any) => {
         const paidPayment = o.payments?.find((p: any) => p.status === 'completed' || p.status === 'paid');
@@ -290,27 +269,18 @@ export default function AdminOrdersPage() {
   const handleBulkAction = async (action: string, newStatus?: string) => {
     if (newStatus) {
       try {
-        const { error } = await supabase
-          .from('orders')
-          .update({ status: newStatus })
-          .in('id', selectedOrders);
+        await Promise.all(
+          selectedOrders.map((id) =>
+            api(`/api/admin/orders/${id}`, { method: 'PATCH', json: { status: newStatus } }),
+          ),
+        );
 
-        if (error) throw error;
-
-
-
-        // Send Notifications with auth token
-        const { data: { session } } = await supabase.auth.getSession();
-        const authToken = session?.access_token;
-        
         const updatedOrders = orders.filter(o => selectedOrders.includes(o.id));
         updatedOrders.forEach(order => {
           fetch('/api/notifications', {
             method: 'POST',
-            headers: { 
-              'Content-Type': 'application/json',
-              ...(authToken && { 'Authorization': `Bearer ${authToken}` })
-            },
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
             body: JSON.stringify({
               type: 'order_updated',
               payload: { order, status: newStatus }

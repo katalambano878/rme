@@ -3,7 +3,7 @@ import ShopPageClient from "./shop-client"
 import {
   fetchActiveProducts,
   fetchStorefrontCategoriesWithCounts,
-} from "@/lib/supabase/storefront-products"
+} from "@/lib/data/storefront-products"
 
 type ShopSearchParams = { category?: string }
 

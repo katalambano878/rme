@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { supabase } from '@/lib/supabase';
+import { api } from '@/lib/api';
 
 const STATUS_TABS = ['all', 'open', 'in_progress', 'waiting_customer', 'resolved', 'closed'];
 const PRIORITY_OPTIONS = ['all', 'urgent', 'high', 'medium', 'low'];
@@ -22,22 +22,14 @@ export default function TicketsPage() {
 
   const fetchTickets = useCallback(async () => {
     setLoading(true);
-    const from = (page - 1) * limit;
-    const to = from + limit - 1;
+    const params = new URLSearchParams({ page: String(page), limit: String(limit) });
+    if (statusTab !== 'all') params.set('status', statusTab);
+    if (priorityFilter !== 'all') params.set('priority', priorityFilter);
+    if (search) params.set('search', search);
 
-    let query = supabase
-      .from('support_tickets')
-      .select('*', { count: 'exact' })
-      .order('created_at', { ascending: false })
-      .range(from, to);
-
-    if (statusTab !== 'all') query = query.eq('status', statusTab);
-    if (priorityFilter !== 'all') query = query.eq('priority', priorityFilter);
-    if (search) query = query.or(`ticket_number.ilike.%${search}%,subject.ilike.%${search}%,customer_email.ilike.%${search}%,customer_name.ilike.%${search}%`);
-
-    const { data, count } = await query;
-    setTickets(data || []);
-    setTotal(count || 0);
+    const res = await api<{ data: any[]; total: number }>(`/api/support/tickets?${params}`);
+    setTickets(res.data || []);
+    setTotal(res.total || 0);
     setLoading(false);
   }, [page, statusTab, priorityFilter, search]);
 

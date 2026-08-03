@@ -3,8 +3,7 @@
 import Link from 'next/link';
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { supabase } from '@/lib/supabase';
-import { SUPABASE_STORAGE_BUCKET } from '@/lib/supabase-storage';
+import { api } from '@/lib/api';
 
 function slugifyTitle(name: string): string {
   return name
@@ -74,12 +73,13 @@ export default function BlogPostForm({ mode, postId, initialData }: BlogPostForm
     if (!file) return;
     try {
       setUploading(true);
-      const ext = file.name.split('.').pop();
-      const path = `blog-${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
-      const { error: upErr } = await supabase.storage.from(SUPABASE_STORAGE_BUCKET).upload(path, file);
-      if (upErr) throw upErr;
-      const { data } = supabase.storage.from(SUPABASE_STORAGE_BUCKET).getPublicUrl(path);
-      setCoverImageUrl(data.publicUrl);
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('folder', 'blog');
+      const uploadRes = await fetch('/api/uploads', { method: 'POST', body: formData, credentials: 'include' });
+      const uploadJson = await uploadRes.json();
+      if (!uploadRes.ok) throw new Error(uploadJson.error || 'Upload failed');
+      setCoverImageUrl(uploadJson.url);
     } catch (err: unknown) {
       alert(err instanceof Error ? err.message : 'Upload failed');
     } finally {
@@ -125,12 +125,10 @@ export default function BlogPostForm({ mode, postId, initialData }: BlogPostForm
     try {
       setLoading(true);
       if (mode === 'create') {
-        const { error } = await supabase.from('blog_posts').insert([payload]);
-        if (error) throw error;
+        await api('/api/admin/blog', { method: 'POST', json: payload });
         alert('Post created');
       } else if (postId) {
-        const { error } = await supabase.from('blog_posts').update(payload).eq('id', postId);
-        if (error) throw error;
+        await api(`/api/admin/blog/${postId}`, { method: 'PATCH', json: payload });
         alert('Post saved');
       }
       router.push('/admin/blog');

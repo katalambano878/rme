@@ -1,5 +1,5 @@
 import CollectionsPageClient from "./collections-client"
-import { fetchStorefrontCategoriesWithCounts } from "@/lib/supabase/storefront-products"
+import { fetchStorefrontCategoriesWithCounts } from "@/lib/data/storefront-products"
 
 export default async function CollectionsPage() {
   const categories = await fetchStorefrontCategoriesWithCounts()

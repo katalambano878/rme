@@ -1,4 +1,4 @@
-import { createClient } from "@/lib/supabase/server"
+import { query, queryOne } from "@/lib/db"
 import {
   MOCK_PRODUCT_IMAGE,
   publicSupabaseProductImageUrl,
@@ -16,29 +16,70 @@ import type {
 } from "@/types/product"
 import { effectivePriceForVariant } from "@/lib/effective-price"
 
-const PRODUCT_SELECT = `
-  id,
-  name,
-  slug,
-  description,
-  sale_price,
-  metadata,
-  short_description,
-  category_id,
-  status,
-  is_featured,
-  is_new_arrival,
-  is_best_seller,
-  badges,
-  rating_avg,
-  review_count,
-  delivery_estimate,
-  seo_title,
-  seo_description,
-  created_at,
-  categories ( id, name, slug ),
-  product_images ( url, storage_path, sort_order, alt ),
-  variants ( id, sku, price, compare_at_price, sale_price, stock_quantity, option_values )
+const PRODUCT_SELECT_SQL = `
+SELECT
+  p.id,
+  p.name,
+  p.slug,
+  p.description,
+  p.sale_price,
+  p.metadata,
+  p.short_description,
+  p.category_id,
+  p.status,
+  p.is_featured,
+  p.is_new_arrival,
+  p.is_best_seller,
+  p.badges,
+  p.rating_avg,
+  p.review_count,
+  p.delivery_estimate,
+  p.seo_title,
+  p.seo_description,
+  p.created_at,
+  CASE
+    WHEN c.id IS NOT NULL THEN jsonb_build_object(
+      'id', c.id,
+      'name', c.name,
+      'slug', c.slug
+    )
+    ELSE NULL
+  END AS categories,
+  COALESCE(
+    (
+      SELECT jsonb_agg(
+        jsonb_build_object(
+          'url', pi.url,
+          'storage_path', pi.storage_path,
+          'sort_order', pi.sort_order,
+          'alt', pi.alt
+        )
+      )
+      FROM product_images pi
+      WHERE pi.product_id = p.id
+    ),
+    '[]'::jsonb
+  ) AS product_images,
+  COALESCE(
+    (
+      SELECT jsonb_agg(
+        jsonb_build_object(
+          'id', v.id,
+          'sku', v.sku,
+          'price', v.price,
+          'compare_at_price', v.compare_at_price,
+          'sale_price', v.sale_price,
+          'stock_quantity', v.stock_quantity,
+          'option_values', v.option_values
+        )
+      )
+      FROM variants v
+      WHERE v.product_id = p.id
+    ),
+    '[]'::jsonb
+  ) AS variants
+FROM products p
+LEFT JOIN categories c ON c.id = p.category_id
 `
 
 type ProductRow = {
@@ -141,13 +182,11 @@ function buildVariantGroups(variantRows: ProductVariantRow[]): Variant[] {
   return groups
 }
 
-async function fetchSaleEnabled(supabase: Awaited<ReturnType<typeof getClient>>): Promise<boolean> {
-  const { data } = await supabase
-    .from("site_settings")
-    .select("feature_flags")
-    .eq("id", 1)
-    .maybeSingle()
-  const flags = (data?.feature_flags as Record<string, unknown> | null) ?? {}
+async function fetchSaleEnabled(): Promise<boolean> {
+  const row = await queryOne<{ feature_flags: Record<string, unknown> | null }>(
+    `SELECT feature_flags FROM site_settings WHERE id = 1 LIMIT 1`,
+  )
+  const flags = row?.feature_flags ?? {}
   return flags.sale_promotion_enabled === true
 }
 
@@ -160,10 +199,6 @@ function cardPricing(
   salePrice?: number
 } {
   if (variantRows.length === 0) return { price: 0 }
-  // Show the cheapest variant — and use the SHARED effective-price helper so
-  // the storefront UI agrees with what the payment server will actually
-  // charge. (Drift between these two used to cause customers to see GH₵ 8
-  // in the cart but get billed GH₵ 10 by Paystack/Moolre.)
   const sorted = [...variantRows].sort((a, b) => a.price - b.price)
   const v = sorted[0]
   const pricing = effectivePriceForVariant(v, { sale_price: salePriceRaw }, saleEnabled)
@@ -174,6 +209,46 @@ function cardPricing(
 
 function totalStock(variantRows: ProductVariantRow[]): number {
   return variantRows.reduce((s, v) => s + (v.stock_quantity ?? 0), 0)
+}
+
+function parseProductRow(row: ProductRow): ProductRow {
+  const images = row.product_images
+  const variants = row.variants
+  return {
+    ...row,
+    product_images: Array.isArray(images) ? images : images ? [images as unknown as DbProductImageRow] : [],
+    variants: Array.isArray(variants) ? variants : variants ? [variants as unknown as NonNullable<ProductRow["variants"]>[number]] : [],
+  }
+}
+
+async function fetchProductRows(
+  extraWhere: string,
+  params: unknown[],
+  orderBy: string,
+  limit?: number,
+): Promise<ProductRow[]> {
+  const limitSql = limit != null ? ` LIMIT $${params.length + 1}` : ""
+  const allParams = limit != null ? [...params, limit] : params
+  const { rows } = await query<ProductRow>(
+    `${PRODUCT_SELECT_SQL}
+     WHERE p.status = 'active' AND ${extraWhere}
+     ORDER BY ${orderBy}${limitSql}`,
+    allParams,
+  )
+  return rows.map(parseProductRow)
+}
+
+async function fetchProductRowOne(
+  extraWhere: string,
+  params: unknown[],
+): Promise<ProductRow | null> {
+  const row = await queryOne<ProductRow>(
+    `${PRODUCT_SELECT_SQL}
+     WHERE p.status = 'active' AND ${extraWhere}
+     LIMIT 1`,
+    params,
+  )
+  return row ? parseProductRow(row) : null
 }
 
 export function mapProductRowToProduct(row: ProductRow, saleEnabled = false): Product {
@@ -217,21 +292,15 @@ export function extractVariantRows(row: ProductRow): ProductVariantRow[] {
   return normalizeVariantRows(row)
 }
 
-async function getClient() {
-  return createClient()
-}
-
 export async function fetchStorefrontProductBySlug(
   slug: string,
 ): Promise<{ product: Product; variantRows: ProductVariantRow[] } | null> {
-  const supabase = await getClient()
-  const [{ data, error }, saleEnabled] = await Promise.all([
-    supabase.from("products").select(PRODUCT_SELECT).eq("slug", slug).eq("status", "active").maybeSingle(),
-    fetchSaleEnabled(supabase),
+  const [row, saleEnabled] = await Promise.all([
+    fetchProductRowOne("p.slug = $1", [slug]),
+    fetchSaleEnabled(),
   ])
 
-  if (error || !data) return null
-  const row = data as unknown as ProductRow
+  if (!row) return null
   return {
     product: mapProductRowToProduct(row, saleEnabled),
     variantRows: extractVariantRows(row),
@@ -244,93 +313,85 @@ export async function fetchRelatedProducts(
   limit = 4,
 ): Promise<Product[]> {
   if (!categoryId) return []
-  const supabase = await getClient()
-  const [{ data, error }, saleEnabled] = await Promise.all([
-    supabase.from("products").select(PRODUCT_SELECT).eq("status", "active").eq("category_id", categoryId).neq("id", excludeProductId).order("created_at", { ascending: false }).limit(limit),
-    fetchSaleEnabled(supabase),
+  const [rows, saleEnabled] = await Promise.all([
+    fetchProductRows("p.category_id = $1 AND p.id <> $2", [categoryId, excludeProductId], "p.created_at DESC", limit),
+    fetchSaleEnabled(),
   ])
-
-  if (error || !data) return []
-  return (data as unknown as ProductRow[]).map((r) => mapProductRowToProduct(r, saleEnabled))
+  return rows.map((r) => mapProductRowToProduct(r, saleEnabled))
 }
 
 export async function fetchActiveProducts(): Promise<Product[]> {
-  const supabase = await getClient()
-  const [{ data, error }, saleEnabled] = await Promise.all([
-    supabase.from("products").select(PRODUCT_SELECT).eq("status", "active").order("created_at", { ascending: false }),
-    fetchSaleEnabled(supabase),
+  const [rows, saleEnabled] = await Promise.all([
+    fetchProductRows("TRUE", [], "p.created_at DESC"),
+    fetchSaleEnabled(),
   ])
-
-  if (error || !data) return []
-  return (data as unknown as ProductRow[]).map((r) => mapProductRowToProduct(r, saleEnabled))
+  return rows.map((r) => mapProductRowToProduct(r, saleEnabled))
 }
 
 export async function fetchNewArrivals(limit: number): Promise<Product[]> {
-  const supabase = await getClient()
-  const [{ data, error }, saleEnabled] = await Promise.all([
-    supabase.from("products").select(PRODUCT_SELECT).eq("status", "active").eq("is_new_arrival", true).order("created_at", { ascending: false }).limit(limit),
-    fetchSaleEnabled(supabase),
-  ])
+  const saleEnabled = await fetchSaleEnabled()
+  let rows = await fetchProductRows(
+    "p.is_new_arrival = true",
+    [],
+    "p.created_at DESC",
+    limit,
+  )
 
-  if (error || !data?.length) {
-    const { data: fb } = await supabase.from("products").select(PRODUCT_SELECT).eq("status", "active").order("created_at", { ascending: false }).limit(limit)
-    if (!fb) return []
-    return (fb as unknown as ProductRow[]).map((r) => mapProductRowToProduct(r, saleEnabled))
+  if (rows.length === 0) {
+    rows = await fetchProductRows("TRUE", [], "p.created_at DESC", limit)
   }
-  return (data as unknown as ProductRow[]).map((r) => mapProductRowToProduct(r, saleEnabled))
+
+  return rows.map((r) => mapProductRowToProduct(r, saleEnabled))
 }
 
 export async function fetchBestSellers(limit: number): Promise<Product[]> {
-  const supabase = await getClient()
-  const [{ data, error }, saleEnabled] = await Promise.all([
-    supabase.from("products").select(PRODUCT_SELECT).eq("status", "active").eq("is_best_seller", true).order("review_count", { ascending: false }).limit(limit),
-    fetchSaleEnabled(supabase),
-  ])
+  const saleEnabled = await fetchSaleEnabled()
+  let rows = await fetchProductRows(
+    "p.is_best_seller = true",
+    [],
+    "p.review_count DESC",
+    limit,
+  )
 
-  if (error || !data?.length) {
-    const { data: fb } = await supabase.from("products").select(PRODUCT_SELECT).eq("status", "active").order("review_count", { ascending: false }).limit(limit)
-    if (!fb) return []
-    return (fb as unknown as ProductRow[]).map((r) => mapProductRowToProduct(r, saleEnabled))
+  if (rows.length === 0) {
+    rows = await fetchProductRows("TRUE", [], "p.review_count DESC", limit)
   }
-  return (data as unknown as ProductRow[]).map((r) => mapProductRowToProduct(r, saleEnabled))
+
+  return rows.map((r) => mapProductRowToProduct(r, saleEnabled))
 }
 
 export async function fetchTrendingProducts(limit: number): Promise<Product[]> {
-  const supabase = await getClient()
-  const [{ data, error }, saleEnabled] = await Promise.all([
-    supabase.from("products").select(PRODUCT_SELECT).eq("status", "active").eq("is_featured", true).order("created_at", { ascending: false }).limit(limit),
-    fetchSaleEnabled(supabase),
-  ])
+  const saleEnabled = await fetchSaleEnabled()
+  let rows = await fetchProductRows(
+    "p.is_featured = true",
+    [],
+    "p.created_at DESC",
+    limit,
+  )
 
-  if (!error && data?.length) {
-    return (data as unknown as ProductRow[]).map((r) => mapProductRowToProduct(r, saleEnabled))
+  if (rows.length === 0) {
+    rows = await fetchProductRows("TRUE", [], "p.review_count DESC", limit)
   }
 
-  const { data: fb } = await supabase.from("products").select(PRODUCT_SELECT).eq("status", "active").order("review_count", { ascending: false }).limit(limit)
-  return (fb as unknown as ProductRow[] | null)?.map((r) => mapProductRowToProduct(r, saleEnabled)) ?? []
+  return rows.map((r) => mapProductRowToProduct(r, saleEnabled))
 }
 
 export async function fetchProductsByCategorySlug(
   categorySlug: string,
   limit: number,
 ): Promise<Product[]> {
-  const supabase = await getClient()
-  const { data: cat } = await supabase
-    .from("categories")
-    .select("id")
-    .eq("slug", categorySlug)
-    .eq("is_active", true)
-    .maybeSingle()
+  const cat = await queryOne<{ id: string }>(
+    `SELECT id FROM categories WHERE slug = $1 AND is_active = true LIMIT 1`,
+    [categorySlug],
+  )
 
   if (!cat?.id) return []
 
-  const [{ data, error }, saleEnabled] = await Promise.all([
-    supabase.from("products").select(PRODUCT_SELECT).eq("status", "active").eq("category_id", cat.id).order("created_at", { ascending: false }).limit(limit),
-    fetchSaleEnabled(supabase),
+  const [rows, saleEnabled] = await Promise.all([
+    fetchProductRows("p.category_id = $1", [cat.id], "p.created_at DESC", limit),
+    fetchSaleEnabled(),
   ])
-
-  if (error || !data) return []
-  return (data as unknown as ProductRow[]).map((r) => mapProductRowToProduct(r, saleEnabled))
+  return rows.map((r) => mapProductRowToProduct(r, saleEnabled))
 }
 
 export type StorefrontCategory = {
@@ -345,15 +406,11 @@ export type StorefrontCategory = {
 }
 
 export async function fetchHomepageCategoryLimit(): Promise<number | null> {
-  const supabase = await getClient()
-  const { data, error } = await supabase
-    .from("home_content")
-    .select("sections")
-    .eq("id", 1)
-    .maybeSingle()
+  const row = await queryOne<{ sections: unknown }>(
+    `SELECT sections FROM home_content WHERE id = 1 LIMIT 1`,
+  )
 
-  if (error) return null
-  const sections = data?.sections
+  const sections = row?.sections
   if (!Array.isArray(sections)) return null
 
   for (const section of sections) {
@@ -385,22 +442,30 @@ export async function fetchHomepageCategoryLimit(): Promise<number | null> {
 export async function fetchStorefrontCategoriesWithCounts(): Promise<
   StorefrontCategory[]
 > {
-  const supabase = await getClient()
-  const { data: cats, error: catErr } = await supabase
-    .from("categories")
-    .select("id, name, slug, description, image_url, parent_id, sort_order")
-    .eq("is_active", true)
+  const [cats, productRows] = await Promise.all([
+    query<{
+      id: string
+      name: string | null
+      slug: string | null
+      description: string | null
+      image_url: string | null
+      parent_id: string | null
+      sort_order: number | null
+    }>(
+      `SELECT id, name, slug, description, image_url, parent_id, sort_order
+       FROM categories
+       WHERE is_active = true`,
+    ),
+    query<{ category_id: string | null }>(
+      `SELECT category_id FROM products WHERE status = 'active'`,
+    ),
+  ])
 
-  if (catErr || !cats?.length) return []
-
-  const { data: products } = await supabase
-    .from("products")
-    .select("category_id")
-    .eq("status", "active")
+  if (!cats.rows.length) return []
 
   const countMap = new Map<string, number>()
-  for (const p of products ?? []) {
-    const cid = p.category_id as string | null
+  for (const p of productRows.rows) {
+    const cid = p.category_id
     if (!cid) continue
     countMap.set(cid, (countMap.get(cid) ?? 0) + 1)
   }
@@ -414,7 +479,7 @@ export async function fetchStorefrontCategoriesWithCounts(): Promise<
     parent_id: string | null
     sort_order: number | null
   }
-  const rows = cats as CatRow[]
+  const rows = cats.rows as CatRow[]
   const sorted = sortCategoriesForDisplay(rows)
   const byId = new Map(sorted.map((c) => [c.id, c]))
 

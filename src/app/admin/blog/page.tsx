@@ -3,7 +3,7 @@
 
 import Link from 'next/link';
 import { useState, useEffect } from 'react';
-import { supabase } from '@/lib/supabase';
+import { api } from '@/lib/api';
 
 type BlogPostListItem = {
   id: string;
@@ -31,11 +31,7 @@ export default function AdminBlogPage() {
   const fetchPosts = async () => {
     try {
       setLoading(true);
-      const { data, error } = await supabase
-        .from('blog_posts')
-        .select('id, title, slug, excerpt, category, cover_image_url, published, published_at, updated_at, created_at')
-        .order('updated_at', { ascending: false });
-      if (error) throw error;
+      const data = await api<any[]>('/api/admin/blog');
       const mapped: BlogPostListItem[] = (data ?? []).map((p: any) => {
         const published = Boolean(p.published);
         const dateRaw = p.published_at || p.updated_at || p.created_at;

@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
-import { supabase } from '@/lib/supabase';
+import { api } from '@/lib/api';
 import BulkDiscountPanel from '@/components/admin/BulkDiscountPanel';
 
 export default function AdminSalesPage() {
@@ -16,8 +16,7 @@ export default function AdminSalesPage() {
     let cancelled = false;
     (async () => {
       try {
-        const { data, error } = await supabase.from('site_settings').select('feature_flags').eq('id', 1).maybeSingle();
-        if (error) throw error;
+        const data = await api<{ feature_flags: Record<string, unknown> }>('/api/admin/settings');
         if (!cancelled) {
           const flags = (data?.feature_flags as Record<string, unknown> | null) ?? {};
           setSalePromotionOn(flags.sale_promotion_enabled === true);
@@ -43,11 +42,10 @@ export default function AdminSalesPage() {
     }
     try {
       setSavingFee(true);
-      const { data: row, error: fetchErr } = await supabase.from('site_settings').select('feature_flags').eq('id', 1).maybeSingle();
-      if (fetchErr) throw fetchErr;
-      const flags = { ...((row?.feature_flags as Record<string, unknown> | null) ?? {}), delivery_fee: fee };
-      const { error: upErr } = await supabase.from('site_settings').update({ feature_flags: flags }).eq('id', 1);
-      if (upErr) throw upErr;
+      await api('/api/admin/settings', {
+        method: 'PATCH',
+        json: { feature_flags: { delivery_fee: fee } },
+      });
       alert('Delivery fee updated!');
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : 'Could not save';
@@ -61,11 +59,10 @@ export default function AdminSalesPage() {
     const next = !salePromotionOn;
     try {
       setSaving(true);
-      const { data: row, error: fetchErr } = await supabase.from('site_settings').select('feature_flags').eq('id', 1).maybeSingle();
-      if (fetchErr) throw fetchErr;
-      const flags = { ...((row?.feature_flags as Record<string, unknown> | null) ?? {}), sale_promotion_enabled: next };
-      const { error: upErr } = await supabase.from('site_settings').update({ feature_flags: flags }).eq('id', 1);
-      if (upErr) throw upErr;
+      await api('/api/admin/settings', {
+        method: 'PATCH',
+        json: { feature_flags: { sale_promotion_enabled: next } },
+      });
       setSalePromotionOn(next);
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : 'Could not save';

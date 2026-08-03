@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { createAdminClient } from "@/lib/supabase/admin"
+import { query, queryOne, withTransaction } from "@/lib/db"
 import { generateOrderNumber } from "@/lib/utils"
 import { effectivePriceForVariant } from "@/lib/effective-price"
 
@@ -47,7 +47,6 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Paystack not configured" }, { status: 500 })
     }
 
-    const supabase = createAdminClient()
     const orderNumber = generateOrderNumber()
 
     // SECURITY: Recompute every price server-side from the database. NEVER
@@ -56,9 +55,14 @@ export async function POST(req: NextRequest) {
     const productIds = Array.from(
       new Set(items.map((i: any) => i.productId).filter((id: any) => id != null && id !== "null")),
     ) as string[]
-    const variantIds = Array.from(
-      new Set(items.map((i: any) => i.variantId).filter((id: any) => id != null && id !== "null")),
-    ) as string[]
+    const productsNeedingVariants = Array.from(
+      new Set(
+        items
+          .filter((i: any) => i.selectedSize || i.selectedColor)
+          .map((i: any) => i.productId)
+          .filter(Boolean),
+      ),
+    )
 
     type DbProduct = {
       id: string
@@ -78,51 +82,56 @@ export async function POST(req: NextRequest) {
       option_values: { name: string; value: string }[] | null
     }
 
-    // Fetch products + all variants for products that have selected options (for variant resolution)
-    const productsNeedingVariants = Array.from(new Set(
-      items.filter((i: any) => i.selectedSize || i.selectedColor).map((i: any) => i.productId).filter(Boolean)
-    ))
+    let products: DbProduct[] = []
+    let allVariants: DbVariant[] = []
+    let siteSettingsRow: { feature_flags: unknown } | null = null
 
-    // We need the global sale toggle so the server applies the SAME pricing
-    // rules the storefront UI showed the customer. If we don't honor the
-    // toggle, we'd charge the sale price even when the storefront is hiding
-    // sales — that's overcharging silently. (See lib/effective-price.ts.)
-    const [productsRes, allVariantsRes, siteSettingsRes] = await Promise.all([
-      productIds.length
-        ? supabase
-            .from("products")
-            .select("id, name, price, sale_price, compare_at_price, status")
-            .in("id", productIds)
-        : Promise.resolve({ data: [] as DbProduct[], error: null }),
-      productsNeedingVariants.length
-        ? supabase
-            .from("variants")
-            .select("id, product_id, price, sale_price, compare_at_price, sku, option_values")
-            .in("product_id", productsNeedingVariants)
-        : Promise.resolve({ data: [] as DbVariant[], error: null }),
-      supabase.from("site_settings").select("feature_flags").eq("id", 1).maybeSingle(),
-    ])
-
-    if (productsRes.error || allVariantsRes.error) {
-      console.error("Order init: price lookup failed", productsRes.error || allVariantsRes.error)
+    try {
+      const [productsResult, variantsResult, settingsResult] = await Promise.all([
+        productIds.length
+          ? query<DbProduct>(
+              `SELECT id, name, price, sale_price, compare_at_price, status
+               FROM products
+               WHERE id = ANY($1::uuid[])`,
+              [productIds],
+            )
+          : Promise.resolve({ rows: [] as DbProduct[] }),
+        productsNeedingVariants.length
+          ? query<DbVariant>(
+              `SELECT id, product_id, price, sale_price, compare_at_price, sku, option_values
+               FROM variants
+               WHERE product_id = ANY($1::uuid[])`,
+              [productsNeedingVariants],
+            )
+          : Promise.resolve({ rows: [] as DbVariant[] }),
+        queryOne<{ feature_flags: unknown }>(
+          `SELECT feature_flags FROM site_settings WHERE id = 1 LIMIT 1`,
+        ),
+      ])
+      products = productsResult.rows
+      allVariants = variantsResult.rows
+      siteSettingsRow = settingsResult
+    } catch (e) {
+      console.error("Order init: price lookup failed", e)
       return NextResponse.json({ error: "Failed to verify cart" }, { status: 500 })
     }
 
-    const featureFlags = (siteSettingsRes.data?.feature_flags as Record<string, unknown> | null) ?? {}
+    const featureFlags = (siteSettingsRow?.feature_flags as Record<string, unknown> | null) ?? {}
     const saleEnabled = featureFlags.sale_promotion_enabled === true
 
-    const productMap = new Map<string, DbProduct>(
-      ((productsRes.data as DbProduct[]) || []).map((p) => [p.id, p]),
-    )
-    // Group variants by product_id for option-based matching
+    const productMap = new Map<string, DbProduct>(products.map((p) => [p.id, p]))
     const variantsByProduct = new Map<string, DbVariant[]>()
-    for (const v of (allVariantsRes.data as DbVariant[]) || []) {
+    for (const v of allVariants) {
       const arr = variantsByProduct.get(v.product_id) ?? []
       arr.push(v)
       variantsByProduct.set(v.product_id, arr)
     }
 
-    function matchVariantByOptions(productId: string, selectedSize?: string, selectedColor?: string): DbVariant | undefined {
+    function matchVariantByOptions(
+      productId: string,
+      selectedSize?: string,
+      selectedColor?: string,
+    ): DbVariant | undefined {
       const variants = variantsByProduct.get(productId) ?? []
       return variants.find((v) => {
         const opts = v.option_values ?? []
@@ -155,21 +164,14 @@ export async function POST(req: NextRequest) {
         )
       }
 
-      // Try to resolve the exact variant by selected options. When the
-      // customer didn't pick options (simple product) we still want variant
-      // pricing if the product has variants, because the sale_price/
-      // compare_at_price often lives on the cheapest variant.
-      const allVariants = variantsByProduct.get(product.id) ?? []
-      const matchedVariant = (it.selectedSize || it.selectedColor)
-        ? matchVariantByOptions(product.id, it.selectedSize, it.selectedColor)
-        : allVariants.length > 0
-          ? [...allVariants].sort((a, b) => (Number(a.price) || 0) - (Number(b.price) || 0))[0]
-          : undefined
+      const allProductVariants = variantsByProduct.get(product.id) ?? []
+      const matchedVariant =
+        it.selectedSize || it.selectedColor
+          ? matchVariantByOptions(product.id, it.selectedSize, it.selectedColor)
+          : allProductVariants.length > 0
+            ? [...allProductVariants].sort((a, b) => (Number(a.price) || 0) - (Number(b.price) || 0))[0]
+            : undefined
 
-      // Use the SAME effective-price logic the storefront uses to decide what
-      // to display in the cart. Without this, the cart shows GH₵ 8 (sale)
-      // but Paystack would charge GH₵ 10 (regular) — which is the deception
-      // bug we're fixing.
       const pricing = matchedVariant
         ? effectivePriceForVariant(matchedVariant, product, saleEnabled)
         : effectivePriceForVariant(
@@ -216,12 +218,7 @@ export async function POST(req: NextRequest) {
     let shippingCost = 0
     const method = String(shippingMethod || "").toLowerCase()
     if (method !== "pickup" && method !== "store_pickup") {
-      const { data: settingsRow } = await supabase
-        .from("site_settings")
-        .select("feature_flags")
-        .eq("id", 1)
-        .maybeSingle()
-      const flags = (settingsRow?.feature_flags as Record<string, unknown> | null) ?? {}
+      const flags = (siteSettingsRow?.feature_flags as Record<string, unknown> | null) ?? {}
       shippingCost =
         typeof flags.delivery_fee === "number" && Number.isFinite(flags.delivery_fee)
           ? Math.max(0, flags.delivery_fee)
@@ -251,46 +248,57 @@ export async function POST(req: NextRequest) {
       postalCode: postalCode || "",
     }
 
-    const { data: order, error: orderErr } = await supabase
-      .from("orders")
-      .insert({
-        order_number: orderNumber,
-        guest_email: trimmedEmail || null,
-        guest_phone: phone || null,
-        status: "pending",
-        subtotal: computedSubtotal,
-        shipping_total: shippingCost,
-        discount_total: 0,
-        tax_total: 0,
-        grand_total: computedTotal,
-        currency: "GHS",
-        shipping_address: shippingAddress,
-        billing_address: shippingAddress,
-        notes: `Shipping: ${shippingMethod}`,
-      })
-      .select("id")
-      .single()
+    const order = await queryOne<{ id: string }>(
+      `INSERT INTO orders (
+         order_number, guest_email, guest_phone, status,
+         subtotal, shipping_total, discount_total, tax_total, grand_total,
+         currency, shipping_address, billing_address, notes
+       )
+       VALUES ($1, $2, $3, 'pending', $4, $5, 0, 0, $6, 'GHS', $7::jsonb, $8::jsonb, $9)
+       RETURNING id`,
+      [
+        orderNumber,
+        trimmedEmail || null,
+        phone || null,
+        computedSubtotal,
+        shippingCost,
+        computedTotal,
+        JSON.stringify(shippingAddress),
+        JSON.stringify(shippingAddress),
+        `Shipping: ${shippingMethod}`,
+      ],
+    )
 
-    if (orderErr || !order) {
-      console.error("Order creation failed:", orderErr)
+    if (!order) {
+      console.error("Order creation failed")
       return NextResponse.json({ error: "Failed to create order" }, { status: 500 })
     }
 
-    const orderItems = serverItems.map((item) => ({
-      order_id: order.id,
-      product_id: item.productId,
-      variant_id: item.variantId,
-      name_snapshot: item.name,
-      sku_snapshot: item.sku,
-      unit_price: item.unitPrice,
-      quantity: item.quantity,
-      line_total: item.lineTotal,
-      options_snapshot: item.optionsSnapshot,
-    }))
-
-    const { error: itemsErr } = await supabase.from("order_items").insert(orderItems)
-    if (itemsErr) {
-      console.error("Order items insert failed:", itemsErr)
+    try {
+      await withTransaction(async (client) => {
+        for (const item of serverItems) {
+          await client.query(
+            `INSERT INTO order_items (
+               order_id, product_id, variant_id, name_snapshot, sku_snapshot,
+               unit_price, quantity, line_total, options_snapshot
+             )
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb)`,
+            [
+              order.id,
+              item.productId,
+              item.variantId,
+              item.name,
+              item.sku,
+              item.unitPrice,
+              item.quantity,
+              item.lineTotal,
+              item.optionsSnapshot ? JSON.stringify(item.optionsSnapshot) : null,
+            ],
+          )
+        }
+      })
+    } catch (e) {
+      console.error("Order items insert failed:", e)
     }
 
     if (useMoolre) {
@@ -302,7 +310,10 @@ export async function POST(req: NextRequest) {
     }
 
     const amountInPesewas = Math.round(computedTotal * 100)
-    const appBase = (process.env.APP_BASE_URL || process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000").replace(/\/+$/, "")
+    const appBase = (process.env.APP_BASE_URL || process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000").replace(
+      /\/+$/,
+      "",
+    )
     const callbackUrl = `${appBase}/checkout/callback?reference=${orderNumber}`
 
     const paystackRes = await fetch("https://api.paystack.co/transaction/initialize", {
@@ -335,14 +346,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: paystackData.message || "Payment init failed" }, { status: 502 })
     }
 
-    await supabase.from("payments").insert({
-      order_id: order.id,
-      provider: "paystack",
-      provider_ref: paystackData.data.reference,
-      amount: computedTotal,
-      currency: "GHS",
-      status: "pending",
-    })
+    await query(
+      `INSERT INTO payments (order_id, provider, provider_ref, amount, currency, status)
+       VALUES ($1, 'paystack', $2, $3, 'GHS', 'pending')`,
+      [order.id, paystackData.data.reference, computedTotal],
+    )
 
     return NextResponse.json({
       authorization_url: paystackData.data.authorization_url,

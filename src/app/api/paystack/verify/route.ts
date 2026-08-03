@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { createAdminClient } from "@/lib/supabase/admin"
+import { query, queryOne } from "@/lib/db"
 import { fulfillPaidOrder, amountsMatch } from "@/lib/payments/fulfill-paid-order"
 import { normalizePaystackStatus } from "@/lib/payments/status"
 import { checkRateLimit, getClientIdentifier, RATE_LIMITS } from "@/lib/rate-limit"
@@ -39,14 +39,23 @@ export async function GET(req: NextRequest) {
     }
 
     const tx = data.data
-    const supabase = createAdminClient()
     const internal = normalizePaystackStatus(tx.status)
 
-    const { data: order } = await supabase
-      .from("orders")
-      .select("id, order_number, grand_total, guest_email, guest_phone, shipping_address, currency")
-      .eq("order_number", reference)
-      .maybeSingle()
+    const order = await queryOne<{
+      id: string
+      order_number: string
+      grand_total: number
+      guest_email: string | null
+      guest_phone: string | null
+      shipping_address: unknown
+      currency: string
+    }>(
+      `SELECT id, order_number, grand_total, guest_email, guest_phone, shipping_address, currency
+       FROM orders
+       WHERE order_number = $1
+       LIMIT 1`,
+      [reference],
+    )
 
     if (!order) {
       return NextResponse.json({ error: "Order not found" }, { status: 404 })
@@ -65,7 +74,7 @@ export async function GET(req: NextRequest) {
         return NextResponse.json({ error: "Currency mismatch" }, { status: 400 })
       }
 
-      const result = await fulfillPaidOrder(supabase, {
+      const result = await fulfillPaidOrder({
         orderId: order.id,
         orderNumber: order.order_number,
         provider: "paystack",
@@ -96,15 +105,12 @@ export async function GET(req: NextRequest) {
       })
     }
 
-    await supabase
-      .from("payments")
-      .update({
-        status: "failed",
-        raw_payload: tx,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("provider_ref", reference)
-      .neq("status", "paid")
+    await query(
+      `UPDATE payments
+       SET status = 'failed', raw_payload = $2::jsonb, updated_at = now()
+       WHERE provider_ref = $1 AND status <> 'paid'`,
+      [reference, JSON.stringify(tx)],
+    )
 
     return NextResponse.json({
       verified: false,

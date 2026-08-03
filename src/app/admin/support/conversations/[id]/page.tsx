@@ -2,7 +2,7 @@
 
 import { useState, useEffect, use } from 'react';
 import Link from 'next/link';
-import { supabase } from '@/lib/supabase';
+import { api } from '@/lib/api';
 import MarkdownMessage from '@/components/MarkdownMessage';
 
 export default function ConversationDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -21,29 +21,25 @@ export default function ConversationDetailPage({ params }: { params: Promise<{ i
 
   async function fetchData() {
     setLoading(true);
-    const { data: conv } = await supabase.from('chat_conversations').select('*').eq('id', id).single();
-    setConversation(conv);
-
-    if (conv?.user_id) {
-      const { data: memData } = await supabase.from('ai_memory').select('*').eq('customer_id', conv.user_id).order('created_at', { ascending: false });
-      setMemories(memData || []);
-    } else if (conv?.customer_email) {
-      const { data: memData } = await supabase.from('ai_memory').select('*').eq('customer_email', conv.customer_email).order('created_at', { ascending: false });
-      setMemories(memData || []);
-    }
+    const res = await api<{ data: any; memories: any[] }>(`/api/support/conversations/${id}`);
+    setConversation(res.data);
+    setMemories(res.memories || []);
     setLoading(false);
   }
 
   async function addMemoryNote() {
     if (!newMemory.trim()) return;
     setAddingMemory(true);
-    await supabase.from('ai_memory').insert({
-      customer_id: conversation?.user_id || null,
-      customer_email: conversation?.customer_email || null,
-      memory_type: memoryType,
-      content: newMemory.trim(),
-      importance: 'normal',
-      source_conversation_id: id,
+    await api('/api/support/memory', {
+      method: 'POST',
+      json: {
+        customer_id: conversation?.user_id || null,
+        customer_email: conversation?.customer_email || null,
+        memory_type: memoryType,
+        content: newMemory.trim(),
+        importance: 'normal',
+        source_conversation_id: id,
+      },
     });
     setNewMemory('');
     await fetchData();
@@ -51,22 +47,24 @@ export default function ConversationDetailPage({ params }: { params: Promise<{ i
   }
 
   async function deleteMemory(memId: string) {
-    await supabase.from('ai_memory').delete().eq('id', memId);
+    await api(`/api/support/memory?id=${memId}`, { method: 'DELETE' });
     setMemories(prev => prev.filter(m => m.id !== memId));
   }
 
   async function toggleResolved() {
     const newVal = !conversation.is_resolved;
-    await supabase.from('chat_conversations').update({ is_resolved: newVal }).eq('id', id);
+    await api(`/api/support/conversations/${id}`, {
+      method: 'PATCH',
+      json: { is_resolved: newVal },
+    });
     setConversation({ ...conversation, is_resolved: newVal });
   }
 
   async function createTicketFromConversation() {
     setCreatingTicket(true);
-    const res = await fetch('/api/support/tickets', {
+    const data = await api<{ data?: { ticket_number: string } }>('/api/support/tickets', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
+      json: {
         subject: conversation.summary || `Chat conversation from ${conversation.customer_name || conversation.customer_email || 'customer'}`,
         description: `Auto-created from AI conversation. Session: ${conversation.session_id}`,
         customer_id: conversation.user_id,
@@ -78,12 +76,14 @@ export default function ConversationDetailPage({ params }: { params: Promise<{ i
         priority: conversation.sentiment === 'negative' ? 'high' : 'medium',
         initial_message: conversation.summary || 'Created from AI chat conversation',
         message_sender_type: 'system',
-      }),
+      },
     });
-    const data = await res.json();
     setCreatingTicket(false);
     if (data.data) {
-      await supabase.from('chat_conversations').update({ is_escalated: true, escalated_at: new Date().toISOString() }).eq('id', id);
+      await api(`/api/support/conversations/${id}`, {
+        method: 'PATCH',
+        json: { is_escalated: true },
+      });
       setConversation({ ...conversation, is_escalated: true });
       alert(`Ticket ${data.data.ticket_number} created!`);
     }

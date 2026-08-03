@@ -1,20 +1,17 @@
 #!/usr/bin/env node
 /**
- * Create a store admin user (Supabase Auth + profiles.role via trigger).
+ * Create a store admin user in auth.users + profiles (plain Postgres).
  *
- * Requires in .env.local or the environment:
- *   NEXT_PUBLIC_SUPABASE_URL
- *   SUPABASE_SERVICE_ROLE_KEY  (never commit; server-only)
+ * Requires DATABASE_URL in .env.local or the environment.
  *
  * Usage:
  *   node scripts/create-admin-user.mjs you@example.com 'YourSecurePassword'
- *
- * Or: npm run create-admin -- you@example.com 'YourSecurePassword'
  */
 
 import { readFileSync, existsSync } from "node:fs"
 import { resolve } from "node:path"
-import { createClient } from "@supabase/supabase-js"
+import pg from "pg"
+import bcrypt from "bcryptjs"
 
 function loadDotEnvLocal() {
   const p = resolve(process.cwd(), ".env.local")
@@ -37,8 +34,8 @@ function loadDotEnvLocal() {
   }
 }
 
-const [email, password] = process.argv.slice(2)
-if (!email || !password) {
+const [emailRaw, password] = process.argv.slice(2)
+if (!emailRaw || !password) {
   console.error(
     "Usage: node scripts/create-admin-user.mjs <email> <password>\n" +
       "Example: node scripts/create-admin-user.mjs admin@shop.com 'Str0ng!pass'",
@@ -48,39 +45,77 @@ if (!email || !password) {
 
 loadDotEnvLocal()
 
-const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-
-if (!url || !serviceKey) {
-  console.error(
-    "Missing NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY (.env.local).",
-  )
+const databaseUrl = process.env.DATABASE_URL
+if (!databaseUrl) {
+  console.error("Missing DATABASE_URL (.env.local).")
   process.exit(1)
 }
 
-const supabase = createClient(url, serviceKey, {
-  auth: { autoRefreshToken: false, persistSession: false },
-})
+const email = emailRaw.toLowerCase().trim()
+const pool = new pg.Pool({ connectionString: databaseUrl })
 
-const { error: allowError } = await supabase
-  .from("store_admins")
-  .upsert({ email: email.toLowerCase().trim() }, { onConflict: "email" })
+try {
+  const encrypted = await bcrypt.hash(password, 12)
+  const client = await pool.connect()
+  try {
+    await client.query("BEGIN")
+    const existing = await client.query(
+      `SELECT id FROM auth.users WHERE lower(email) = lower($1) LIMIT 1`,
+      [email],
+    )
 
-if (allowError) {
-  console.error("store_admins insert failed:", allowError.message)
+    let userId
+    if (existing.rows[0]) {
+      userId = existing.rows[0].id
+      await client.query(
+        `UPDATE auth.users
+         SET encrypted_password = $2, email_confirmed_at = COALESCE(email_confirmed_at, now()), updated_at = now()
+         WHERE id = $1`,
+        [userId, encrypted],
+      )
+    } else {
+      const inserted = await client.query(
+        `INSERT INTO auth.users (email, encrypted_password, email_confirmed_at, raw_user_meta_data)
+         VALUES ($1, $2, now(), '{}'::jsonb)
+         RETURNING id`,
+        [email, encrypted],
+      )
+      userId = inserted.rows[0].id
+    }
+
+    await client.query(
+      `INSERT INTO public.store_admins (email) VALUES ($1)
+       ON CONFLICT (email) DO NOTHING`,
+      [email],
+    ).catch(() => {})
+
+    await client.query(
+      `UPDATE public.profiles
+       SET role = 'admin', email = $2, updated_at = now()
+       WHERE id = $1`,
+      [userId, email],
+    )
+
+    // If trigger didn't create profile
+    await client.query(
+      `INSERT INTO public.profiles (id, email, role)
+       VALUES ($1, $2, 'admin')
+       ON CONFLICT (id) DO UPDATE
+       SET role = 'admin', email = EXCLUDED.email, updated_at = now()`,
+      [userId, email],
+    )
+
+    await client.query("COMMIT")
+    console.log(`Admin ready: ${email} (${userId})`)
+  } catch (err) {
+    await client.query("ROLLBACK")
+    throw err
+  } finally {
+    client.release()
+  }
+} catch (err) {
+  console.error(err instanceof Error ? err.message : err)
   process.exit(1)
+} finally {
+  await pool.end()
 }
-
-const { data, error } = await supabase.auth.admin.createUser({
-  email: email.trim(),
-  password,
-  email_confirm: true,
-})
-
-if (error) {
-  console.error("createUser failed:", error.message)
-  process.exit(1)
-}
-
-console.log("Admin user created:", data.user?.email)
-console.log("Sign in at /auth/login with that email and password, then open /admin")
