@@ -107,6 +107,16 @@ function supabasePublicToLocal(src: string): { bucket: string; objectPath: strin
   }
 }
 
+/** Optional origin for files never copied to local STORAGE_ROOT (legacy Supabase). */
+function legacyStorageOrigin(): string | null {
+  const raw =
+    process.env.LEGACY_SUPABASE_URL ||
+    process.env.LEGACY_STORAGE_ORIGIN ||
+    ""
+  const trimmed = raw.trim().replace(/\/+$/, "")
+  return trimmed || null
+}
+
 async function loadSourceBytes(
   src: string,
   request: NextRequest,
@@ -116,8 +126,42 @@ async function loadSourceBytes(
     const bucket = storageMatch[1]
     const objectPath = decodeURIComponent(storageMatch[2])
     const result = await readObject(bucket, objectPath)
-    if (!result?.bytes) return { ok: false, reason: "not_found" }
-    return { ok: true, bytes: result.bytes }
+    if (result?.bytes) return { ok: true, bytes: result.bytes }
+
+    // Self-heal: pull from legacy Supabase public storage when local disk misses.
+    const legacy = legacyStorageOrigin()
+    if (legacy) {
+      try {
+        const remote = `${legacy}/storage/v1/object/public/${bucket}/${objectPath
+          .split("/")
+          .map(encodeURIComponent)
+          .join("/")}`
+        const res = await fetchWithTimeout(remote)
+        if (res.ok) {
+          const bytes = Buffer.from(await res.arrayBuffer())
+          // Best-effort local cache so subsequent hits stay on disk.
+          try {
+            const full = path.join(STORAGE_ROOT, bucket, objectPath)
+            await fs.mkdir(path.dirname(full), { recursive: true })
+            await fs.writeFile(full, bytes)
+            const ct = res.headers.get("content-type")
+            if (ct) {
+              await fs.writeFile(
+                `${full}.meta.json`,
+                JSON.stringify({ contentType: ct }),
+              )
+            }
+          } catch {
+            /* ignore cache write failures */
+          }
+          return { ok: true, bytes }
+        }
+      } catch {
+        /* fall through */
+      }
+    }
+
+    return { ok: false, reason: "not_found" }
   }
 
   const fromSupabase = supabasePublicToLocal(src)
