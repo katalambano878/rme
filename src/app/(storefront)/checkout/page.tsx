@@ -75,7 +75,7 @@ const initialFormData: FormData = {
   postalCode: "",
   saveForNextTime: false,
   shippingMethod: "",
-  paymentMethod: "paystack",
+  paymentMethod: "moolre",
   agreeToTerms: false,
   couponCode: "",
   orderNotes: "",
@@ -89,17 +89,18 @@ const steps = [
 ]
 
 const paymentMethods = [
-  {
-    id: "paystack",
-    name: "Card Payment",
-    description: "Debit & credit cards, bank transfer & more (via Paystack)",
-    recommended: true,
-  },
+  // Paystack disabled until keys are configured in production
+  // {
+  //   id: "paystack",
+  //   name: "Card Payment",
+  //   description: "Debit & credit cards, bank transfer & more (via Paystack)",
+  //   recommended: true,
+  // },
   {
     id: "moolre",
     name: "Mobile Money",
     description: "Pay with mobile money from your network",
-    recommended: false,
+    recommended: true,
   },
 ]
 
