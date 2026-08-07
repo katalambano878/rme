@@ -397,7 +397,7 @@ export default function OrderDetailClient({ orderId }: OrderDetailClientProps) {
             </div>
             <div className="text-right">
               <p>Subtotal: GH₵ {order?.subtotal?.toFixed(2)}</p>
-              <p>Shipping: GH₵ {order?.shipping_total?.toFixed(2)}</p>
+              <p>Shipping: Confirmed by store</p>
               <p className="font-bold text-lg border-t border-gray-400 pt-1 mt-1">Total: GH₵ {order?.total?.toFixed(2)}</p>
             </div>
           </div>
@@ -486,7 +486,7 @@ export default function OrderDetailClient({ orderId }: OrderDetailClientProps) {
                 </div>
                 <div className="flex justify-between text-gray-700">
                   <span>Shipping</span>
-                  <span>GH₵ {order.shipping_total?.toFixed(2)}</span>
+                  <span>Confirmed by store</span>
                 </div>
                 <div className="flex justify-between text-gray-700">
                   <span>Tax</span>

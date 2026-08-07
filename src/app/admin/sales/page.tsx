@@ -123,31 +123,11 @@ export default function AdminSalesPage() {
         </div>
       </div>
 
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 p-4 rounded-xl border-2 border-rose-100 bg-[#FFF5F5]">
-        <div className="min-w-0 flex-1">
-          <p className="text-sm font-semibold text-gray-900">Doorstep Delivery Fee (GH₵)</p>
-          <p className="text-xs text-gray-600 mt-0.5 max-w-xl">
-            The amount charged for doorstep delivery at checkout. Store pickup is always free. Set to 0 for free delivery.
-          </p>
-        </div>
-        <div className="flex items-center gap-3 shrink-0">
-          <input
-            type="number"
-            min="0"
-            step="0.01"
-            value={deliveryFee}
-            onChange={(e) => setDeliveryFee(e.target.value)}
-            className="w-24 px-3 py-2 border-2 border-gray-300 rounded-lg text-sm font-semibold text-center focus:ring-2 focus:ring-rose-400 focus:border-rose-400 input-no-spinner"
-          />
-          <button
-            type="button"
-            onClick={saveDeliveryFee}
-            disabled={savingFee}
-            className="px-4 py-2 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-sm font-semibold transition-colors whitespace-nowrap disabled:opacity-50"
-          >
-            {savingFee ? 'Saving…' : 'Save'}
-          </button>
-        </div>
+      <div className="p-4 rounded-xl border-2 border-rose-100 bg-[#FFF5F5]">
+        <p className="text-sm font-semibold text-gray-900">Shipping / delivery</p>
+        <p className="text-xs text-gray-600 mt-0.5 max-w-xl">
+          Checkout does not charge shipping. Confirm the delivery cost with each customer after they place an order.
+        </p>
       </div>
 
       {loading && <p className="text-sm text-gray-500">Loading sale settings…</p>}

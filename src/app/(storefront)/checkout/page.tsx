@@ -983,17 +983,8 @@ export default function CheckoutPage() {
                       </div>
                       <div className="flex justify-between text-sm">
                         <span className="text-muted-foreground">Shipping</span>
-                        <span
-                          className={cn(
-                            "font-medium",
-                            shippingCost === 0
-                              ? "text-emerald-600"
-                              : "text-navy",
-                          )}
-                        >
-                          {shippingCost === 0
-                            ? "Free"
-                            : formatPrice(shippingCost)}
+                        <span className="font-medium text-navy">
+                          Confirmed by store
                         </span>
                       </div>
                       <Separator className="bg-rose-border" />
@@ -1220,9 +1211,7 @@ function OrderSummaryContent({
         </div>
         <div className="flex justify-between text-[15px]">
           <span className="text-navy/75">Shipping</span>
-          <span className="font-semibold text-navy">
-            {!shippingMethod ? "—" : shippingMethod === "delivery" ? "TBD" : "Free"}
-          </span>
+          <span className="font-semibold text-navy">Confirmed by store</span>
         </div>
         <div className="flex justify-between text-[15px]">
           <span className="text-navy/75">Tax</span>

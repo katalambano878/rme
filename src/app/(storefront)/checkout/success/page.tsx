@@ -287,17 +287,7 @@ function CheckoutSuccessContent() {
                     </div>
                     <div className="flex justify-between text-sm">
                       <span className="text-muted-foreground">Shipping</span>
-                      <span
-                        className={
-                          orderData.shipping === 0
-                            ? "text-emerald-600"
-                            : "text-navy"
-                        }
-                      >
-                        {orderData.shipping === 0
-                          ? "Free"
-                          : formatPrice(orderData.shipping)}
-                      </span>
+                      <span className="text-navy">Confirmed by store</span>
                     </div>
                     <Separator className="bg-rose-border" />
                     <div className="flex justify-between pt-1">

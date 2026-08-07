@@ -531,9 +531,10 @@ interface ChatShippingInfo {
   region: string
 }
 
+// Shipping is confirmed by the store after order — never charge at chat checkout.
 const DELIVERY_COSTS: Record<string, number> = {
-  standard: 20,
-  express: 40,
+  standard: 0,
+  express: 0,
   pickup: 0,
 }
 
@@ -752,7 +753,7 @@ export async function createChatOrder(
         success: true,
         orderNumber,
         total,
-        message: `Order ${orderNumber} placed! Total GH₵${total.toFixed(2)} (incl. GH₵${shippingCost.toFixed(2)} delivery). Cash on delivery — our team will confirm.`,
+        message: `Order ${orderNumber} placed! Total GH₵${total.toFixed(2)} (shipping confirmed by our team). Cash on delivery — our team will confirm.`,
       }
     }
 
@@ -900,7 +901,7 @@ export async function createChatOrder(
       orderNumber,
       total,
       paymentUrl: paystackData.data.authorization_url,
-      message: `Order ${orderNumber} is ready. Total GH₵${total.toFixed(2)} (incl. GH₵${shippingCost.toFixed(2)} delivery). Use the secure Paystack link below to pay.`,
+      message: `Order ${orderNumber} is ready. Total GH₵${total.toFixed(2)} (shipping confirmed by our team). Use the secure Paystack link below to pay.`,
     }
   } catch (err: any) {
     console.error("[ChatTools] createChatOrder:", err)
