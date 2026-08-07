@@ -9,6 +9,7 @@ import FraudDetectionAlert from '@/components/FraudDetectionAlert';
 import { BRAND_NAME } from '@/lib/brand';
 import { buildDisplaySku } from '@/lib/sku-display';
 import { normalizeShippingAddress, isAddressComplete } from '@/lib/shipping-address';
+import { adminImageSrc } from '@/lib/product-image';
 
 // Toggle to re-enable the per-order fraud detection alert in the admin UI.
 const FRAUD_DETECTION_ENABLED = false;
@@ -453,7 +454,7 @@ export default function OrderDetailClient({ orderId }: OrderDetailClientProps) {
                     <div className="w-20 h-20 bg-white rounded-lg overflow-hidden border border-gray-200 flex items-center justify-center relative">
                       {item.products?.product_images?.[0]?.url ? (
                         <img
-                          src={item.products.product_images[0].url}
+                          src={adminImageSrc(item.products.product_images[0].url, 96)}
                           alt={item.product_name}
                           className="w-full h-full object-cover"
                         />

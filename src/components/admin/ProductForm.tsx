@@ -8,6 +8,7 @@ import { SITE_DOMAIN, BRAND_NAME } from '@/lib/brand';
 import { SUPABASE_STORAGE_BUCKET } from '@/lib/supabase-storage';
 import { sortCategoriesForDisplay, categoryOptionLabel } from '@/lib/category-tree';
 import { money } from '@/lib/format-money';
+import { adminImageSrc, normalizePublicImageSrc } from '@/lib/product-image';
 
 /** URL-safe slug from product title (keeps admin slug in sync until the user edits it). */
 function slugifyProductName(name: string): string {
@@ -337,7 +338,7 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
                 .from(SUPABASE_STORAGE_BUCKET)
                 .getPublicUrl(filePath);
 
-            setImages([...images, { url: publicUrl, position: images.length }]);
+            setImages([...images, { url: normalizePublicImageSrc(publicUrl), position: images.length }]);
 
         } catch (error: any) {
             alert('Error uploading image: ' + error.message);
@@ -1187,7 +1188,7 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
                                 {images.map((img: any, index: number) => (
                                     <div key={index} className="relative group">
                                         <div className="aspect-square bg-gray-100 rounded-xl overflow-hidden border-2 border-gray-200">
-                                            <img src={img.url} alt={`Product ${index + 1}`} className="w-full h-full object-cover" />
+                                            <img src={adminImageSrc(img.url, 200)} alt={`Product ${index + 1}`} className="w-full h-full object-cover" />
                                         </div>
                                         {index === 0 && (
                                             <span className="absolute top-2 left-2 bg-rose-600 text-white px-2 py-1 rounded text-xs font-semibold whitespace-nowrap">

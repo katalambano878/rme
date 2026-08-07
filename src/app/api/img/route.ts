@@ -263,10 +263,17 @@ export async function GET(request: NextRequest) {
 
   const loaded = await loadSourceBytes(src, request)
   if (!loaded.ok) {
+    const headers = { "Cache-Control": "no-store" }
     if (loaded.reason === "fetch_failed") {
-      return NextResponse.json({ error: "Failed to fetch source" }, { status: 502 })
+      return NextResponse.json(
+        { error: "Failed to fetch source" },
+        { status: 502, headers },
+      )
     }
-    return NextResponse.json({ error: "Source not found" }, { status: 404 })
+    return NextResponse.json(
+      { error: "Source not found" },
+      { status: 404, headers },
+    )
   }
 
   try {

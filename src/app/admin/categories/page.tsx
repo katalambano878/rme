@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { supabase } from '@/lib/supabase';
 import { SUPABASE_STORAGE_BUCKET } from '@/lib/supabase-storage';
+import { adminImageSrc, normalizePublicImageSrc } from '@/lib/product-image';
 import {
   sortCategoriesForDisplay,
   categoryDepth,
@@ -279,7 +280,7 @@ export default function AdminCategoriesPage() {
                       <div className="flex items-center space-x-3">
                         <div className="w-16 h-16 shrink-0 bg-gray-100 rounded-lg overflow-hidden border border-gray-200">
                           {category.image_url ? (
-                            <img src={category.image_url} alt={category.name} className="w-full h-full object-cover" />
+                            <img src={adminImageSrc(category.image_url, 160)} alt={category.name} className="w-full h-full object-cover" />
                           ) : (
                             <div className="w-full h-full flex items-center justify-center text-gray-400">
                               <i className="ri-image-line text-2xl"></i>
@@ -449,7 +450,7 @@ export default function AdminCategoriesPage() {
                     </div>
                   ) : formData.image_url ? (
                     <div className="relative group">
-                      <img src={formData.image_url} alt="Category" className="h-40 mx-auto object-contain rounded-lg shadow-sm" />
+                      <img src={adminImageSrc(formData.image_url, 320)} alt="Category" className="h-40 mx-auto object-contain rounded-lg shadow-sm" />
                       <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity rounded-lg">
                         <label className="cursor-pointer bg-white px-4 py-2 rounded-lg font-semibold text-sm hover:bg-gray-100">
                           Change Image

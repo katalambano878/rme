@@ -12,11 +12,13 @@ const STORAGE_ROOT =
   process.env.STORAGE_ROOT || path.join(process.cwd(), ".storage");
 
 function publicBase(): string {
+  // Prefer relative public URLs so www↔apex never trip CSP img-src.
+  // Absolute base is only needed for signed URLs consumed off-site.
   return (
     process.env.STORAGE_PUBLIC_URL ||
     process.env.SUPABASE_PUBLIC_URL ||
     process.env.NEXT_PUBLIC_APP_URL ||
-    "http://localhost:3000"
+    ""
   ).replace(/\/+$/, "");
 }
 
@@ -148,9 +150,12 @@ export function createStorageClient(): StorageClient {
         },
         getPublicUrl(objectPath) {
           const clean = objectPath.replace(/^\/+/, "");
+          const path = `/storage/v1/object/public/${bucket}/${encodeURI(clean)}`;
+          // Relative by default (browser + server HTML). Absolute only if explicitly configured.
+          const base = publicBase();
           return {
             data: {
-              publicUrl: `${publicBase()}/storage/v1/object/public/${bucket}/${encodeURI(clean)}`,
+              publicUrl: base ? `${base}${path}` : path,
             },
           };
         },

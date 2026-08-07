@@ -4,6 +4,7 @@
 
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
+import { adminImageSrc } from '@/lib/product-image';
 
 export default function AdminReviewsPage() {
   const [statusFilter, setStatusFilter] = useState('all');

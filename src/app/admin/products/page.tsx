@@ -9,6 +9,7 @@ import { deleteProductAndDependencies } from '@/lib/admin-product-delete';
 import { buildDisplaySku } from '@/lib/sku-display';
 import { listSkuRaw, listStockFromProduct } from '@/lib/product-metrics';
 import { effectivePriceForProduct } from '@/lib/effective-price';
+import { adminImageSrc } from '@/lib/product-image';
 
 export default function ProductsPage() {
   const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
@@ -367,7 +368,7 @@ export default function ProductsPage() {
                     <td className="py-4 px-4">
                       <div className="flex items-center space-x-3">
                         <div className="size-10 shrink-0 bg-gray-100 rounded-full overflow-hidden border border-gray-200 ring-1 ring-gray-100">
-                          <img src={product.image} alt={product.name} className="h-full w-full object-cover" />
+                          <img src={adminImageSrc(product.image, 80)} alt={product.name} className="h-full w-full object-cover" />
                         </div>
                         <div>
                           <p className="font-semibold text-gray-900">{product.name}</p>
@@ -436,7 +437,7 @@ export default function ProductsPage() {
                     className="absolute top-2 left-2 w-5 h-5 text-rose-700 border-gray-300 rounded focus:ring-rose-400 cursor-pointer z-10"
                   />
                   <div className="aspect-square bg-gray-100 rounded-lg overflow-hidden mb-3 border border-gray-200">
-                    <img src={product.image} alt={product.name} className="w-full h-full object-cover" />
+                    <img src={adminImageSrc(product.image, 400)} alt={product.name} className="w-full h-full object-cover" />
                   </div>
                 </div>
                 <span className={`inline-block px-2 py-1 rounded-full text-xs font-semibold mb-2 capitalize ${statusColors[product.status] || 'bg-gray-100 text-gray-600'}`}>

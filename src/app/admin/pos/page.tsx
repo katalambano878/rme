@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { supabase } from '@/lib/supabase';
 import { listPriceFromProduct, listSkuRaw, listStockFromProduct } from '@/lib/product-metrics';
+import { adminImageSrc } from '@/lib/product-image';
 
 interface Product {
     id: string;
@@ -479,7 +480,7 @@ export default function POSPage() {
                                 >
                                     <div className="relative aspect-[5/6] shrink-0 overflow-hidden rounded-t-2xl bg-gray-50">
                                         {product.image
-                                            ? <img src={product.image} alt={product.name} className={`h-full w-full object-cover transition-transform duration-300 ${inStock ? 'group-hover:scale-[1.03]' : ''}`} />
+                                            ? <img src={adminImageSrc(product.image, 240)} alt={product.name} className={`h-full w-full object-cover transition-transform duration-300 ${inStock ? 'group-hover:scale-[1.03]' : ''}`} />
                                             : <div className={`h-full w-full flex items-center justify-center text-gray-300 transition-transform duration-300 ${inStock ? 'group-hover:scale-[1.03]' : ''}`}><i className="ri-image-line text-4xl"></i></div>
                                         }
                                         {inStock ? (
@@ -577,7 +578,7 @@ export default function POSPage() {
                             <div key={item.id} className="flex gap-3 p-3 bg-gray-50 rounded-lg group hover:bg-gray-100 transition-colors">
                                 <div className="w-16 h-16 bg-white rounded-md overflow-hidden flex-shrink-0 border border-gray-200 flex items-center justify-center">
                                     {item.image
-                                        ? <img src={item.image} className="w-full h-full object-cover" alt="" />
+                                        ? <img src={adminImageSrc(item.image, 80)} className="w-full h-full object-cover" alt="" />
                                         : <i className="ri-image-line text-gray-300 text-2xl"></i>
                                     }
                                 </div>

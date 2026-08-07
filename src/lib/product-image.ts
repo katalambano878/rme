@@ -1,16 +1,27 @@
 /** Single mock asset used when a product has no images (and for category fallbacks). */
 export const MOCK_PRODUCT_IMAGE = "/mock-product.png"
 
-/** Rewrite legacy hosted Supabase public URLs to same-origin storage paths. */
+const SAME_ORIGIN_HOSTS = new Set([
+  "ronnyandme.com",
+  "www.ronnyandme.com",
+  "localhost",
+  "127.0.0.1",
+])
+
+/** Rewrite absolute storage URLs to same-origin paths (avoids www↔apex CSP blocks). */
 export function normalizePublicImageSrc(src: string): string {
   const trimmed = src.trim()
   if (!trimmed) return trimmed
   try {
     if (trimmed.startsWith("/")) return trimmed
     const u = new URL(trimmed)
+    const host = u.hostname.toLowerCase()
+    const isStoragePath = u.pathname.startsWith("/storage/v1/object/public/")
     if (
-      u.hostname.endsWith(".supabase.co") &&
-      u.pathname.startsWith("/storage/v1/object/public/")
+      isStoragePath &&
+      (host.endsWith(".supabase.co") ||
+        SAME_ORIGIN_HOSTS.has(host) ||
+        host.endsWith(".sslip.io"))
     ) {
       return u.pathname + u.search
     }
@@ -22,7 +33,25 @@ export function normalizePublicImageSrc(src: string): string {
 
 export function optimizedImageUrl(src: string, width?: number): string {
   const normalized = normalizePublicImageSrc(src)
+  if (!normalized) return MOCK_PRODUCT_IMAGE
+  if (
+    normalized.startsWith("blob:") ||
+    normalized.startsWith("data:") ||
+    normalized.startsWith("http://localhost") ||
+    normalized.startsWith("http://127.0.0.1")
+  ) {
+    return normalized
+  }
   return `/api/img?src=${encodeURIComponent(normalized)}&w=${width || 640}`
+}
+
+/** Admin/list thumbnails — same proxy as storefront; safe for null/empty. */
+export function adminImageSrc(
+  src: string | null | undefined,
+  width = 200,
+): string {
+  if (!src?.trim()) return MOCK_PRODUCT_IMAGE
+  return optimizedImageUrl(src, width)
 }
 
 export function getProductGalleryImages(product: {
