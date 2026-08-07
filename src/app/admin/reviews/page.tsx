@@ -261,7 +261,7 @@ export default function AdminReviewsPage() {
                     <td className="py-4 px-4">
                       <div className="flex items-center space-x-3">
                         <img
-                          src={review.product.image}
+                          src={adminImageSrc(review.product.image, 96)}
                           alt={review.product.name}
                           className="w-12 h-12 rounded-lg object-cover border border-gray-100"
                         />

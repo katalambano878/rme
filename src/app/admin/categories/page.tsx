@@ -107,7 +107,7 @@ export default function AdminCategoriesPage() {
         .from(SUPABASE_STORAGE_BUCKET)
         .getPublicUrl(filePath);
 
-      setFormData({ ...formData, image_url: publicUrl });
+      setFormData({ ...formData, image_url: normalizePublicImageSrc(publicUrl) });
 
     } catch (error: any) {
       alert('Error uploading image: ' + error.message);
