@@ -9,8 +9,6 @@ export default function AdminSalesPage() {
   const [salePromotionOn, setSalePromotionOn] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [deliveryFee, setDeliveryFee] = useState('25');
-  const [savingFee, setSavingFee] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -21,7 +19,6 @@ export default function AdminSalesPage() {
         if (!cancelled) {
           const flags = (data?.feature_flags as Record<string, unknown> | null) ?? {};
           setSalePromotionOn(flags.sale_promotion_enabled === true);
-          if (typeof flags.delivery_fee === 'number') setDeliveryFee(String(flags.delivery_fee));
         }
       } catch (e) {
         console.error(e);
@@ -34,28 +31,6 @@ export default function AdminSalesPage() {
       cancelled = true;
     };
   }, []);
-
-  const saveDeliveryFee = async () => {
-    const fee = parseFloat(deliveryFee);
-    if (isNaN(fee) || fee < 0) {
-      alert('Enter a valid delivery fee (0 or higher).');
-      return;
-    }
-    try {
-      setSavingFee(true);
-      const { data: row, error: fetchErr } = await supabase.from('site_settings').select('feature_flags').eq('id', 1).maybeSingle();
-      if (fetchErr) throw fetchErr;
-      const flags = { ...((row?.feature_flags as Record<string, unknown> | null) ?? {}), delivery_fee: fee };
-      const { error: upErr } = await supabase.from('site_settings').update({ feature_flags: flags }).eq('id', 1);
-      if (upErr) throw upErr;
-      alert('Delivery fee updated!');
-    } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : 'Could not save';
-      alert(msg);
-    } finally {
-      setSavingFee(false);
-    }
-  };
 
   const toggleSalePromotion = async () => {
     const next = !salePromotionOn;
