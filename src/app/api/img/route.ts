@@ -287,6 +287,30 @@ export async function GET(request: NextRequest) {
       },
     })
   } catch {
-    return NextResponse.json({ error: "Image processing failed" }, { status: 502 })
+    // Fall back to original bytes when sharp cannot transcode (rare formats).
+    const lower = src.toLowerCase()
+    const contentType =
+      lower.endsWith(".png")
+        ? "image/png"
+        : lower.endsWith(".webp")
+          ? "image/webp"
+          : lower.endsWith(".gif")
+            ? "image/gif"
+            : lower.endsWith(".jpg") || lower.endsWith(".jpeg")
+              ? "image/jpeg"
+              : "application/octet-stream"
+    if (contentType !== "application/octet-stream") {
+      return new NextResponse(new Uint8Array(loaded.bytes), {
+        status: 200,
+        headers: {
+          "Content-Type": contentType,
+          "Cache-Control": "public, max-age=86400",
+        },
+      })
+    }
+    return NextResponse.json(
+      { error: "Image processing failed" },
+      { status: 502, headers: { "Cache-Control": "no-store" } },
+    )
   }
 }

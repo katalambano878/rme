@@ -9,6 +9,7 @@ import { SUPABASE_STORAGE_BUCKET } from '@/lib/supabase-storage';
 import { sortCategoriesForDisplay, categoryOptionLabel } from '@/lib/category-tree';
 import { money } from '@/lib/format-money';
 import { adminImageSrc, normalizePublicImageSrc } from '@/lib/product-image';
+import { ACCEPT_PRODUCT_IMAGES, prepareImageForUpload } from '@/lib/browser-image-upload';
 
 /** URL-safe slug from product title (keeps admin slug in sync until the user edits it). */
 function slugifyProductName(name: string): string {
@@ -323,27 +324,27 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
             if (!e.target.files || e.target.files.length === 0) return;
 
             setUploading(true);
-            const file = e.target.files[0];
-            const fileExt = file.name.split('.').pop();
-            const fileName = `${Math.random()}.${fileExt}`;
-            const filePath = `${fileName}`;
+            const raw = e.target.files[0];
+            const { file, path: filePath } = await prepareImageForUpload(raw);
 
-            const { error: uploadError } = await supabase.storage
+            const { data: uploaded, error: uploadError } = await supabase.storage
                 .from(SUPABASE_STORAGE_BUCKET)
-                .upload(filePath, file);
+                .upload(filePath, file, { contentType: file.type || 'image/jpeg', upsert: false });
 
             if (uploadError) throw uploadError;
 
+            const savedPath = uploaded?.path || filePath;
             const { data: { publicUrl } } = supabase.storage
                 .from(SUPABASE_STORAGE_BUCKET)
-                .getPublicUrl(filePath);
+                .getPublicUrl(savedPath);
 
             setImages([...images, { url: normalizePublicImageSrc(publicUrl), position: images.length }]);
 
         } catch (error: any) {
-            alert('Error uploading image: ' + error.message);
+            alert('Error uploading image: ' + (error?.message || 'Upload failed'));
         } finally {
             setUploading(false);
+            e.target.value = '';
         }
     };
 
@@ -1218,7 +1219,7 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
                                     <span className="text-sm font-semibold">{uploading ? 'Uploading...' : 'Upload Image'}</span>
                                     <input
                                         type="file"
-                                        accept="image/*"
+                                        accept={ACCEPT_PRODUCT_IMAGES}
                                         className="hidden"
                                         onChange={handleImageUpload}
                                         disabled={uploading}

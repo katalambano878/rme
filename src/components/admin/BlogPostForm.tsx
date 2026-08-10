@@ -5,6 +5,8 @@ import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { SUPABASE_STORAGE_BUCKET } from '@/lib/supabase-storage';
+import { ACCEPT_PRODUCT_IMAGES, prepareImageForUpload } from '@/lib/browser-image-upload';
+import { normalizePublicImageSrc } from '@/lib/product-image';
 
 function slugifyTitle(name: string): string {
   return name
@@ -74,16 +76,23 @@ export default function BlogPostForm({ mode, postId, initialData }: BlogPostForm
     if (!file) return;
     try {
       setUploading(true);
-      const ext = file.name.split('.').pop();
-      const path = `blog-${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
-      const { error: upErr } = await supabase.storage.from(SUPABASE_STORAGE_BUCKET).upload(path, file);
+      const prepared = await prepareImageForUpload(file);
+      const path = `blog-${Date.now()}-${prepared.path}`;
+      const { data: uploaded, error: upErr } = await supabase.storage
+        .from(SUPABASE_STORAGE_BUCKET)
+        .upload(path, prepared.file, {
+          contentType: prepared.file.type || 'image/jpeg',
+          upsert: false,
+        });
       if (upErr) throw upErr;
-      const { data } = supabase.storage.from(SUPABASE_STORAGE_BUCKET).getPublicUrl(path);
-      setCoverImageUrl(data.publicUrl);
+      const savedPath = uploaded?.path || path;
+      const { data } = supabase.storage.from(SUPABASE_STORAGE_BUCKET).getPublicUrl(savedPath);
+      setCoverImageUrl(normalizePublicImageSrc(data.publicUrl));
     } catch (err: unknown) {
       alert(err instanceof Error ? err.message : 'Upload failed');
     } finally {
       setUploading(false);
+      e.target.value = '';
     }
   };
 
@@ -239,7 +248,7 @@ export default function BlogPostForm({ mode, postId, initialData }: BlogPostForm
             />
             <label className="inline-flex items-center justify-center px-4 py-3 border-2 border-dashed border-gray-300 rounded-lg hover:border-rose-400 cursor-pointer text-sm font-medium text-gray-700 whitespace-nowrap">
               {uploading ? 'Uploading…' : 'Upload file'}
-              <input type="file" accept="image/*" className="hidden" onChange={handleCoverUpload} disabled={uploading} />
+              <input type="file" accept={ACCEPT_PRODUCT_IMAGES} className="hidden" onChange={handleCoverUpload} disabled={uploading} />
             </label>
           </div>
           {coverImageUrl ? (

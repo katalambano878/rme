@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { supabase } from '@/lib/supabase';
 import { SUPABASE_STORAGE_BUCKET } from '@/lib/supabase-storage';
 import { adminImageSrc, normalizePublicImageSrc } from '@/lib/product-image';
+import { ACCEPT_PRODUCT_IMAGES, prepareImageForUpload } from '@/lib/browser-image-upload';
 import {
   sortCategoriesForDisplay,
   categoryDepth,
@@ -91,28 +92,30 @@ export default function AdminCategoriesPage() {
       if (!e.target.files || e.target.files.length === 0) return;
 
       setUploading(true);
-      const file = e.target.files[0];
-      const fileExt = file.name.split('.').pop();
-      const fileName = `cat-${Math.random()}.${fileExt}`;
-      const filePath = `${fileName}`;
+      const prepared = await prepareImageForUpload(e.target.files[0]);
+      const filePath = `cat-${prepared.path}`;
 
-      // Same public bucket as product images (see supabase/migrations + SUPABASE_STORAGE_BUCKET)
-      const { error: uploadError } = await supabase.storage
+      const { data: uploaded, error: uploadError } = await supabase.storage
         .from(SUPABASE_STORAGE_BUCKET)
-        .upload(filePath, file);
+        .upload(filePath, prepared.file, {
+          contentType: prepared.file.type || 'image/jpeg',
+          upsert: false,
+        });
 
       if (uploadError) throw uploadError;
 
+      const savedPath = uploaded?.path || filePath;
       const { data: { publicUrl } } = supabase.storage
         .from(SUPABASE_STORAGE_BUCKET)
-        .getPublicUrl(filePath);
+        .getPublicUrl(savedPath);
 
       setFormData({ ...formData, image_url: normalizePublicImageSrc(publicUrl) });
 
     } catch (error: any) {
-      alert('Error uploading image: ' + error.message);
+      alert('Error uploading image: ' + (error?.message || 'Upload failed'));
     } finally {
       setUploading(false);
+      e.target.value = '';
     }
   };
 
@@ -454,7 +457,7 @@ export default function AdminCategoriesPage() {
                       <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity rounded-lg">
                         <label className="cursor-pointer bg-white px-4 py-2 rounded-lg font-semibold text-sm hover:bg-gray-100">
                           Change Image
-                          <input type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />
+                          <input type="file" accept={ACCEPT_PRODUCT_IMAGES} className="hidden" onChange={handleImageUpload} />
                         </label>
                       </div>
                     </div>
@@ -463,7 +466,7 @@ export default function AdminCategoriesPage() {
                       <i className="ri-upload-cloud-line text-4xl text-gray-400 mb-2 w-10 h-10 flex items-center justify-center mx-auto"></i>
                       <p className="text-gray-700 font-medium">Click to upload image</p>
                       <p className="text-sm text-gray-500 mt-1">Square (1:1) Recommended (e.g., 800x800px)</p>
-                      <input type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />
+                      <input type="file" accept={ACCEPT_PRODUCT_IMAGES} className="hidden" onChange={handleImageUpload} />
                     </label>
                   )}
                 </div>
