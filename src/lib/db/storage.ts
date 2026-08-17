@@ -7,6 +7,10 @@
 import { createHmac } from "crypto";
 import { promises as fs } from "fs";
 import path from "path";
+import {
+  extractUploadBody,
+  isMultipartWrapper,
+} from "@/lib/extract-upload-body";
 
 const STORAGE_ROOT =
   process.env.STORAGE_ROOT || path.join(process.cwd(), ".storage");
@@ -65,7 +69,7 @@ export async function readObject(
 ): Promise<{ bytes: Buffer; contentType: string } | null> {
   try {
     const full = safeJoin(bucket, objectPath);
-    const bytes = await fs.readFile(full);
+    let bytes = await fs.readFile(full);
     let contentType = "application/octet-stream";
     try {
       const meta = JSON.parse(await fs.readFile(full + ".meta.json", "utf8"));
@@ -73,6 +77,25 @@ export async function readObject(
     } catch {
       contentType = guessContentType(objectPath);
     }
+
+    // Self-heal uploads that were saved as raw multipart wrappers.
+    if (isMultipartWrapper(bytes)) {
+      const extracted = extractUploadBody(bytes, "multipart/form-data");
+      if (extracted.length > 0 && !isMultipartWrapper(extracted)) {
+        bytes = extracted;
+        contentType = guessContentType(objectPath);
+        try {
+          await fs.writeFile(full, bytes);
+          await fs.writeFile(
+            full + ".meta.json",
+            JSON.stringify({ contentType }),
+          );
+        } catch {
+          /* ignore repair write failures */
+        }
+      }
+    }
+
     return { bytes, contentType };
   } catch {
     return null;

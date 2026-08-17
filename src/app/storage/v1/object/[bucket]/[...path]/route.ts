@@ -2,9 +2,18 @@ import { NextRequest, NextResponse } from "next/server"
 import { createStorageClient } from "@/lib/db/storage"
 import { isPlainPostgres } from "@/lib/db/mode"
 import { normalizeUploadImage } from "@/lib/normalize-upload-image"
+import { extractUploadBody } from "@/lib/extract-upload-body"
 
 export const dynamic = "force-dynamic"
 export const runtime = "nodejs"
+
+function guessImageType(objectPath: string): string {
+  const ext = objectPath.toLowerCase().split(".").pop() || ""
+  if (ext === "png") return "image/png"
+  if (ext === "webp") return "image/webp"
+  if (ext === "gif") return "image/gif"
+  return "image/jpeg"
+}
 
 /**
  * Supabase Storage upload:
@@ -25,10 +34,15 @@ export async function POST(
   const contentType =
     req.headers.get("content-type") || "application/octet-stream"
 
-  const raw = Buffer.from(await req.arrayBuffer())
+  const raw = extractUploadBody(
+    Buffer.from(await req.arrayBuffer()),
+    contentType,
+  )
   let bytes = raw
   let finalPath = objectPath
-  let finalType = contentType
+  let finalType = contentType.includes("multipart/")
+    ? guessImageType(objectPath)
+    : contentType
 
   // Product / public image buckets: force browser-safe formats.
   if (bucket === "product-images" || bucket === "blog-images" || bucket === "uploads") {

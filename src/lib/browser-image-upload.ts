@@ -1,5 +1,6 @@
 /** Formats we accept for product/category uploads in the admin UI. */
-export const ACCEPT_PRODUCT_IMAGES = "image/jpeg,image/jpg,image/png,image/webp"
+export const ACCEPT_PRODUCT_IMAGES =
+  "image/jpeg,image/jpg,image/png,image/webp,image/gif,image/heic,image/heif,image/avif,image/*"
 
 const ALLOWED_EXT = /\.(jpe?g|png|webp)$/i
 
@@ -11,9 +12,16 @@ export async function prepareImageForUpload(
   file: File,
 ): Promise<{ file: File; path: string }> {
   const originalExt = (file.name.split(".").pop() || "jpg").toLowerCase()
+  const safeExt =
+    originalExt === "jpg"
+      ? "jpeg"
+      : ["jpeg", "png", "webp", "gif"].includes(originalExt)
+        ? originalExt
+        : "jpeg"
 
+  // Always normalize phone/camera uploads client-side when possible.
   if (ALLOWED_EXT.test(file.name) && file.size <= 3_500_000) {
-    const path = `${Math.random()}.${originalExt === "jpg" ? "jpeg" : originalExt}`
+    const path = `${Math.random()}.${safeExt}`
     return { file, path }
   }
 
