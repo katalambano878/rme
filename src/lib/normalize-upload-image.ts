@@ -55,7 +55,14 @@ export async function normalizeUploadImage(
       objectPath: `${base}.jpeg`,
       contentType: "image/jpeg",
     }
-  } catch {
+  } catch (cause) {
+    console.error("[upload] normalize failed", {
+      objectPath,
+      contentType,
+      bytes: bytes.length,
+      head: bytes.subarray(0, 16).toString("hex"),
+      cause: cause instanceof Error ? cause.message : String(cause),
+    })
     throw new Error(
       "Unsupported image format. Please upload a JPG, PNG, or WebP photo (not HEIC/JXL).",
     )
