@@ -69,7 +69,7 @@ export async function readObject(
 ): Promise<{ bytes: Buffer; contentType: string } | null> {
   try {
     const full = safeJoin(bucket, objectPath);
-    let bytes = await fs.readFile(full);
+    let bytes: Buffer = await fs.readFile(full);
     let contentType = "application/octet-stream";
     try {
       const meta = JSON.parse(await fs.readFile(full + ".meta.json", "utf8"));

@@ -40,14 +40,17 @@ export async function POST(
   )
   let bytes = raw
   let finalPath = objectPath
-  let finalType = contentType.includes("multipart/")
-    ? guessImageType(objectPath)
-    : contentType
+  // Never let the multipart wrapper's content type reach stored metadata,
+  // otherwise the object is later served as multipart/form-data.
+  let finalType =
+    contentType.includes("multipart/") || contentType === "application/octet-stream"
+      ? guessImageType(objectPath)
+      : contentType
 
   // Product / public image buckets: force browser-safe formats.
   if (bucket === "product-images" || bucket === "blog-images" || bucket === "uploads") {
     try {
-      const normalized = await normalizeUploadImage(raw, objectPath, contentType)
+      const normalized = await normalizeUploadImage(raw, objectPath, finalType)
       bytes = normalized.bytes
       finalPath = normalized.objectPath
       finalType = normalized.contentType
