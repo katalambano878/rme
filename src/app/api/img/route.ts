@@ -3,7 +3,7 @@ import { promises as fs } from "fs"
 import path from "path"
 import { NextRequest, NextResponse } from "next/server"
 import sharp from "sharp"
-import { readObject } from "@/lib/db/storage"
+import { cacheObject, readObject } from "@/lib/db/storage"
 
 const STORAGE_ROOT =
   process.env.STORAGE_ROOT || path.join(process.cwd(), ".storage")
@@ -140,20 +140,12 @@ async function loadSourceBytes(
         if (res.ok) {
           const bytes = Buffer.from(await res.arrayBuffer())
           // Best-effort local cache so subsequent hits stay on disk.
-          try {
-            const full = path.join(STORAGE_ROOT, bucket, objectPath)
-            await fs.mkdir(path.dirname(full), { recursive: true })
-            await fs.writeFile(full, bytes)
-            const ct = res.headers.get("content-type")
-            if (ct) {
-              await fs.writeFile(
-                `${full}.meta.json`,
-                JSON.stringify({ contentType: ct }),
-              )
-            }
-          } catch {
-            /* ignore cache write failures */
-          }
+          await cacheObject(
+            bucket,
+            objectPath,
+            bytes,
+            res.headers.get("content-type"),
+          )
           return { ok: true, bytes }
         }
       } catch {

@@ -1,12 +1,7 @@
-import { promises as fs } from "fs"
-import path from "path"
-import { readObject } from "@/lib/db/storage"
+import { cacheObject, readObject } from "@/lib/db/storage"
 
 export const dynamic = "force-dynamic"
 export const runtime = "nodejs"
-
-const STORAGE_ROOT =
-  process.env.STORAGE_ROOT || path.join(process.cwd(), ".storage")
 
 function legacyStorageOrigin(): string | null {
   const raw =
@@ -33,17 +28,7 @@ async function fetchLegacy(
     const bytes = Buffer.from(await res.arrayBuffer())
     const contentType =
       res.headers.get("content-type") || "application/octet-stream"
-    try {
-      const full = path.join(STORAGE_ROOT, bucket, objectPath)
-      await fs.mkdir(path.dirname(full), { recursive: true })
-      await fs.writeFile(full, bytes)
-      await fs.writeFile(
-        `${full}.meta.json`,
-        JSON.stringify({ contentType }),
-      )
-    } catch {
-      /* ignore cache write */
-    }
+    await cacheObject(bucket, objectPath, bytes, contentType)
     return { bytes, contentType }
   } catch {
     return null

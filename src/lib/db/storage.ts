@@ -63,6 +63,28 @@ function safeJoin(bucket: string, objectPath: string): string {
   return full;
 }
 
+/**
+ * Best-effort local cache write for objects pulled from legacy storage.
+ * Goes through safeJoin so a crafted object path cannot escape the bucket.
+ */
+export async function cacheObject(
+  bucket: string,
+  objectPath: string,
+  bytes: Buffer,
+  contentType?: string | null
+): Promise<void> {
+  try {
+    const full = safeJoin(bucket, objectPath);
+    await fs.mkdir(path.dirname(full), { recursive: true });
+    await fs.writeFile(full, bytes);
+    if (contentType) {
+      await fs.writeFile(full + ".meta.json", JSON.stringify({ contentType }));
+    }
+  } catch {
+    /* caching is optional; never fail the request over it */
+  }
+}
+
 export async function readObject(
   bucket: string,
   objectPath: string
