@@ -3,6 +3,7 @@ import { supabaseAdmin } from '@/lib/supabase-admin';
 import { sendOrderConfirmation } from '@/lib/notifications';
 import { checkRateLimit, getClientIdentifier, RATE_LIMITS } from '@/lib/rate-limit';
 import { reduceOrderStock } from '@/lib/order-stock';
+import { amountMatchesOrder } from '@/lib/moolre-status';
 
 /**
  * Moolre Callback Payload Structure (actual API response):
@@ -180,7 +181,7 @@ export async function POST(req: Request) {
             }
             const callbackAmount = parseFloat(String(rawAmount));
             const expectedAmount = Number(existingOrder.grand_total);
-            if (isNaN(callbackAmount) || Math.abs(callbackAmount - expectedAmount) > 0.01) {
+            if (isNaN(callbackAmount) || !amountMatchesOrder(callbackAmount, expectedAmount)) {
                 console.error('[Callback] AMOUNT MISMATCH — REJECTING! Expected:', expectedAmount, 'Got:', callbackAmount, 'Order:', merchantOrderRef);
                 return NextResponse.json({
                     success: false,

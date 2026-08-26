@@ -71,7 +71,9 @@ export default function AdminDashboard() {
         const allOrders = allOrdersData || [];
 
         // Paid orders helper
-        const isPaid = (o: any) => (o.payments || []).some((p: any) => p.status === 'paid');
+        const isPaid = (o: any) =>
+          (o.payments || []).some((p: any) => p.status === 'paid' || p.status === 'completed') ||
+          o.status === 'paid';
 
         // All-time paid
         const paidOrders = allOrders.filter(isPaid);

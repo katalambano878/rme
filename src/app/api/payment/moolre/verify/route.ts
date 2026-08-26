@@ -3,6 +3,7 @@ import { createAdminClient } from "@/lib/supabase/admin"
 import { checkRateLimit, getClientIdentifier, RATE_LIMITS } from "@/lib/rate-limit"
 import { sendOrderConfirmation } from "@/lib/notifications"
 import { reduceOrderStock } from "@/lib/order-stock"
+import { amountMatchesOrder, verifyMoolrePayment } from "@/lib/moolre-status"
 
 /**
  * Client-callable verification after redirect from Moolre (e.g. checkout success page).
@@ -67,66 +68,15 @@ export async function POST(req: Request) {
       .limit(1)
       .maybeSingle()
 
-    const refsToTry = Array.from(
-      new Set(
-        [pendingPay?.provider_ref, orderNumber.trim()].filter(
-          (r): r is string => typeof r === "string" && r.length > 0,
-        ),
-      ),
+    const refsToTry = [pendingPay?.provider_ref, orderNumber.trim()].filter(
+      (r): r is string => typeof r === "string" && r.length > 0,
     )
 
-    let moolreApiVerified = false
-    let verifiedExternalRef: string | null = null
-    try {
-      for (const externalref of refsToTry) {
-        const controller = new AbortController()
-        const timeout = setTimeout(() => controller.abort(), 15_000)
-        let checkResult: {
-          status?: number
-          data?: { status?: string; amount?: string }
-        }
-        try {
-          const checkResponse = await fetch("https://api.moolre.com/embed/status", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "X-API-USER": process.env.MOOLRE_API_USER!,
-              "X-API-PUBKEY": process.env.MOOLRE_API_PUBKEY!,
-            },
-            body: JSON.stringify({ externalref }),
-            signal: controller.signal,
-          })
-          checkResult = await checkResponse.json()
-        } finally {
-          clearTimeout(timeout)
-        }
-
-        const statusStr = String(checkResult.data?.status || "").toLowerCase()
-        let ok =
-          checkResult.status === 1 &&
-          !!checkResult.data &&
-          (statusStr === "success" ||
-            statusStr === "successful" ||
-            statusStr === "completed" ||
-            statusStr === "paid")
-
-        if (ok && checkResult.data?.amount) {
-          const paidAmount = parseFloat(checkResult.data.amount)
-          const expected = Number(order.grand_total)
-          if (Math.abs(paidAmount - expected) > 0.01) {
-            ok = false
-          }
-        }
-
-        if (ok) {
-          moolreApiVerified = true
-          verifiedExternalRef = externalref
-          break
-        }
-      }
-    } catch (e) {
-      console.warn("[Moolre verify] API error:", e)
-    }
+    const { ok, tx, matchedRef } = await verifyMoolrePayment(refsToTry)
+    const paidAmount = parseFloat(String(tx?.amount ?? tx?.value ?? ""))
+    const expected = Number(order.grand_total)
+    const moolreApiVerified =
+      ok && (Number.isNaN(paidAmount) || amountMatchesOrder(paidAmount, expected))
 
     if (!moolreApiVerified) {
       return NextResponse.json({
@@ -138,7 +88,7 @@ export async function POST(req: Request) {
     const payPayload = {
       order_id: order.id,
       provider: "moolre" as const,
-      provider_ref: verifiedExternalRef || pendingPay?.provider_ref || `verify-${orderNumber}`,
+      provider_ref: String(tx?.transactionid || matchedRef || pendingPay?.provider_ref || `verify-${orderNumber}`),
       amount: Number(order.grand_total),
       currency: "GHS",
       status: "paid" as const,

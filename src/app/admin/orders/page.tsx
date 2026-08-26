@@ -60,6 +60,7 @@ function isPosSale(order: { notes?: string | null; guest_email?: string | null }
 }
 
 const FULFILLED_STATUSES = new Set([
+  'paid',
   'processing',
   'shipped',
   'out_for_delivery',
@@ -195,6 +196,7 @@ export default function AdminOrdersPage() {
       // Calculate stats based on confirmed orders only
       const stats = [
         { label: 'All Orders', count: confirmedOrders.length, status: 'all' },
+        { label: 'Paid', count: confirmedOrders.filter(o => o.status === 'paid').length, status: 'paid' },
         { label: 'Pending', count: confirmedOrders.filter(o => o.status === 'pending').length, status: 'pending' },
         { label: 'Processing', count: confirmedOrders.filter(o => o.status === 'processing').length, status: 'processing' },
         { label: 'Packaged', count: confirmedOrders.filter(o => o.status === 'shipped').length, status: 'shipped' },
@@ -213,6 +215,7 @@ export default function AdminOrdersPage() {
 
   const statusColors: Record<string, string> = {
     'pending': 'bg-amber-100 text-amber-700 border-amber-200',
+    'paid': 'bg-emerald-100 text-emerald-800 border-emerald-200',
     'processing': 'bg-rose-100 text-rose-800 border-rose-200',
     'shipped': 'bg-purple-100 text-purple-700 border-purple-200',
     'out_for_delivery': 'bg-blue-100 text-blue-700 border-blue-200',
@@ -224,6 +227,7 @@ export default function AdminOrdersPage() {
   const formatStatus = (status: string) => {
     if (status === 'shipped') return 'Packaged';
     if (status === 'out_for_delivery') return 'With Rider';
+    if (status === 'paid') return 'Paid';
     return status ? status.charAt(0).toUpperCase() + status.slice(1) : 'Unknown';
   };
 
@@ -414,7 +418,10 @@ export default function AdminOrdersPage() {
 
     // First filter by view tab (confirmed vs abandoned) — uses the smart
     // classifier that respects POS sales and admin-advanced statuses.
-    const matchesViewTab = orderViewTab === 'confirmed' ? order.is_confirmed : !order.is_confirmed;
+    // Searching should find the order even if it is in the other tab.
+    const matchesViewTab = searchQuery.trim()
+      ? true
+      : orderViewTab === 'confirmed' ? order.is_confirmed : !order.is_confirmed;
 
     const matchesSearch = orderId.includes(searchQuery.toLowerCase()) ||
       customerName.includes(searchQuery.toLowerCase()) ||
