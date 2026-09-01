@@ -261,6 +261,17 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Failed to create order" }, { status: 500 })
     }
 
+    const { data: persisted } = await supabase
+      .from("orders")
+      .select("id, order_number")
+      .eq("id", order.id)
+      .maybeSingle()
+    if (!persisted) {
+      console.error("Order insert did not persist:", orderNumber, order.id)
+      return NextResponse.json({ error: "Failed to create order" }, { status: 500 })
+    }
+    console.log("[Checkout] created order", persisted.order_number, persisted.id)
+
     const orderItems = serverItems.map((item) => ({
       order_id: order.id,
       product_id: item.productId,

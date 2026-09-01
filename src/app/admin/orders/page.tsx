@@ -724,7 +724,7 @@ export default function AdminOrdersPage() {
                               onClick={() => handleVerifyPayment(order)}
                               disabled={verifyingPayment === order.id}
                               className="w-8 h-8 flex items-center justify-center text-emerald-600 hover:text-emerald-800 hover:bg-emerald-50 rounded-lg transition-colors cursor-pointer disabled:opacity-50"
-                              title="Verify if payment went through on Paystack"
+                              title="Verify if payment went through on Moolre"
                             >
                               {verifyingPayment === order.id ? (
                                 <i className="ri-loader-4-line text-lg w-4 h-4 flex items-center justify-center animate-spin"></i>
