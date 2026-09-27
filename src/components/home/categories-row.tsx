@@ -58,7 +58,7 @@ export function CategoriesRow({ categories }: CategoriesRowProps) {
                   <div className="relative h-[200px] overflow-hidden bg-[#EAE8E4] sm:h-[260px] lg:h-[320px]">
                     <img
                       src={imageSrc}
-                      alt={category.displayName}
+                      alt={category.name}
                       className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-[1.04]"
                       loading="lazy"
                     />
@@ -68,7 +68,7 @@ export function CategoriesRow({ categories }: CategoriesRowProps) {
                   <div className="flex flex-col gap-2 bg-[#FFF5F5] px-3.5 py-3 text-left sm:gap-2 sm:px-6 sm:py-3.5">
                     <div>
                       <h3 className="font-sans text-[13px] font-semibold leading-tight tracking-tight text-navy sm:text-[15px]">
-                        {category.displayName}
+                        {category.name}
                       </h3>
                       <p className="mt-0.5 text-[11px] font-normal leading-snug text-navy/60 sm:mt-1 sm:text-[13px]">
                         Discover the collection

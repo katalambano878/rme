@@ -8,7 +8,7 @@ import { supabase } from '@/lib/supabase';
 import { deleteProductAndDependencies } from '@/lib/admin-product-delete';
 import { buildDisplaySku } from '@/lib/sku-display';
 import { listSkuRaw, listStockFromProduct } from '@/lib/product-metrics';
-import { effectivePriceForProduct } from '@/lib/effective-price';
+import { effectivePriceForProduct, withResolvedSalePrice } from '@/lib/effective-price';
 import { adminImageSrc } from '@/lib/product-image';
 
 export default function ProductsPage() {
@@ -80,7 +80,7 @@ export default function ProductsPage() {
       if (data) {
         const transformedProducts = data.map((p: any) => {
           const variants = p.variants || [];
-          const pricing = effectivePriceForProduct(p, saleEnabled);
+          const pricing = effectivePriceForProduct(withResolvedSalePrice(p), saleEnabled);
           const computedStock = listStockFromProduct(p);
           const rawSku = listSkuRaw(p);
 

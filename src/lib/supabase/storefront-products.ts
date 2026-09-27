@@ -14,7 +14,7 @@ import type {
   ProductVariantRow,
   Variant,
 } from "@/types/product"
-import { displayPricingForProductCard } from "@/lib/effective-price"
+import { displayPricingForProductCard, resolveCatalogSalePrice } from "@/lib/effective-price"
 
 const PRODUCT_SELECT = `
   id,
@@ -167,17 +167,9 @@ function totalStock(variantRows: ProductVariantRow[]): number {
   return variantRows.reduce((s, v) => s + (v.stock_quantity ?? 0), 0)
 }
 
-function normalizeCatalogSalePrice(
-  raw: number | string | null | undefined,
-): number | null {
-  if (raw == null || raw === "") return null
-  const n = Number(raw)
-  return Number.isFinite(n) ? n : null
-}
-
 export function mapProductRowToProduct(row: ProductRow, saleEnabled = false): Product {
   const variantRows = normalizeVariantRows(row)
-  const catalogSalePrice = normalizeCatalogSalePrice(row.sale_price)
+  const catalogSalePrice = resolveCatalogSalePrice(row.sale_price, row.metadata)
   const { price, salePrice } = cardPricing(variantRows, catalogSalePrice, saleEnabled)
   const cat = row.categories
 
@@ -344,6 +336,8 @@ export type StorefrontCategory = {
   description: string
   productCount: number
   image_url: string | null
+  parentId: string | null
+  featuredOnHome: boolean
 }
 
 export async function fetchHomepageCategoryLimit(): Promise<number | null> {
@@ -390,7 +384,7 @@ export async function fetchStorefrontCategoriesWithCounts(): Promise<
   const supabase = await getClient()
   const { data: cats, error: catErr } = await supabase
     .from("categories")
-    .select("id, name, slug, description, image_url, parent_id, sort_order")
+    .select("id, name, slug, description, image_url, parent_id, sort_order, featured_on_home")
     .eq("is_active", true)
 
   if (catErr || !cats?.length) return []
@@ -415,6 +409,7 @@ export async function fetchStorefrontCategoriesWithCounts(): Promise<
     image_url: string | null
     parent_id: string | null
     sort_order: number | null
+    featured_on_home: boolean | null
   }
   const rows = cats as CatRow[]
   const sorted = sortCategoriesForDisplay(rows)
@@ -430,6 +425,8 @@ export async function fetchStorefrontCategoriesWithCounts(): Promise<
       description: (c.description as string | null)?.trim() ?? "",
       productCount: countMap.get(c.id) ?? 0,
       image_url: (c.image_url as string | null)?.trim() || null,
+      parentId: c.parent_id,
+      featuredOnHome: c.featured_on_home === true,
     }
   })
 }

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { generateOrderNumber } from "@/lib/utils"
-import { effectivePriceForVariant } from "@/lib/effective-price"
+import { effectivePriceForVariant, withResolvedSalePrice } from "@/lib/effective-price"
 
 export async function POST(req: NextRequest) {
   try {
@@ -65,6 +65,7 @@ export async function POST(req: NextRequest) {
       price: number | string
       sale_price: number | string | null
       compare_at_price: number | string | null
+      metadata?: Record<string, unknown> | null
       status: string
     }
     type DbVariant = {
@@ -90,7 +91,7 @@ export async function POST(req: NextRequest) {
       productIds.length
         ? supabase
             .from("products")
-            .select("id, name, price, sale_price, compare_at_price, status")
+            .select("id, name, price, sale_price, compare_at_price, metadata, status")
             .in("id", productIds)
         : Promise.resolve({ data: [] as DbProduct[], error: null }),
       productsNeedingVariants.length
@@ -111,7 +112,7 @@ export async function POST(req: NextRequest) {
     const saleEnabled = featureFlags.sale_promotion_enabled === true
 
     const productMap = new Map<string, DbProduct>(
-      ((productsRes.data as DbProduct[]) || []).map((p) => [p.id, p]),
+      ((productsRes.data as DbProduct[]) || []).map((p) => [p.id, withResolvedSalePrice(p)]),
     )
     // Group variants by product_id for option-based matching
     const variantsByProduct = new Map<string, DbVariant[]>()

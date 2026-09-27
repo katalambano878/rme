@@ -38,6 +38,36 @@ const num = (v: number | string | null | undefined): number => {
   return Number.isFinite(n) ? n : NaN
 }
 
+/**
+ * Promotional amount the admin typed as Sales (GH₵).
+ * Newer saves write `products.sale_price`. Older saves only stored
+ * `metadata.sales_price` / `metadata.sale_price`, which the storefront ignored.
+ */
+export function resolveCatalogSalePrice(
+  column: number | string | null | undefined,
+  metadata?: Record<string, unknown> | null,
+): number | null {
+  const fromColumn = num(column)
+  if (Number.isFinite(fromColumn) && fromColumn > 0) return fromColumn
+  if (!metadata || typeof metadata !== 'object') return null
+  const raw = metadata.sales_price ?? metadata.sale_price
+  if (typeof raw !== 'number' && typeof raw !== 'string') return null
+  const fromMeta = num(raw)
+  if (Number.isFinite(fromMeta) && fromMeta > 0) return fromMeta
+  return null
+}
+
+export function withResolvedSalePrice<
+  T extends {
+    sale_price?: number | string | null
+    metadata?: Record<string, unknown> | null
+  },
+>(product: T): T {
+  const resolved = resolveCatalogSalePrice(product.sale_price, product.metadata)
+  if (resolved == null) return product
+  return { ...product, sale_price: resolved }
+}
+
 export interface EffectivePrice {
   /** What the customer ACTUALLY pays (the lower of original/sale). */
   effective: number

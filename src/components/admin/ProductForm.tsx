@@ -397,6 +397,16 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
             const hasPromoSalesPrice = sal > 0 && sal < effectiveReg;
             const metaOnSale = Boolean(strikeout || hasPromoSalesPrice);
 
+            const previousMeta =
+                initialData?.metadata && typeof initialData.metadata === 'object'
+                    ? initialData.metadata
+                    : {};
+            const {
+                sales_price: _legacySales,
+                sale_price: _legacySale,
+                ...restMeta
+            } = previousMeta as Record<string, unknown>;
+
             const productData = {
                 name: productName,
                 slug: urlSlug.trim() || slugifyProductName(productName),
@@ -414,7 +424,8 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
                 seo_description: metaDescription,
                 tags: (keywords as string).split(',').map((k: string) => k.trim()).filter(Boolean),
                 metadata: {
-                    ...(initialData?.metadata && typeof initialData.metadata === 'object' ? initialData.metadata : {}),
+                    ...restMeta,
+                    ...(hasPromoSalesPrice ? { sales_price: sal } : {}),
                     low_stock_threshold: parseInt(lowStockThreshold) || 5,
                     preorder_shipping: preorderShipping.trim() || null,
                     on_sale: metaOnSale,

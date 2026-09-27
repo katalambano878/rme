@@ -1,7 +1,7 @@
 import { createAdminClient } from "@/lib/supabase/admin"
 import { listStockFromProduct } from "@/lib/product-metrics"
 import { generateOrderNumber } from "@/lib/utils"
-import { effectivePriceForProduct, effectivePriceForVariant } from "@/lib/effective-price"
+import { effectivePriceForProduct, effectivePriceForVariant, withResolvedSalePrice } from "@/lib/effective-price"
 import {
   BRAND_NAME,
   BRAND_TAGLINE,
@@ -70,7 +70,7 @@ export type ChatCustomerProfile = {
 }
 
 const PRODUCT_SELECT = `
-  id, name, slug, status, description, price, sale_price, compare_at_price, quantity,
+  id, name, slug, status, description, price, sale_price, compare_at_price, quantity, metadata,
   variants(id, sku, price, sale_price, compare_at_price, stock_quantity),
   product_images(url, sort_order)
 `
@@ -92,8 +92,9 @@ async function fetchSaleEnabled(client: any): Promise<boolean> {
 }
 
 function aggregateProductPricing(p: any, saleEnabled: boolean) {
-  const list = Array.isArray(p?.variants) ? p.variants : []
-  const pricing = effectivePriceForProduct(p, saleEnabled)
+  const priced = withResolvedSalePrice(p)
+  const list = Array.isArray(priced?.variants) ? priced.variants : []
+  const pricing = effectivePriceForProduct(priced, saleEnabled)
   return {
     stock: listStockFromProduct(p),
     price: pricing.effective,
@@ -682,7 +683,7 @@ export async function createChatOrder(
       if (!v) return { success: false, message: `Product "${p.name}" has no purchasable variant.` }
       // Honor sale_price / compare_at_price the same way the storefront does,
       // so the chat customer is charged what they saw — not the original.
-      const pricing = effectivePriceForVariant(v, p, saleEnabled)
+      const pricing = effectivePriceForVariant(v, withResolvedSalePrice(p), saleEnabled)
       const unit = pricing.effective
       if (!Number.isFinite(unit) || unit <= 0) {
         return { success: false, message: `Product "${p.name}" has no valid price.` }

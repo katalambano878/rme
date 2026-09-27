@@ -52,10 +52,15 @@ export default async function HomePage() {
       fetchStorefrontCategoriesWithCounts(),
       fetchHomepageCategoryLimit(),
     ])
+  const featured = allCategories.filter((category) => category.featuredOnHome)
+  const pool = [
+    ...featured,
+    ...allCategories.filter((category) => !category.featuredOnHome),
+  ]
   const categories =
     homeCategoryLimit && homeCategoryLimit > 0
-      ? allCategories.slice(0, homeCategoryLimit)
-      : allCategories.slice(0, 4)
+      ? pool.slice(0, homeCategoryLimit)
+      : pool
 
   return (
     <>

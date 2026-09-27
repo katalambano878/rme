@@ -17,14 +17,6 @@ import {
   TIKTOK_URL,
 } from "@/lib/brand"
 
-const shopLinks = [
-  { href: "/shop?category=baby-products", label: "Baby Products" },
-  { href: "/shop?category=hair-appliances", label: "Hair Appliances" },
-  { href: "/shop?category=hair-products", label: "Hair Products" },
-  { href: "/shop?category=makeup", label: "Makeup" },
-  { href: "/admin/login", label: "RME" },
-]
-
 const careLinks = [
   { href: "/contact", label: "Contact Us" },
   { href: "/policies/shipping", label: "Shipping & Delivery" },
@@ -114,7 +106,7 @@ function FooterColumn({
       <h3 className="mb-5 font-heading text-lg font-semibold">{title}</h3>
       <ul className="space-y-3">
         {links.map((link) => (
-          <li key={link.href}>
+          <li key={`${link.href}:${link.label}`}>
             <Link
               href={link.href}
               className="text-sm text-white/60 transition-colors hover:text-white"
@@ -128,7 +120,11 @@ function FooterColumn({
   )
 }
 
-export function Footer() {
+export function Footer({
+  shopLinks,
+}: {
+  shopLinks: { href: string; label: string }[]
+}) {
   const [email, setEmail] = useState("")
 
   return (
