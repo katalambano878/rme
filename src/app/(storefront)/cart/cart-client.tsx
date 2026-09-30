@@ -43,7 +43,7 @@ export default function CartPageClient({
 }: CartPageClientProps) {
   const [mounted, setMounted] = useState(false)
   const [couponCode, setCouponCode] = useState("")
-  const [couponApplied, setCouponApplied] = useState(false)
+  const [couponMessage, setCouponMessage] = useState("")
 
   const items = useCartStore((s) => s.items)
   const removeItem = useCartStore((s) => s.removeItem)
@@ -67,15 +67,16 @@ export default function CartPageClient({
     [items],
   )
 
-  const discount = couponApplied ? subtotal * 0.1 : 0
   const freeShipping = subtotal >= FREE_SHIPPING_THRESHOLD_GHS
   const tax = 0
-  const estimatedTotal = subtotal - discount
+  const estimatedTotal = subtotal
 
   const handleApplyCoupon = () => {
-    if (couponCode.trim().toUpperCase() === "WELCOME10") {
-      setCouponApplied(true)
-    }
+    setCouponMessage(
+      couponCode.trim()
+        ? "That code isn't active, so the total is unchanged."
+        : "Enter a coupon code.",
+    )
   }
 
   if (!mounted) {
@@ -343,9 +344,9 @@ export default function CartPageClient({
                       </div>
                     </div>
 
-                    {couponApplied && (
-                      <div className="rounded-xl bg-emerald-50 px-3 py-2 text-xs text-emerald-700">
-                        Discount applied: WELCOME10 (-{formatPrice(discount)})
+                    {couponMessage && (
+                      <div className="rounded-xl bg-rose-50 px-3 py-2 text-xs text-navy/80">
+                        {couponMessage}
                       </div>
                     )}
 

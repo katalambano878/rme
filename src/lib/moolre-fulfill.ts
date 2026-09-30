@@ -20,6 +20,18 @@ export function stripRetrySuffix(ref: string): string {
   return ref.replace(/-R\d+$/, "")
 }
 
+/** Drop callback secrets before a payment payload is stored. */
+export function redactPaymentPayload(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(redactPaymentPayload)
+  if (!value || typeof value !== "object") return value
+  const out: Record<string, unknown> = {}
+  for (const [key, child] of Object.entries(value as Record<string, unknown>)) {
+    if (key.toLowerCase() === "secret") continue
+    out[key] = redactPaymentPayload(child)
+  }
+  return out
+}
+
 export function ghanaPhoneFromPayer(payer?: string | null): string | null {
   const digits = String(payer || "").replace(/\D/g, "")
   if (!digits) return null
@@ -202,7 +214,7 @@ export async function fulfillMoolrePaidOrder(
     currency: "GHS",
     status: "paid" as const,
     updated_at: new Date().toISOString(),
-    raw_payload: opts.rawPayload ?? null,
+    raw_payload: redactPaymentPayload(opts.rawPayload) ?? null,
   }
 
   if (existingPay?.id) {

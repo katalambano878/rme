@@ -21,12 +21,10 @@ const PUBLIC_READ_TABLES = new Set([
   "collection_products",
   "blog_posts",
   "home_content",
-  "site_settings",
   "storefront_settings",
   "reviews",
   "testimonials",
   "occasions",
-  "discounts",
   "attributes",
   "attribute_values",
 ]);

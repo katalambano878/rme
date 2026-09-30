@@ -201,7 +201,7 @@ export default function CheckoutPage() {
   const [step, setStep] = useState(1)
   const [formData, setFormData] = useState<FormData>(initialFormData)
   const [mobileSummaryOpen, setMobileSummaryOpen] = useState(false)
-  const [couponApplied, setCouponApplied] = useState(false)
+  const [couponMessage, setCouponMessage] = useState("")
 
   const items = useCartStore((s) => s.items)
   const clearCart = useCartStore((s) => s.clearCart)
@@ -233,7 +233,11 @@ export default function CheckoutPage() {
   }
 
   const handleApplyCoupon = () => {
-    setCouponApplied(formData.couponCode.trim().toUpperCase() === "WELCOME10")
+    setCouponMessage(
+      formData.couponCode.trim()
+        ? "That code isn't active, so the total is unchanged."
+        : "Enter a coupon code.",
+    )
   }
 
   const fieldClass =
@@ -533,7 +537,7 @@ export default function CheckoutPage() {
                     couponCode={formData.couponCode}
                     onCouponChange={(val) => updateField("couponCode", val)}
                     onApplyCoupon={handleApplyCoupon}
-                    couponApplied={couponApplied}
+                    couponMessage={couponMessage}
                   />
                 </div>
               </motion.div>
@@ -1079,7 +1083,7 @@ export default function CheckoutPage() {
                     couponCode={formData.couponCode}
                     onCouponChange={(val) => updateField("couponCode", val)}
                     onApplyCoupon={handleApplyCoupon}
-                    couponApplied={couponApplied}
+                    couponMessage={couponMessage}
                   />
                 </CardContent>
               </Card>
@@ -1125,7 +1129,7 @@ function OrderSummaryContent({
   couponCode,
   onCouponChange,
   onApplyCoupon,
-  couponApplied,
+  couponMessage,
 }: {
   items: ReturnType<typeof useCartStore.getState>["items"]
   subtotal: number
@@ -1135,7 +1139,7 @@ function OrderSummaryContent({
   couponCode: string
   onCouponChange: (value: string) => void
   onApplyCoupon: () => void
-  couponApplied: boolean
+  couponMessage: string
 }) {
   const tax = 0
 
@@ -1199,8 +1203,8 @@ function OrderSummaryContent({
             Apply
           </button>
         </div>
-        {couponApplied ? (
-          <p className="mt-2 text-xs text-navy/75">Coupon applied: WELCOME10</p>
+        {couponMessage ? (
+          <p className="mt-2 text-xs text-navy/75">{couponMessage}</p>
         ) : null}
       </div>
 

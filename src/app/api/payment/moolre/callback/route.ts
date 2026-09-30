@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { checkRateLimit, getClientIdentifier, RATE_LIMITS } from '@/lib/rate-limit';
-import { fulfillMoolrePaidOrder, ghanaPhoneFromPayer, stripRetrySuffix } from '@/lib/moolre-fulfill';
+import { fulfillMoolrePaidOrder, ghanaPhoneFromPayer, redactPaymentPayload, stripRetrySuffix } from '@/lib/moolre-fulfill';
+import { verifyMoolrePayment } from '@/lib/moolre-status';
 
 /**
  * Moolre Callback Payload Structure (actual API response):
@@ -67,33 +68,25 @@ export async function POST(req: Request) {
         console.log('[Callback] Body keys:', Object.keys(body).join(', '));
         console.log('[Callback] Data keys:', body.data ? Object.keys(body.data).join(', ') : 'no data object');
 
+        const storedPayload = redactPaymentPayload(body);
+
         // Log every incoming callback to webhook_logs for diagnostics
         try {
             await supabaseAdmin.from('webhook_logs').insert({
                 provider: 'moolre',
                 event_type: 'callback',
-                payload: body,
+                payload: storedPayload,
                 headers: { 'content-type': contentType, 'x-forwarded-for': req.headers.get('x-forwarded-for') },
                 status_code: 0, // will be updated below if needed
             });
         } catch { /* non-fatal */ }
 
-        // ============================================================
-        // SECURITY: Callback secret — always required
-        // MOOLRE_CALLBACK_SECRET must be set in env AND must match payload.
-        // Reject the request if either side is missing or mismatched.
-        // ============================================================
+        // A mismatched secret is always rejected. A missing secret is not trusted
+        // on its own — payment is confirmed with Moolre's status API below.
         const expectedSecret = process.env.MOOLRE_CALLBACK_SECRET;
         if (body.secret && expectedSecret && body.secret !== expectedSecret) {
-            // Secret was sent but doesn't match — reject as potential spoofing attempt
-            console.error('[Callback] SECRET MISMATCH — received:', String(body.secret).substring(0, 8) + '...');
+            console.error('[Callback] SECRET MISMATCH');
             return NextResponse.json({ error: 'Invalid callback secret' }, { status: 403 });
-        }
-        if (!body.secret) {
-            // Moolre does not always include the secret in callback payloads — allow through
-            console.warn('[Callback] No secret in payload — proceeding without secret verification');
-        } else {
-            console.log('[Callback] Secret verified OK');
         }
 
         // ============================================================
@@ -142,33 +135,37 @@ export async function POST(req: Request) {
         const isSuccess = (apiOk || txOk) && !messageStr.includes('fail') && !messageStr.includes('error');
 
         if (isSuccess) {
-            console.log(`[Callback] Payment SUCCESS for Order ${merchantOrderRef}`);
+            console.log(`[Callback] Payment claimed for Order ${merchantOrderRef}`);
 
-            const rawAmount = data.amount ?? data.value ?? body.amount ?? null;
-            if (rawAmount === null || rawAmount === undefined || rawAmount === '') {
-                console.error('[Callback] AMOUNT MISSING — REJECTING! Order:', merchantOrderRef);
+            const refsToVerify = [rawExternalRef, data.transactionid, data.thirdpartyref]
+                .map((value) => (value == null ? "" : String(value).trim()))
+                .filter((value) => value.length > 0);
+            const verified = await verifyMoolrePayment(refsToVerify);
+            const txOrder = stripRetrySuffix(String(verified.tx?.externalref || ""));
+            const claimedOrder = stripRetrySuffix(String(merchantOrderRef));
+            const paidAmount = parseFloat(String(verified.tx?.amount ?? verified.tx?.value ?? ""));
+            if (
+                !verified.ok ||
+                !verified.tx ||
+                !Number.isFinite(paidAmount) ||
+                paidAmount <= 0 ||
+                (txOrder && txOrder !== claimedOrder)
+            ) {
+                console.error('[Callback] Moolre did not confirm payment for', merchantOrderRef);
                 return NextResponse.json({
                     success: false,
-                    message: 'Payment amount missing from callback'
-                }, { status: 400 });
-            }
-            const callbackAmount = parseFloat(String(rawAmount));
-            if (isNaN(callbackAmount) || callbackAmount <= 0) {
-                console.error('[Callback] AMOUNT INVALID — REJECTING! Got:', rawAmount, 'Order:', merchantOrderRef);
-                return NextResponse.json({
-                    success: false,
-                    message: 'Payment amount does not match order total'
+                    message: 'Payment not confirmed',
                 }, { status: 400 });
             }
 
             const meta = data.metadata || body.metadata || {};
             const result = await fulfillMoolrePaidOrder(supabaseAdmin, {
                 orderNumber: merchantOrderRef,
-                paidAmount: callbackAmount,
-                providerRef: String(moolreReference),
-                rawPayload: body,
+                paidAmount,
+                providerRef: String(verified.tx.transactionid || moolreReference),
+                rawPayload: storedPayload,
                 email: meta.customer_email || meta.email || null,
-                phone: ghanaPhoneFromPayer(data.payer || data.payee),
+                phone: ghanaPhoneFromPayer(verified.tx.payer || data.payer || data.payee),
             });
 
             if (!result.ok) {
@@ -228,7 +225,7 @@ export async function POST(req: Request) {
                     .update({
                         status: 'failed',
                         updated_at: new Date().toISOString(),
-                        raw_payload: body,
+                        raw_payload: storedPayload,
                     })
                     .eq('order_id', failedOrder.id)
                     .neq('status', 'paid');
