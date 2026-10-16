@@ -234,7 +234,12 @@ export default function AdminLayout({
       moduleId: 'blog',
       permissionKey: 'blog',
     },
-    {
+        {
+      title: 'Buy SMS',
+      icon: 'ri-message-2-line',
+      path: '/admin/sms-credit',
+    },
+{
       title: 'Modules',
       icon: 'ri-puzzle-line',
       path: '/admin/modules',
