@@ -15,6 +15,7 @@ import type {
   Variant,
 } from "@/types/product"
 import { displayPricingForProductCard, resolveCatalogSalePrice } from "@/lib/effective-price"
+import { findOption, sortSizeOptions } from "@/lib/variant-options"
 
 const PRODUCT_SELECT = `
   id,
@@ -116,26 +117,22 @@ function normalizeVariantRows(row: ProductRow): ProductVariantRow[] {
 }
 
 function buildVariantGroups(variantRows: ProductVariantRow[]): Variant[] {
-  const nameToValues = new Map<string, Set<string>>()
-  for (const v of variantRows) {
-    for (const ov of v.option_values) {
-      const fieldName = (ov as any).name || (ov as any).attribute_name
-      if (!fieldName || ov.value === undefined || ov.value === "") continue
-      if (!nameToValues.has(fieldName)) nameToValues.set(fieldName, new Set())
-      nameToValues.get(fieldName)!.add(String(ov.value))
-    }
-  }
   const groups: Variant[] = []
-  let i = 0
-  for (const [name, values] of nameToValues) {
-    const lower = name.toLowerCase()
-    const type: "size" | "color" =
-      lower.includes("color") || lower.includes("colour") ? "color" : "size"
+  for (const type of ["size", "color"] as const) {
+    const values: string[] = []
+    let name = ""
+    for (const v of variantRows) {
+      const option = findOption(v.option_values, type)
+      if (!option) continue
+      name ||= option.name
+      if (!values.includes(option.value)) values.push(option.value)
+    }
+    if (values.length === 0) continue
     groups.push({
-      id: `vg-${i++}`,
+      id: `vg-${groups.length}`,
       name,
       type,
-      options: [...values].sort(),
+      options: type === "size" ? sortSizeOptions(values) : values,
     })
   }
   return groups

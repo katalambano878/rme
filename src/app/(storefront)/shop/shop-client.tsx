@@ -42,6 +42,8 @@ import {
 } from "@/lib/product-image"
 import { useCartStore } from "@/lib/store/cart-store"
 import { useWishlistStore } from "@/lib/store/wishlist-store"
+import { useHydrated } from "@/lib/hooks/use-hydrated"
+import { useListPositionMemory } from "@/lib/hooks/use-list-position-memory"
 
 const ITEMS_PER_PAGE = 9
 
@@ -97,6 +99,19 @@ export default function ShopPageClient({
   const [quickViewOpen, setQuickViewOpen] = useState(false)
 
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false)
+
+  useListPositionMemory(
+    `shop-position:${searchParams.toString()}`,
+    { selectedCategories, sort, inStockOnly, visibleCount },
+    (saved) => {
+      if (Array.isArray(saved.selectedCategories)) setSelectedCategories(saved.selectedCategories)
+      if (typeof saved.sort === "string") setSort(saved.sort)
+      if (typeof saved.inStockOnly === "boolean") setInStockOnly(saved.inStockOnly)
+      if (typeof saved.visibleCount === "number" && saved.visibleCount > ITEMS_PER_PAGE) {
+        setVisibleCount(saved.visibleCount)
+      }
+    },
+  )
 
   useEffect(() => {
     setPriceRange([MIN_PRICE, maxPrice])
@@ -532,7 +547,9 @@ function ShopProductCard({
 }) {
   const addItem = useCartStore((s) => s.addItem)
   const toggleItem = useWishlistStore((s) => s.toggleItem)
-  const isInWishlist = useWishlistStore((s) => s.isInWishlist(product.id))
+  const hydrated = useHydrated()
+  const storedInWishlist = useWishlistStore((s) => s.isInWishlist(product.id))
+  const isInWishlist = hydrated && storedInWishlist
 
   return (
     <div className="group overflow-hidden rounded-2xl border border-rose-border/20 bg-white transition-all duration-300 hover:border-rose-200 hover:shadow-[0_18px_38px_-18px_rgba(15,23,42,0.45)]">
@@ -562,14 +579,16 @@ function ShopProductCard({
 
           <div className="pointer-events-none absolute inset-x-0 bottom-0 flex justify-center pb-4 opacity-0 transition-opacity duration-300 group-hover:opacity-100">
             <button
+              type="button"
               onClick={(e) => {
                 e.preventDefault()
-                addItem(product)
+                if (product.variants.length > 0) onQuickView(product)
+                else addItem(product)
               }}
               className="pointer-events-auto inline-flex items-center gap-2 rounded-full bg-white px-7 py-3 text-base font-semibold text-rose-primary shadow-xl"
             >
               <ShoppingBag className="size-4" />
-              Add to Bag
+              {product.variants.length > 0 ? "Choose Options" : "Add to Bag"}
             </button>
           </div>
         </div>

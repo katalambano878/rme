@@ -3,6 +3,7 @@
 import { use, useEffect, useState } from 'react';
 import ProductForm from '@/components/admin/ProductForm';
 import { supabase } from '@/lib/supabase';
+import { findOption } from '@/lib/variant-options';
 
 export default function EditProductPage({ params }: { params: Promise<{ id: string }> }) {
   const resolvedParams = use(params);
@@ -26,17 +27,18 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
         if (error) throw error;
 
         const normalizedVariants = (data?.variants || []).map((variant: any) => {
-          const optionValues = Array.isArray(variant.option_values) ? variant.option_values : [];
-          const sizeOption = optionValues.find((value: any) => value?.attribute_name === 'Size');
-          const colorOption = optionValues.find((value: any) => value?.attribute_name === 'Color');
+          const sizeOption = findOption(variant.option_values, 'size');
+          const colorOption = findOption(variant.option_values, 'color');
 
           return {
             id: variant.id,
             name: sizeOption?.value || '',
             color: colorOption?.value || '',
+            colorHex: colorOption?.hex || '',
             sku: variant.sku,
             price: variant.price,
             compare_at_price: variant.compare_at_price,
+            sale_price: variant.sale_price,
             quantity: variant.stock_quantity,
             stock: variant.stock_quantity,
           };
@@ -56,7 +58,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
           product_images: normalizedImages,
           price: data?.price ?? firstVariant?.price ?? '',
           compare_at_price: data?.compare_at_price ?? firstVariant?.compare_at_price ?? '',
-          sku: firstVariant?.sku ?? data?.sku ?? '',
+          sku: data?.sku || firstVariant?.sku || '',
           quantity: normalizedVariants.reduce(
             (sum: number, variant: any) => sum + (Number(variant.quantity) || 0),
             0,

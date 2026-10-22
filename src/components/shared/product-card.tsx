@@ -7,6 +7,7 @@ import { Heart, ShoppingBag, Eye } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useCartStore } from "@/lib/store/cart-store"
 import { useWishlistStore } from "@/lib/store/wishlist-store"
+import { useHydrated } from "@/lib/hooks/use-hydrated"
 import type { Product } from "@/types/product"
 import {
   getProductPrimaryImageUrl,
@@ -25,7 +26,12 @@ export function ProductCard({ product, className, onQuickView }: ProductCardProp
   const [isHovered, setIsHovered] = useState(false)
   const addItem = useCartStore((s) => s.addItem)
   const toggleItem = useWishlistStore((s) => s.toggleItem)
-  const isInWishlist = useWishlistStore((s) => s.isInWishlist(product.id))
+  const hydrated = useHydrated()
+  const storedInWishlist = useWishlistStore((s) => s.isInWishlist(product.id))
+  const isInWishlist = hydrated && storedInWishlist
+  const needsOptions = product.variants.length > 0
+  const addButtonClass =
+    "flex w-full items-center justify-center gap-2 rounded-xl border border-rose-border bg-white py-2.5 text-sm font-medium text-navy transition-all hover:border-rose-primary hover:bg-rose-light hover:text-rose-primary"
 
   return (
     <motion.div
@@ -105,13 +111,24 @@ export function ProductCard({ product, className, onQuickView }: ProductCardProp
 
         <Price amount={product.price} salePrice={product.salePrice} size="sm" />
 
-        <button
-          onClick={() => addItem(product)}
-          className="flex w-full items-center justify-center gap-2 rounded-xl border border-rose-border bg-white py-2.5 text-sm font-medium text-navy transition-all hover:border-rose-primary hover:bg-rose-light hover:text-rose-primary"
-        >
-          <ShoppingBag className="size-4" />
-          Add to Bag
-        </button>
+        {needsOptions && !onQuickView ? (
+          <Link
+            href={`/products/${product.slug}`}
+            className={addButtonClass}
+          >
+            <ShoppingBag className="size-4" />
+            Choose Options
+          </Link>
+        ) : (
+          <button
+            type="button"
+            onClick={() => (needsOptions ? onQuickView?.(product) : addItem(product))}
+            className={addButtonClass}
+          >
+            <ShoppingBag className="size-4" />
+            {needsOptions ? "Choose Options" : "Add to Bag"}
+          </button>
+        )}
       </div>
     </motion.div>
   )

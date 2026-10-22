@@ -440,7 +440,7 @@ export default function CheckoutPage() {
             <p className="mt-2 text-muted-foreground">
               Add some items before checking out
             </p>
-            <Link href="/" className="mt-8">
+            <Link href="/shop" className="mt-8">
               <Button className="h-auto rounded-full bg-rose-100 px-10 py-3.5 text-base font-semibold text-navy hover:bg-rose-200">
                 Continue Shopping
               </Button>

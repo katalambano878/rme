@@ -10,6 +10,12 @@ import { sortCategoriesForDisplay, categoryOptionLabel } from '@/lib/category-tr
 import { money } from '@/lib/format-money';
 import { adminImageSrc, normalizePublicImageSrc } from '@/lib/product-image';
 import { ACCEPT_PRODUCT_IMAGES, prepareImageForUpload } from '@/lib/browser-image-upload';
+import { normalizeHex, sameOptionValue } from '@/lib/variant-options';
+import { planVariantSync, type DesiredVariant } from '@/lib/admin-variant-sync';
+
+const DEFAULT_CUSTOM_HEX = '#888888';
+
+type VariantFormData = { id?: string; price: string; stock: string; sku: string; salePrice: string };
 
 /** URL-safe slug from product title (keeps admin slug in sync until the user edits it). */
 function slugifyProductName(name: string): string {
@@ -109,42 +115,44 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
     const existingVariants = (initialData?.product_variants || initialData?.variants || []).map((v: any) => ({
         ...v,
         stock: v.stock ?? v.stock_quantity ?? v.quantity ?? 0,
-        color: v.color ?? v.option2 ?? '',
-        size: v.name || ''
+        color: String(v.color ?? v.option2 ?? '').trim(),
+        colorHex: v.colorHex || '',
+        size: String(v.name || '').trim(),
     }));
 
     const [selectedColors, setSelectedColors] = useState<{ name: string; hex: string }[]>(() => {
-        const colors = new Map<string, string>();
+        const colors: { name: string; hex: string }[] = [];
         existingVariants.forEach((v: any) => {
-            if (v.color) {
-                const preset = colorPresets.find(c => c.name.toLowerCase() === v.color.toLowerCase());
-                colors.set(v.color, preset?.hex || '#888888');
-            }
+            if (!v.color || colors.some(c => sameOptionValue(c.name, v.color))) return;
+            const preset = colorPresets.find(c => sameOptionValue(c.name, v.color));
+            colors.push({ name: v.color, hex: normalizeHex(v.colorHex) || preset?.hex || DEFAULT_CUSTOM_HEX });
         });
-        return Array.from(colors.entries()).map(([name, hex]) => ({ name, hex }));
+        return colors;
     });
 
     const [selectedSizes, setSelectedSizes] = useState<string[]>(() => {
-        const sizes = new Set<string>();
+        const sizes: string[] = [];
         existingVariants.forEach((v: any) => {
-            if (v.size) sizes.add(v.size);
+            if (v.size && !sizes.some(s => sameOptionValue(s, v.size))) sizes.push(v.size);
         });
-        return Array.from(sizes);
+        return sizes;
     });
 
     const [customColorName, setCustomColorName] = useState('');
-    const [customColorHex, setCustomColorHex] = useState('#888888');
+    const [customColorHex, setCustomColorHex] = useState(DEFAULT_CUSTOM_HEX);
     const [customSize, setCustomSize] = useState('');
 
-    // Build variants from colors × sizes (or just sizes, or just colors)
-    const buildVariantKey = (color: string, size: string) => `${color}|||${size}`;
+    // Build variants from colors × sizes (or just sizes, or just colors). Keys are case-insensitive.
+    const buildVariantKey = (color: string, size: string) => `${color.trim().toLowerCase()}|||${size.trim().toLowerCase()}`;
 
-    // Store variant data (price, stock) in a map keyed by "color|||size"
-    const [variantData, setVariantData] = useState<Record<string, { price: string; stock: string; sku: string; salePrice: string }>>(() => {
-        const data: Record<string, { price: string; stock: string; sku: string; salePrice: string }> = {};
+    // Store variant data (db id, price, stock) in a map keyed by "color|||size"
+    const [variantData, setVariantData] = useState<Record<string, VariantFormData>>(() => {
+        const data: Record<string, VariantFormData> = {};
         existingVariants.forEach((v: any) => {
             const key = buildVariantKey(v.color || '', v.size || '');
+            if (data[key]) return;
             data[key] = {
+                id: v.id || undefined,
                 price: v.price?.toString() || '',
                 stock: v.stock?.toString() || '0',
                 sku: v.sku || '',
@@ -153,6 +161,9 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
         });
         return data;
     });
+    const initialOptionVariantCount = existingVariants.filter((v: any) => v.color || v.size).length;
+
+    const emptyVariantData = (): VariantFormData => ({ price: regularPrice, stock: '0', sku: '', salePrice: '' });
 
     // Computed: all variant combinations
     const variantCombinations = (() => {
@@ -179,10 +190,12 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
     // the main price field is immediately reflected in both the admin list and storefront.
     const isSimpleProduct = selectedColors.length === 0 && selectedSizes.length === 0;
     const variants = variantCombinations.map(combo => {
-        const d = variantData[combo.key] || { price: regularPrice, stock: '0', sku: '', salePrice: '' };
+        const d = variantData[combo.key] || emptyVariantData();
         return {
+            id: d.id,
             name: combo.size,
             color: combo.color,
+            colorHex: combo.colorHex,
             sku: d.sku,
             price: isSimpleProduct ? regularPrice : (d.price || regularPrice),
             stock: d.stock || '0',
@@ -190,19 +203,25 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
         };
     });
 
-    const updateVariantField = (key: string, field: string, value: string) => {
+    const updateVariantField = (key: string, field: 'price' | 'stock' | 'salePrice', value: string) => {
         setVariantData(prev => ({
             ...prev,
-            [key]: { ...prev[key] || { price: regularPrice, stock: '0', sku: '' }, [field]: value }
+            [key]: { ...(prev[key] || emptyVariantData()), [field]: value }
         }));
     };
 
     // Bulk set price/stock for all variants
     const bulkSetField = (field: 'price' | 'stock' | 'salePrice', value: string) => {
+        const trimmed = value.trim();
+        if (trimmed !== '' && !(Number(trimmed) >= 0)) {
+            alert('Please enter a number that is 0 or more.');
+            return;
+        }
+        if (field !== 'salePrice' && trimmed === '') return;
         setVariantData(prev => {
             const updated = { ...prev };
             variantCombinations.forEach(combo => {
-                updated[combo.key] = { ...updated[combo.key] || { price: regularPrice, stock: '0', sku: '' }, [field]: value };
+                updated[combo.key] = { ...(updated[combo.key] || emptyVariantData()), [field]: trimmed };
             });
             return updated;
         });
@@ -210,33 +229,38 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
 
     const toggleColor = (color: { name: string; hex: string }) => {
         setSelectedColors(prev => {
-            const exists = prev.find(c => c.name === color.name);
-            if (exists) return prev.filter(c => c.name !== color.name);
+            const exists = prev.some(c => sameOptionValue(c.name, color.name));
+            if (exists) return prev.filter(c => !sameOptionValue(c.name, color.name));
             return [...prev, color];
         });
     };
 
+    const updateColorHex = (name: string, hex: string) => {
+        setSelectedColors(prev => prev.map(c => (sameOptionValue(c.name, name) ? { ...c, hex } : c)));
+    };
+
     const toggleSize = (size: string) => {
         setSelectedSizes(prev => {
-            if (prev.includes(size)) return prev.filter(s => s !== size);
+            if (prev.some(s => sameOptionValue(s, size))) return prev.filter(s => !sameOptionValue(s, size));
             return [...prev, size];
         });
     };
 
     const addCustomColor = () => {
-        if (!customColorName.trim()) return;
-        const exists = selectedColors.find(c => c.name.toLowerCase() === customColorName.trim().toLowerCase());
-        if (!exists) {
-            setSelectedColors(prev => [...prev, { name: customColorName.trim(), hex: customColorHex }]);
+        const name = customColorName.trim();
+        if (!name) return;
+        if (!selectedColors.some(c => sameOptionValue(c.name, name))) {
+            setSelectedColors(prev => [...prev, { name, hex: customColorHex }]);
         }
         setCustomColorName('');
-        setCustomColorHex('#888888');
+        setCustomColorHex(DEFAULT_CUSTOM_HEX);
     };
 
     const addCustomSize = () => {
-        if (!customSize.trim()) return;
-        if (!selectedSizes.includes(customSize.trim())) {
-            setSelectedSizes(prev => [...prev, customSize.trim()]);
+        const size = customSize.trim();
+        if (!size) return;
+        if (!selectedSizes.some(s => sameOptionValue(s, size))) {
+            setSelectedSizes(prev => [...prev, size]);
         }
         setCustomSize('');
     };
@@ -280,13 +304,13 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
             if (data) {
                 const ordered = sortCategoriesForDisplay(data as { id: string; name: string; parent_id?: string | null; sort_order?: number | null }[]);
                 setCategories(ordered);
-                if (ordered.length > 0 && !categoryId) {
-                    setCategoryId(ordered[0].id);
+                if (ordered.length > 0) {
+                    setCategoryId((prev: string) => prev || ordered[0].id);
                 }
             }
         }
         fetchCategories();
-    }, [categoryId]);
+    }, []);
 
     // Keep slug in sync with product name until the user edits the slug field (avoids "stuck" empty or stale slugs).
     useEffect(() => {
@@ -355,6 +379,21 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
     // Variant helpers removed — variants are now auto-generated from selectedColors × selectedSizes
 
     const handleSubmit = async () => {
+        const badVariant = variants.find(v =>
+            [v.price, v.stock, v.salePrice].some(val => String(val ?? '').trim() !== '' && !(Number(val) >= 0)),
+        );
+        if (badVariant) {
+            const label = [badVariant.color, badVariant.name].filter(Boolean).join(' / ') || 'this product';
+            alert(`Price, sale price and stock must be 0 or more (check ${label} in the Variants tab).`);
+            return;
+        }
+        if (isEditMode && initialOptionVariantCount > 0 && isSimpleProduct) {
+            const ok = confirm(
+                `This product currently has ${initialOptionVariantCount} color/size variant(s), but none are selected now.\n\n` +
+                'Saving will remove all of its colors and sizes from the store. Continue?',
+            );
+            if (!ok) return;
+        }
         try {
             setLoading(true);
 
@@ -463,7 +502,8 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
 
                 // 1. Images
                 if (isEditMode) {
-                    await supabase.from('product_images').delete().eq('product_id', productId);
+                    const { error: imgDeleteError } = await supabase.from('product_images').delete().eq('product_id', productId);
+                    if (imgDeleteError) throw imgDeleteError;
                 }
                 if (images.length > 0) {
                     const imageInserts = images.map((img, idx) => ({
@@ -472,46 +512,56 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
                         sort_order: idx,
                         alt: productName
                     }));
-                    await supabase.from('product_images').insert(imageInserts);
+                    const { error: imgInsertError } = await supabase.from('product_images').insert(imageInserts);
+                    if (imgInsertError) throw imgInsertError;
                 }
 
-                if (isEditMode) {
-                    await supabase.from('variants').delete().eq('product_id', productId);
-                }
+                // 2. Variants — update rows in place so carts and order history keep their variant links.
+                const { data: currentRows, error: currentRowsError } = isEditMode
+                    ? await supabase.from('variants').select('id').eq('product_id', productId)
+                    : { data: [], error: null };
+                if (currentRowsError) throw currentRowsError;
 
-                if (variants.length > 0) {
-                    const baseProductSku = (sku || generateSku()).trim();
-                    const saleRatio =
-                        hasPromoSalesPrice && reg > 0 && sal > 0
-                            ? reg / sal
-                            : strikeout && reg > 0 && cmpOpt > 0
-                              ? cmpOpt / reg
-                              : null;
-                    const variantInserts = variants.map((v, idx) => {
-                        const colorHex = selectedColors.find(c => c.name === v.color)?.hex || null;
-                        const optionValues: any[] = [];
-                        if (v.name) optionValues.push({ name: 'Size', value: v.name });
-                        if (v.color?.trim()) optionValues.push({ name: 'Color', value: v.color.trim(), ...(colorHex ? { hex: colorHex } : {}) });
-                        const rowSku = (v.sku || '').trim();
-                        const resolvedSku =
-                            rowSku ||
-                            (variants.length > 1 ? `${baseProductSku}-${idx + 1}` : baseProductSku);
-                        const vp = parseFloat(String(v.price)) || 0;
-                        const variantCompare =
-                            saleRatio && vp > 0 ? Math.round(vp * saleRatio * 100) / 100 : null;
-                        const vsp = parseFloat(String(v.salePrice)) || 0;
-                        return {
-                            product_id: productId,
-                            sku: resolvedSku,
-                            price: vp,
-                            compare_at_price: variantCompare,
-                            sale_price: vsp > 0 && vsp < vp ? vsp : null,
-                            stock_quantity: parseInt(String(v.stock), 10) || 0,
-                            option_values: optionValues,
-                        };
-                    });
-                    const { error: varError } = await supabase.from('variants').insert(variantInserts);
-                    if (varError) throw varError;
+                const saleRatio =
+                    hasPromoSalesPrice && reg > 0 && sal > 0
+                        ? reg / sal
+                        : strikeout && reg > 0 && cmpOpt > 0
+                          ? cmpOpt / reg
+                          : null;
+                const desired: DesiredVariant[] = variants.map((v) => {
+                    const vp = parseFloat(String(v.price)) || 0;
+                    const vsp = parseFloat(String(v.salePrice)) || 0;
+                    return {
+                        id: v.id,
+                        size: v.name,
+                        color: v.color,
+                        colorHex: v.colorHex,
+                        sku: v.sku,
+                        price: vp,
+                        compareAtPrice: saleRatio && vp > 0 ? Math.round(vp * saleRatio * 100) / 100 : null,
+                        salePrice: vsp > 0 && vsp < vp ? vsp : null,
+                        stock: parseInt(String(v.stock), 10) || 0,
+                    };
+                });
+                const plan = planVariantSync(
+                    (currentRows || []).map((r: { id: string }) => r.id),
+                    desired,
+                    (sku || generateSku()).trim(),
+                );
+
+                if (plan.toDelete.length > 0) {
+                    const { error: delError } = await supabase.from('variants').delete().in('id', plan.toDelete);
+                    if (delError) throw delError;
+                }
+                for (const { id, row } of plan.toUpdate) {
+                    const { error: updError } = await supabase.from('variants').update(row).eq('id', id);
+                    if (updError) throw updError;
+                }
+                if (plan.toInsert.length > 0) {
+                    const { error: insError } = await supabase
+                        .from('variants')
+                        .insert(plan.toInsert.map(row => ({ ...row, product_id: productId })));
+                    if (insError) throw insError;
                 }
             }
 
@@ -924,7 +974,7 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
 
                                 <div className="flex flex-wrap gap-2 mb-4">
                                     {colorPresets.map(color => {
-                                        const isSelected = selectedColors.some(c => c.name === color.name);
+                                        const isSelected = selectedColors.some(c => sameOptionValue(c.name, color.name));
                                         return (
                                             <button
                                                 key={color.name}
@@ -977,9 +1027,16 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
                                     <div className="mt-4 flex flex-wrap gap-2">
                                         {selectedColors.map(color => (
                                             <span key={color.name} className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-gray-200 rounded-full text-sm shadow-sm">
-                                                <span className="w-3.5 h-3.5 rounded-full border border-gray-300" style={{ backgroundColor: color.hex }}></span>
+                                                <input
+                                                    type="color"
+                                                    value={color.hex}
+                                                    onChange={(e) => updateColorHex(color.name, e.target.value)}
+                                                    className="w-5 h-5 rounded-full border border-gray-300 cursor-pointer p-0 overflow-hidden"
+                                                    title={`Change swatch for ${color.name}`}
+                                                    aria-label={`Swatch color for ${color.name}`}
+                                                />
                                                 {color.name}
-                                                <button onClick={() => toggleColor(color)} className="text-gray-400 hover:text-red-500 ml-1">
+                                                <button type="button" onClick={() => toggleColor(color)} className="text-gray-400 hover:text-red-500 ml-1" aria-label={`Remove ${color.name}`}>
                                                     <i className="ri-close-line text-sm"></i>
                                                 </button>
                                             </span>
@@ -1003,7 +1060,7 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
 
                                 <div className="flex flex-wrap gap-2 mb-4">
                                     {sizePresets.map(size => {
-                                        const isSelected = selectedSizes.includes(size);
+                                        const isSelected = selectedSizes.some(s => sameOptionValue(s, size));
                                         return (
                                             <button
                                                 key={size}
@@ -1112,7 +1169,7 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
                                             </thead>
                                             <tbody>
                                                 {variantCombinations.map((combo) => {
-                                                    const d = variantData[combo.key] || { price: regularPrice, stock: '0', sku: '', salePrice: '' };
+                                                    const d = variantData[combo.key] || emptyVariantData();
                                                     return (
                                                         <tr key={combo.key} className="border-b border-gray-100 hover:bg-gray-50">
                                                             {selectedColors.length > 0 && (
@@ -1140,6 +1197,7 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
                                                                     onChange={(e) => updateVariantField(combo.key, 'price', e.target.value)}
                                                                     className="w-28 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-1 focus:ring-rose-400 focus:border-rose-400"
                                                                     step="0.01"
+                                                                    min="0"
                                                                     placeholder={regularPrice?.toString() || '0'}
                                                                 />
                                                             </td>
@@ -1150,6 +1208,7 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
                                                                     onChange={(e) => updateVariantField(combo.key, 'salePrice', e.target.value)}
                                                                     className="w-28 px-3 py-2 border border-red-200 rounded-lg text-sm focus:ring-1 focus:ring-red-400 focus:border-red-400 text-red-700"
                                                                     step="0.01"
+                                                                    min="0"
                                                                     placeholder="Optional"
                                                                 />
                                                             </td>
@@ -1160,6 +1219,8 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
                                                                     onChange={(e) => updateVariantField(combo.key, 'stock', e.target.value)}
                                                                     className="w-24 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-1 focus:ring-rose-400 focus:border-rose-400"
                                                                     placeholder="0"
+                                                                    min="0"
+                                                                    step="1"
                                                                 />
                                                             </td>
                                                         </tr>

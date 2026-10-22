@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { generateOrderNumber } from "@/lib/utils"
 import { effectivePriceForVariant, withResolvedSalePrice } from "@/lib/effective-price"
+import { findOption } from "@/lib/variant-options"
 
 export async function POST(req: NextRequest) {
   try {
@@ -125,9 +126,8 @@ export async function POST(req: NextRequest) {
     function matchVariantByOptions(productId: string, selectedSize?: string, selectedColor?: string): DbVariant | undefined {
       const variants = variantsByProduct.get(productId) ?? []
       return variants.find((v) => {
-        const opts = v.option_values ?? []
-        const sizeOk = !selectedSize || opts.some((o) => o.value === selectedSize)
-        const colorOk = !selectedColor || opts.some((o) => o.value === selectedColor)
+        const sizeOk = !selectedSize || findOption(v.option_values, "size")?.value === selectedSize
+        const colorOk = !selectedColor || findOption(v.option_values, "color")?.value === selectedColor
         return sizeOk && colorOk
       })
     }

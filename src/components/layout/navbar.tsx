@@ -8,6 +8,7 @@ import { Search, Heart, ShoppingBag, User, Menu } from "lucide-react"
 import { BRAND_LOGO_ALT, BRAND_LOGO_SRC, BRAND_NAME } from "@/lib/brand"
 import { useCartStore } from "@/lib/store/cart-store"
 import { useWishlistStore } from "@/lib/store/wishlist-store"
+import { useHydrated } from "@/lib/hooks/use-hydrated"
 import {
   Sheet,
   SheetContent,
@@ -38,9 +39,12 @@ export function Navbar() {
   const [heroSolid, setHeroSolid] = useState(false)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
-  const cartItemCount = useCartStore((s) => s.getItemCount())
+  const hydrated = useHydrated()
+  const storedCartCount = useCartStore((s) => s.getItemCount())
   const openCart = useCartStore((s) => s.openCart)
-  const wishlistCount = useWishlistStore((s) => s.items.length)
+  const storedWishlistCount = useWishlistStore((s) => s.items.length)
+  const cartItemCount = hydrated ? storedCartCount : 0
+  const wishlistCount = hydrated ? storedWishlistCount : 0
 
   useEffect(() => {
     if (!isHome) {

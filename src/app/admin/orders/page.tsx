@@ -1,8 +1,13 @@
 'use client';
 
 import Link from 'next/link';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
+import {
+  readOrdersViewState,
+  writeOrdersViewState,
+  type OrdersViewTab,
+} from '@/lib/admin-orders-view-state';
 import ProductSalesStats from './ProductSalesStats';
 
 interface Order {
@@ -89,39 +94,84 @@ interface OrderStats {
   status: string;
 }
 
+/** Last loaded list, kept across visits to an order detail page so returning is instant. */
+let cachedOrders: Order[] | null = null;
+
 export default function AdminOrdersPage() {
-  const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState('all');
+  const [savedView] = useState(readOrdersViewState);
+  const [searchQuery, setSearchQuery] = useState(savedView.searchQuery);
+  const [statusFilter, setStatusFilter] = useState(savedView.statusFilter);
   const [selectedOrders, setSelectedOrders] = useState<string[]>([]);
   const [showFilters, setShowFilters] = useState(false);
-  const [sortBy, setSortBy] = useState('date');
-  const [orders, setOrders] = useState<Order[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [orderViewTab, setOrderViewTab] = useState<'confirmed' | 'abandoned'>('confirmed');
+  const [sortBy, setSortBy] = useState(savedView.sortBy);
+  const [orders, setOrders] = useState<Order[]>(() => cachedOrders ?? []);
+  const [loading, setLoading] = useState(() => cachedOrders === null);
+  const [orderViewTab, setOrderViewTab] = useState<OrdersViewTab>(savedView.tab);
   const [sendingPaymentLink, setSendingPaymentLink] = useState<string | null>(null);
   const [verifyingPayment, setVerifyingPayment] = useState<string | null>(null);
-  const [orderStats, setOrderStats] = useState<OrderStats[]>([
-    { label: 'All Orders', count: 0, status: 'all' },
-    { label: 'Pending', count: 0, status: 'pending' },
-    { label: 'Processing', count: 0, status: 'processing' },
-    { label: 'Packaged', count: 0, status: 'shipped' },
-    { label: 'With Rider', count: 0, status: 'out_for_delivery' },
-    { label: 'Delivered', count: 0, status: 'delivered' },
-    { label: 'Cancelled', count: 0, status: 'cancelled' }
-  ]);
-  const [abandonedCount, setAbandonedCount] = useState(0);
-  const [confirmedCount, setConfirmedCount] = useState(0);
   const [showProductStats, setShowProductStats] = useState(false);
-  const [productFilter, setProductFilter] = useState('all');
-  const [availableProducts, setAvailableProducts] = useState<string[]>([]);
+  const [productFilter, setProductFilter] = useState(savedView.productFilter);
+  const [highlightedOrderId, setHighlightedOrderId] = useState<string | null>(savedView.lastOpenedOrderId);
+  const positionRestored = useRef(false);
 
   useEffect(() => {
     fetchOrders();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    writeOrdersViewState({ tab: orderViewTab, statusFilter, searchQuery, productFilter, sortBy });
+  }, [orderViewTab, statusFilter, searchQuery, productFilter, sortBy]);
+
+  useEffect(() => {
+    let frame = 0;
+    const onScroll = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        if (positionRestored.current) writeOrdersViewState({ scrollY: window.scrollY });
+      });
+    };
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => {
+      cancelAnimationFrame(frame);
+      window.removeEventListener('scroll', onScroll);
+    };
   }, []);
+
+  const { confirmedCount, abandonedCount, orderStats, availableProducts } = useMemo(() => {
+    const confirmedOrders = orders.filter(o => o.is_confirmed);
+    const countStatus = (status: string) => confirmedOrders.filter(o => o.status === status).length;
+    const stats: OrderStats[] = [
+      { label: 'All Orders', count: confirmedOrders.length, status: 'all' },
+      { label: 'Paid', count: countStatus('paid'), status: 'paid' },
+      { label: 'Pending', count: countStatus('pending'), status: 'pending' },
+      { label: 'Processing', count: countStatus('processing'), status: 'processing' },
+      { label: 'Packaged', count: countStatus('shipped'), status: 'shipped' },
+      { label: 'With Rider', count: countStatus('out_for_delivery'), status: 'out_for_delivery' },
+      { label: 'Delivered', count: countStatus('delivered'), status: 'delivered' },
+      { label: 'Cancelled', count: countStatus('cancelled'), status: 'cancelled' },
+    ];
+    const productNames = new Set<string>();
+    orders.forEach(o => {
+      o.order_items?.forEach((item: any) => {
+        if (item.product_name) productNames.add(item.product_name);
+      });
+    });
+    return {
+      confirmedCount: confirmedOrders.length,
+      abandonedCount: orders.length - confirmedOrders.length,
+      orderStats: stats,
+      availableProducts: Array.from(productNames).sort(),
+    };
+  }, [orders]);
+
+  const rememberOpenedOrder = (orderId: string) => {
+    writeOrdersViewState({ lastOpenedOrderId: orderId, scrollY: window.scrollY });
+  };
 
   const fetchOrders = async () => {
     try {
-      setLoading(true);
+      // Only block the table on the very first load; refreshes keep the rows (and scroll position) in place.
+      if (!cachedOrders) setLoading(true);
 
       const { data: ordersData, error } = await supabase
         .from('orders')
@@ -177,35 +227,8 @@ export default function AdminOrdersPage() {
         };
       });
 
+      cachedOrders = normalized;
       setOrders(normalized);
-
-      const productNames = new Set<string>();
-      normalized.forEach(o => {
-        o.order_items?.forEach((item: any) => {
-          if (item.product_name) productNames.add(item.product_name);
-        });
-      });
-      setAvailableProducts(Array.from(productNames).sort());
-
-      const confirmedOrders = normalized.filter(o => o.is_confirmed);
-      const abandonedOrders = normalized.filter(o => !o.is_confirmed);
-
-      setConfirmedCount(confirmedOrders.length);
-      setAbandonedCount(abandonedOrders.length);
-
-      // Calculate stats based on confirmed orders only
-      const stats = [
-        { label: 'All Orders', count: confirmedOrders.length, status: 'all' },
-        { label: 'Paid', count: confirmedOrders.filter(o => o.status === 'paid').length, status: 'paid' },
-        { label: 'Pending', count: confirmedOrders.filter(o => o.status === 'pending').length, status: 'pending' },
-        { label: 'Processing', count: confirmedOrders.filter(o => o.status === 'processing').length, status: 'processing' },
-        { label: 'Packaged', count: confirmedOrders.filter(o => o.status === 'shipped').length, status: 'shipped' },
-        { label: 'With Rider', count: confirmedOrders.filter(o => o.status === 'out_for_delivery').length, status: 'out_for_delivery' },
-        { label: 'Delivered', count: confirmedOrders.filter(o => o.status === 'delivered').length, status: 'delivered' },
-        { label: 'Cancelled', count: confirmedOrders.filter(o => o.status === 'cancelled').length, status: 'cancelled' }
-      ];
-      setOrderStats(stats);
-
     } catch (error) {
       console.error('Error fetching orders:', error);
     } finally {
@@ -301,7 +324,16 @@ export default function AdminOrdersPage() {
 
         if (error) throw error;
 
-
+        const updatedIds = new Set(selectedOrders);
+        setOrders(prev => {
+          const next = prev.map(o =>
+            updatedIds.has(o.id)
+              ? { ...o, status: newStatus, is_confirmed: o.is_confirmed || FULFILLED_STATUSES.has(newStatus) }
+              : o,
+          );
+          cachedOrders = next;
+          return next;
+        });
 
         // Send Notifications with auth token
         const { data: { session } } = await supabase.auth.getSession();
@@ -430,7 +462,29 @@ export default function AdminOrdersPage() {
     const matchesProduct = productFilter === 'all' || 
       order.order_items?.some((item: any) => item.product_name === productFilter);
     return matchesViewTab && matchesSearch && matchesStatus && matchesProduct;
+  }).sort((a, b) => {
+    if (sortBy === 'total') return b.total - a.total;
+    if (sortBy === 'customer') return getCustomerName(a).localeCompare(getCustomerName(b));
+    if (sortBy === 'status') return (a.status || '').localeCompare(b.status || '');
+    return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
   });
+
+  // Return to the order she last opened (or the last scroll position) once rows are on screen.
+  useEffect(() => {
+    if (loading || positionRestored.current) return;
+    positionRestored.current = true;
+    const lastId = savedView.lastOpenedOrderId;
+    const row = lastId ? document.querySelector<HTMLElement>(`[data-order-id="${CSS.escape(lastId)}"]`) : null;
+    requestAnimationFrame(() => {
+      if (row) row.scrollIntoView({ block: 'center' });
+      else if (savedView.scrollY > 0) window.scrollTo(0, savedView.scrollY);
+    });
+    if (row) {
+      const timer = window.setTimeout(() => setHighlightedOrderId(null), 4000);
+      return () => window.clearTimeout(timer);
+    }
+    setHighlightedOrderId(null);
+  }, [loading, savedView]);
 
   return (
     <div className="space-y-6">
@@ -666,7 +720,11 @@ export default function AdminOrdersPage() {
                 </tr>
               ) : (
                 filteredOrders.map((order) => (
-                  <tr key={order.id} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
+                  <tr
+                    key={order.id}
+                    data-order-id={order.id}
+                    className={`border-b border-gray-100 hover:bg-gray-50 transition-colors duration-700 ${highlightedOrderId === order.id ? 'bg-amber-50 ring-2 ring-inset ring-amber-300' : ''}`}
+                  >
                     <td className="py-4 px-6">
                       <input
                         type="checkbox"
@@ -676,7 +734,7 @@ export default function AdminOrdersPage() {
                       />
                     </td>
                     <td className="py-4 px-4">
-                      <Link href={`/admin/orders/${order.id}`} className="text-rose-700 hover:text-rose-900 font-semibold whitespace-nowrap cursor-pointer">
+                      <Link href={`/admin/orders/${order.id}`} onClick={() => rememberOpenedOrder(order.id)} className="text-rose-700 hover:text-rose-900 font-semibold whitespace-nowrap cursor-pointer">
                         {order.order_number || order.id.substring(0, 8)}
                       </Link>
                     </td>
@@ -713,6 +771,7 @@ export default function AdminOrdersPage() {
                       <div className="flex items-center space-x-2">
                         <Link
                           href={`/admin/orders/${order.id}`}
+                          onClick={() => rememberOpenedOrder(order.id)}
                           className="w-8 h-8 flex items-center justify-center text-gray-600 hover:text-rose-700 hover:bg-pink-50 rounded-lg transition-colors cursor-pointer"
                           title="View Order"
                         >

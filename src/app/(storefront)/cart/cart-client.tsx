@@ -22,6 +22,7 @@ import { Section } from "@/components/shared/section"
 import { Heading } from "@/components/shared/heading"
 import { useCartStore } from "@/lib/store/cart-store"
 import { useWishlistStore } from "@/lib/store/wishlist-store"
+import { useHydrated } from "@/lib/hooks/use-hydrated"
 import {
   getProductPrimaryImageUrl,
   optimizedImageUrl,
@@ -141,7 +142,7 @@ export default function CartPageClient({
             <p className="mt-2 text-muted-foreground">
               Discover something you&apos;ll love
             </p>
-            <Link href="/" className="mt-8">
+            <Link href="/shop" className="mt-8">
               <Button className="h-auto rounded-full px-10 py-3.5 text-base font-semibold">
                 Continue Shopping
               </Button>
@@ -420,7 +421,9 @@ export default function CartPageClient({
 function ShopStyleRecommendationCard({ product }: { product: Product }) {
   const addItem = useCartStore((s) => s.addItem)
   const toggleItem = useWishlistStore((s) => s.toggleItem)
-  const isInWishlist = useWishlistStore((s) => s.isInWishlist(product.id))
+  const hydrated = useHydrated()
+  const storedInWishlist = useWishlistStore((s) => s.isInWishlist(product.id))
+  const isInWishlist = hydrated && storedInWishlist
 
   return (
     <div className="group overflow-hidden rounded-2xl border border-rose-border/20 bg-white transition-all duration-300 hover:border-rose-200 hover:shadow-[0_18px_38px_-18px_rgba(15,23,42,0.45)]">

@@ -205,6 +205,7 @@ export default function ChatWidget() {
   const addItem = useCartStore((s) => s.addItem);
   const clearCart = useCartStore((s) => s.clearCart);
   const openCart = useCartStore((s) => s.openCart);
+  const cartDrawerOpen = useCartStore((s) => s.isOpen);
   const pathname = usePathname();
 
   const cartPayload = useMemo(
@@ -570,8 +571,8 @@ export default function ChatWidget() {
 
   return (
     <>
-      {/* Floating Toggle Button — above mobile bottom nav */}
-      {!open && (
+      {/* Floating Toggle Button — above mobile bottom nav; hidden while the cart drawer is open so it can't cover checkout buttons */}
+      {!open && !cartDrawerOpen && (
         <button
           type="button"
           onClick={() => setOpen(true)}

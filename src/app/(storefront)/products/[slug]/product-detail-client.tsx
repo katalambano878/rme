@@ -29,6 +29,7 @@ import {
 } from "@/lib/product-image"
 import { buildDisplaySku } from "@/lib/sku-display"
 import { displayPricingForVariant } from "@/lib/effective-price"
+import { findOption } from "@/lib/variant-options"
 import {
   Accordion,
   AccordionItem,
@@ -93,24 +94,18 @@ function findMatchingVariantRow(
     return rows[0]
   }
 
-  const selectedMap: Record<string, string> = {}
-  for (const g of product.variants) {
-    if (g.type === "size" && selectedSize) selectedMap[g.name] = selectedSize
-    if (g.type === "color" && selectedColor) selectedMap[g.name] = selectedColor
-  }
-
-  for (const g of product.variants) {
-    if (!selectedMap[g.name]) return null
-  }
+  const needsSize = product.variants.some((g) => g.type === "size")
+  const needsColor = product.variants.some((g) => g.type === "color")
+  if ((needsSize && !selectedSize) || (needsColor && !selectedColor)) return null
 
   return (
     rows.find((row) => {
-      const opts = row.option_values ?? []
-      if (opts.length !== product.variants.length) return false
-      return opts.every((o) => {
-        const key = (o as any).name || (o as any).attribute_name
-        return selectedMap[key] === o.value
-      })
+      const size = findOption(row.option_values, "size")?.value ?? ""
+      const color = findOption(row.option_values, "color")?.value ?? ""
+      return (
+        size === (needsSize ? selectedSize : "") &&
+        color === (needsColor ? selectedColor : "")
+      )
     }) ?? null
   )
 }
@@ -211,12 +206,8 @@ function ProductDetailInner({
   const colorHexMap = useMemo(() => {
     const map: Record<string, string> = {}
     for (const row of variantRows) {
-      for (const ov of row.option_values as any[]) {
-        const fieldName: string = ov.name || ov.attribute_name || ""
-        if (fieldName.toLowerCase().includes("color") || fieldName.toLowerCase().includes("colour")) {
-          if (ov.hex && ov.value) map[ov.value] = ov.hex
-        }
-      }
+      const color = findOption(row.option_values, "color")
+      if (color?.hex && !map[color.value]) map[color.value] = color.hex
     }
     return map
   }, [variantRows])
@@ -266,6 +257,7 @@ function ProductDetailInner({
       quantityClamped,
       selectedSize || undefined,
       selectedColor || undefined,
+      { openCart: false },
     )
     router.push("/checkout")
   }

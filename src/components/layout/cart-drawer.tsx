@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import Link from "next/link"
 import { Minus, Plus, ShoppingBag, Trash2, Tag } from "lucide-react"
 import { AnimatePresence, motion } from "framer-motion"
@@ -21,6 +21,8 @@ import {
   getProductPrimaryImageUrl,
   optimizedImageUrl,
 } from "@/lib/product-image"
+
+const CART_HISTORY_FLAG = "__rmeCartDrawer"
 
 function ProductThumbnail({ product }: { product: Product }) {
   return (
@@ -47,6 +49,38 @@ export function CartDrawer() {
   const [coupon, setCoupon] = useState("")
   const total = useMemo(() => getTotal(), [items, getTotal])
   const itemCount = useMemo(() => getItemCount(), [items, getItemCount])
+
+  // Give the open drawer its own history entry so the phone/browser Back button
+  // closes the bag instead of leaving the page the shopper is browsing.
+  const historyEntryPushed = useRef(false)
+  const leavingViaLink = useRef(false)
+  useEffect(() => {
+    if (!isOpen) {
+      if (historyEntryPushed.current) {
+        historyEntryPushed.current = false
+        if (!leavingViaLink.current && window.history.state?.[CART_HISTORY_FLAG]) {
+          window.history.back()
+        }
+      }
+      leavingViaLink.current = false
+      return
+    }
+    if (!historyEntryPushed.current) {
+      window.history.pushState({ [CART_HISTORY_FLAG]: true }, "")
+      historyEntryPushed.current = true
+    }
+    const onPopState = () => {
+      historyEntryPushed.current = false
+      closeCart()
+    }
+    window.addEventListener("popstate", onPopState)
+    return () => window.removeEventListener("popstate", onPopState)
+  }, [isOpen, closeCart])
+
+  const closeForNavigation = () => {
+    leavingViaLink.current = true
+    closeCart()
+  }
 
   return (
     <Sheet
@@ -233,19 +267,28 @@ export function CartDrawer() {
               </div>
 
               <Link
-                href="/cart"
-                onClick={closeCart}
-                className="flex h-10 items-center justify-center rounded-xl border border-navy text-sm font-medium text-navy transition-colors hover:bg-navy hover:text-white"
-              >
-                View Cart
-              </Link>
-              <Link
                 href="/checkout"
-                onClick={closeCart}
-                className="flex h-10 items-center justify-center rounded-xl bg-rose-100 text-sm font-medium text-navy transition-colors hover:bg-rose-200"
+                onClick={closeForNavigation}
+                className="flex h-11 items-center justify-center rounded-xl bg-rose-100 text-sm font-semibold text-navy transition-colors hover:bg-rose-200"
               >
                 Checkout
               </Link>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={closeCart}
+                  className="flex h-10 items-center justify-center rounded-xl border border-navy bg-navy text-sm font-medium text-white transition-colors hover:bg-navy/90"
+                >
+                  Continue Shopping
+                </button>
+                <Link
+                  href="/cart"
+                  onClick={closeForNavigation}
+                  className="flex h-10 items-center justify-center rounded-xl border border-navy text-sm font-medium text-navy transition-colors hover:bg-navy hover:text-white"
+                >
+                  View Cart
+                </Link>
+              </div>
             </SheetFooter>
           </>
         )}

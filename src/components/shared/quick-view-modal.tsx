@@ -40,13 +40,27 @@ export function QuickViewModal({ open, onClose, product }: QuickViewModalProps) 
     [product]
   )
 
+  const [optionsForProductId, setOptionsForProductId] = useState(product?.id)
+  if (product?.id !== optionsForProductId) {
+    setOptionsForProductId(product?.id)
+    setSelectedSize("")
+    setSelectedColor("")
+    setQuantity(1)
+  }
+
   if (!product) return null
 
   const hasSale = product.salePrice !== undefined && product.salePrice < product.price
   const displayPrice = hasSale ? product.salePrice! : product.price
+  const missingOption =
+    sizeVariant && !selectedSize
+      ? sizeVariant.name || "size"
+      : colorVariant && !selectedColor
+        ? colorVariant.name || "color"
+        : null
 
   function handleAddToBag() {
-    if (!product) return
+    if (!product || missingOption) return
     addItem(
       product,
       quantity,
@@ -136,6 +150,7 @@ export function QuickViewModal({ open, onClose, product }: QuickViewModalProps) 
                     {sizeVariant.options.map((opt) => (
                       <button
                         key={opt}
+                        type="button"
                         onClick={() => setSelectedSize(opt)}
                         className={cn(
                           "rounded-lg border px-3 py-1.5 text-xs font-medium transition-all",
@@ -160,6 +175,7 @@ export function QuickViewModal({ open, onClose, product }: QuickViewModalProps) 
                     {colorVariant.options.map((opt) => (
                       <button
                         key={opt}
+                        type="button"
                         onClick={() => setSelectedColor(opt)}
                         className={cn(
                           "rounded-lg border px-3 py-1.5 text-xs font-medium transition-all",
@@ -197,11 +213,13 @@ export function QuickViewModal({ open, onClose, product }: QuickViewModalProps) 
                 </div>
 
                 <button
+                  type="button"
                   onClick={handleAddToBag}
-                  className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-rose-100 px-5 py-2.5 text-sm font-semibold text-navy transition-all hover:bg-rose-200"
+                  disabled={!!missingOption}
+                  className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-rose-100 px-5 py-2.5 text-sm font-semibold text-navy transition-all hover:bg-rose-200 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   <ShoppingBag className="size-4" />
-                  Add to Bag
+                  {missingOption ? `Select ${missingOption.toLowerCase()}` : "Add to Bag"}
                 </button>
               </div>
             </div>
