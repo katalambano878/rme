@@ -24,6 +24,8 @@ import {
 } from "@/lib/utils"
 import { Container } from "@/components/shared/container"
 import { useCartStore } from "@/lib/store/cart-store"
+import { useStorePricing } from "@/components/store-pricing-provider"
+import { liveLinePrice } from "@/lib/effective-price"
 import {
   getProductPrimaryImageUrl,
   optimizedImageUrl,
@@ -205,15 +207,15 @@ export default function CheckoutPage() {
 
   const items = useCartStore((s) => s.items)
   const clearCart = useCartStore((s) => s.clearCart)
+  const storePricing = useStorePricing()
   useEffect(() => setMounted(true), [])
 
   const subtotal = useMemo(
     () =>
       items.reduce((sum, item) => {
-        const price = item.product.salePrice ?? item.product.price
-        return sum + price * item.quantity
+        return sum + liveLinePrice(item.product, storePricing) * item.quantity
       }, 0),
-    [items],
+    [items, storePricing],
   )
 
   const itemCount = useMemo(
@@ -282,7 +284,7 @@ export default function CheckoutPage() {
           variantId: null,
           name: item.product.name,
           sku: item.product.sku ?? "",
-          price: item.product.salePrice ?? item.product.price,
+          price: liveLinePrice(item.product, storePricing),
           quantity: item.quantity,
           selectedSize: item.selectedSize || undefined,
           selectedColor: item.selectedColor || undefined,
@@ -878,8 +880,7 @@ export default function CheckoutPage() {
                       </h3>
                       <div className="space-y-4">
                         {items.map((item) => {
-                          const price =
-                            item.product.salePrice ?? item.product.price
+                          const price = liveLinePrice(item.product, storePricing)
                           return (
                             <div
                               key={`${item.product.id}-${item.selectedSize}-${item.selectedColor}`}
@@ -1142,12 +1143,13 @@ function OrderSummaryContent({
   couponMessage: string
 }) {
   const tax = 0
+  const storePricing = useStorePricing()
 
   return (
     <div className="space-y-5 text-navy">
       <div className="max-h-64 space-y-3 overflow-y-auto pr-1">
         {items.map((item) => {
-          const price = item.product.salePrice ?? item.product.price
+          const price = liveLinePrice(item.product, storePricing)
           return (
             <div
               key={`${item.product.id}-${item.selectedSize}-${item.selectedColor}`}

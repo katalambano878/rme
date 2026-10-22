@@ -6,7 +6,7 @@ export const STAFF_PERMISSION_AREAS = [
   { key: 'orders', label: 'Orders' },
   { key: 'pos', label: 'POS' },
   { key: 'products', label: 'Products' },
-  { key: 'sales', label: 'Sales' },
+  { key: 'sales', label: 'Sale & discounts' },
   { key: 'categories', label: 'Categories' },
   { key: 'customers', label: 'Customers' },
   { key: 'inventory', label: 'Inventory' },

@@ -29,6 +29,11 @@ export function Price({ amount, salePrice, className, size = "md" }: PriceProps)
       >
         {formatPrice(hasSale ? salePrice : amount)}
       </span>
+      {hasSale && (
+        <span className="text-navy/45 line-through font-normal">
+          {formatPrice(amount)}
+        </span>
+      )}
     </div>
   )
 }

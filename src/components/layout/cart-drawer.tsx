@@ -17,6 +17,8 @@ import {
   SheetDescription,
 } from "@/components/ui/sheet"
 import type { Product } from "@/types/product"
+import { useStorePricing } from "@/components/store-pricing-provider"
+import { liveLinePrice } from "@/lib/effective-price"
 import {
   getProductPrimaryImageUrl,
   optimizedImageUrl,
@@ -43,11 +45,14 @@ export function CartDrawer() {
   const closeCart = useCartStore((s) => s.closeCart)
   const removeItem = useCartStore((s) => s.removeItem)
   const updateQuantity = useCartStore((s) => s.updateQuantity)
-  const getTotal = useCartStore((s) => s.getTotal)
   const getItemCount = useCartStore((s) => s.getItemCount)
+  const storePricing = useStorePricing()
 
   const [coupon, setCoupon] = useState("")
-  const total = useMemo(() => getTotal(), [items, getTotal])
+  const total = useMemo(
+    () => items.reduce((sum, item) => sum + liveLinePrice(item.product, storePricing) * item.quantity, 0),
+    [items, storePricing],
+  )
   const itemCount = useMemo(() => getItemCount(), [items, getItemCount])
 
   // Give the open drawer its own history entry so the phone/browser Back button
@@ -154,7 +159,7 @@ export function CartDrawer() {
             <div className="-mx-4 flex-1 overflow-y-auto px-4 py-4">
               <AnimatePresence mode="popLayout">
                 {items.map((item) => {
-                  const price = item.product.salePrice ?? item.product.price
+                  const price = liveLinePrice(item.product, storePricing)
                   const key = `${item.product.id}-${item.selectedSize ?? ""}-${item.selectedColor ?? ""}`
 
                   return (

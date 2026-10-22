@@ -23,6 +23,8 @@ import { Heading } from "@/components/shared/heading"
 import { useCartStore } from "@/lib/store/cart-store"
 import { useWishlistStore } from "@/lib/store/wishlist-store"
 import { useHydrated } from "@/lib/hooks/use-hydrated"
+import { useStorePricing } from "@/components/store-pricing-provider"
+import { liveLinePrice } from "@/lib/effective-price"
 import {
   getProductPrimaryImageUrl,
   optimizedImageUrl,
@@ -49,6 +51,7 @@ export default function CartPageClient({
   const items = useCartStore((s) => s.items)
   const removeItem = useCartStore((s) => s.removeItem)
   const updateQuantity = useCartStore((s) => s.updateQuantity)
+  const storePricing = useStorePricing()
 
   useEffect(() => {
     queueMicrotask(() => setMounted(true))
@@ -57,10 +60,9 @@ export default function CartPageClient({
   const subtotal = useMemo(
     () =>
       items.reduce((sum, item) => {
-        const price = item.product.salePrice ?? item.product.price
-        return sum + price * item.quantity
+        return sum + liveLinePrice(item.product, storePricing) * item.quantity
       }, 0),
-    [items],
+    [items, storePricing],
   )
 
   const itemCount = useMemo(
@@ -158,8 +160,7 @@ export default function CartPageClient({
                     item.selectedSize,
                     item.selectedColor,
                   )
-                  const effectivePrice =
-                    item.product.salePrice ?? item.product.price
+                  const effectivePrice = liveLinePrice(item.product, storePricing)
 
                   return (
                     <motion.div

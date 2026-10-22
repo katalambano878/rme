@@ -44,6 +44,7 @@ import { useCartStore } from "@/lib/store/cart-store"
 import { useWishlistStore } from "@/lib/store/wishlist-store"
 import { useHydrated } from "@/lib/hooks/use-hydrated"
 import { useListPositionMemory } from "@/lib/hooks/use-list-position-memory"
+import { Price } from "@/components/shared/price"
 
 const ITEMS_PER_PAGE = 9
 
@@ -602,9 +603,7 @@ function ShopProductCard({
           {product.name}
         </h3>
         <div className="mt-2.5 flex items-center justify-between">
-          <p className="text-[18px] font-semibold leading-none text-rose-primary">
-            {formatPrice(product.salePrice ?? product.price)}
-          </p>
+          <Price amount={product.price} salePrice={product.salePrice} size="sm" />
           <button
             onClick={(e) => {
               e.preventDefault()

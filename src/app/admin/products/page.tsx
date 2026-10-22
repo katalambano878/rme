@@ -8,7 +8,7 @@ import { supabase } from '@/lib/supabase';
 import { deleteProductAndDependencies } from '@/lib/admin-product-delete';
 import { buildDisplaySku } from '@/lib/sku-display';
 import { listSkuRaw, listStockFromProduct } from '@/lib/product-metrics';
-import { effectivePriceForProduct, withResolvedSalePrice } from '@/lib/effective-price';
+import { effectivePriceForProduct, parseStorePricing, withResolvedSalePrice } from '@/lib/effective-price';
 import { adminImageSrc } from '@/lib/product-image';
 
 export default function ProductsPage() {
@@ -67,8 +67,7 @@ export default function ProductsPage() {
 
       if (error) throw error;
 
-      const flags = (settingsRow?.feature_flags as Record<string, unknown> | null) ?? {};
-      const saleEnabled = flags.sale_promotion_enabled === true;
+      const saleEnabled = parseStorePricing(settingsRow?.feature_flags);
 
       // Build sales count map from order_items
       const salesMap = new Map<string, number>();

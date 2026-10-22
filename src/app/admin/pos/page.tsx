@@ -2,8 +2,9 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { supabase } from '@/lib/supabase';
-import { listPriceFromProduct, listSkuRaw, listStockFromProduct } from '@/lib/product-metrics';
+import { listSkuRaw, listStockFromProduct } from '@/lib/product-metrics';
 import { adminImageSrc } from '@/lib/product-image';
+import { effectivePriceForProduct, parseStorePricing, withResolvedSalePrice } from '@/lib/effective-price';
 
 interface Product {
     id: string;
@@ -69,21 +70,25 @@ export default function POSPage() {
     const fetchData = async () => {
         try {
             setLoading(true);
-            const { data: prodData } = await supabase
-                .from('products')
-                .select(`
+            const [{ data: prodData }, { data: settingsRow }] = await Promise.all([
+                supabase
+                    .from('products')
+                    .select(`
           id, name, slug,
-          sku, price, quantity,
+          sku, price, sale_price, compare_at_price, quantity, metadata,
           categories(name),
-          variants(sku, price, stock_quantity),
+          variants(sku, price, sale_price, compare_at_price, stock_quantity),
           product_images(url, sort_order)
         `)
-                .eq('status', 'active')
-                .order('name');
+                    .eq('status', 'active')
+                    .order('name'),
+                supabase.from('site_settings').select('feature_flags').eq('id', 1).maybeSingle(),
+            ]);
+            const storePricing = parseStorePricing(settingsRow?.feature_flags);
 
             if (prodData) {
                 const formatted: Product[] = prodData.map((p: any) => {
-                    const computedPrice = listPriceFromProduct(p);
+                    const computedPrice = effectivePriceForProduct(withResolvedSalePrice(p), storePricing).effective;
                     const computedStock = listStockFromProduct(p);
                     const computedSku = listSkuRaw(p);
                     const sortedImages = [...(p.product_images || [])].sort((a: any, b: any) => (a.sort_order ?? 0) - (b.sort_order ?? 0));

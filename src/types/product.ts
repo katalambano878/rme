@@ -22,6 +22,8 @@ export type Product = {
   catalogSalePrice?: number | null
   /** Whether global sale promotion was enabled when this product was loaded. */
   salePromotionEnabled?: boolean
+  discountPercent?: number
+  strictDiscount?: boolean
   images: string[]
   badges: ProductBadge[]
   variants: Variant[]

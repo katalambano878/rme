@@ -14,7 +14,12 @@ import type {
   ProductVariantRow,
   Variant,
 } from "@/types/product"
-import { displayPricingForProductCard, resolveCatalogSalePrice } from "@/lib/effective-price"
+import {
+  displayPricingForProductCard,
+  resolveCatalogSalePrice,
+  type StorePricing,
+} from "@/lib/effective-price"
+import { fetchStorePricing } from "@/lib/store-pricing"
 import { findOption, sortSizeOptions } from "@/lib/variant-options"
 
 const PRODUCT_SELECT = `
@@ -138,36 +143,29 @@ function buildVariantGroups(variantRows: ProductVariantRow[]): Variant[] {
   return groups
 }
 
-async function fetchSaleEnabled(supabase: Awaited<ReturnType<typeof getClient>>): Promise<boolean> {
-  const { data } = await supabase
-    .from("site_settings")
-    .select("feature_flags")
-    .eq("id", 1)
-    .maybeSingle()
-  const flags = (data?.feature_flags as Record<string, unknown> | null) ?? {}
-  return flags.sale_promotion_enabled === true
-}
-
 function cardPricing(
   variantRows: ProductVariantRow[],
   salePriceRaw: number | string | null = null,
-  saleEnabled = false,
+  pricing: StorePricing | boolean = false,
 ): {
   price: number
   salePrice?: number
 } {
   if (variantRows.length === 0) return { price: 0 }
-  return displayPricingForProductCard(variantRows, salePriceRaw, saleEnabled)
+  return displayPricingForProductCard(variantRows, salePriceRaw, pricing)
 }
 
 function totalStock(variantRows: ProductVariantRow[]): number {
   return variantRows.reduce((s, v) => s + (v.stock_quantity ?? 0), 0)
 }
 
-export function mapProductRowToProduct(row: ProductRow, saleEnabled = false): Product {
+export function mapProductRowToProduct(row: ProductRow, saleEnabled: StorePricing | boolean = false): Product {
   const variantRows = normalizeVariantRows(row)
   const catalogSalePrice = resolveCatalogSalePrice(row.sale_price, row.metadata)
   const { price, salePrice } = cardPricing(variantRows, catalogSalePrice, saleEnabled)
+  const pricing = typeof saleEnabled === "boolean"
+    ? { salesActive: saleEnabled, discountPercent: 0, strictDiscount: false }
+    : saleEnabled
   const cat = row.categories
 
   return {
@@ -182,7 +180,9 @@ export function mapProductRowToProduct(row: ProductRow, saleEnabled = false): Pr
     price,
     salePrice,
     catalogSalePrice,
-    salePromotionEnabled: saleEnabled,
+    salePromotionEnabled: pricing.salesActive,
+    discountPercent: pricing.discountPercent,
+    strictDiscount: pricing.strictDiscount,
     images: imageUrlsFromRows(row.product_images ?? undefined),
     badges: (() => {
       const b = normalizeBadges(row.badges)
@@ -218,7 +218,7 @@ export async function fetchStorefrontProductBySlug(
   const supabase = await getClient()
   const [{ data, error }, saleEnabled] = await Promise.all([
     supabase.from("products").select(PRODUCT_SELECT).eq("slug", slug).eq("status", "active").maybeSingle(),
-    fetchSaleEnabled(supabase),
+    fetchStorePricing(supabase),
   ])
 
   if (error || !data) return null
@@ -238,7 +238,7 @@ export async function fetchRelatedProducts(
   const supabase = await getClient()
   const [{ data, error }, saleEnabled] = await Promise.all([
     supabase.from("products").select(PRODUCT_SELECT).eq("status", "active").eq("category_id", categoryId).neq("id", excludeProductId).order("created_at", { ascending: false }).limit(limit),
-    fetchSaleEnabled(supabase),
+    fetchStorePricing(supabase),
   ])
 
   if (error || !data) return []
@@ -249,7 +249,7 @@ export async function fetchActiveProducts(): Promise<Product[]> {
   const supabase = await getClient()
   const [{ data, error }, saleEnabled] = await Promise.all([
     supabase.from("products").select(PRODUCT_SELECT).eq("status", "active").order("created_at", { ascending: false }),
-    fetchSaleEnabled(supabase),
+    fetchStorePricing(supabase),
   ])
 
   if (error || !data) return []
@@ -260,7 +260,7 @@ export async function fetchNewArrivals(limit: number): Promise<Product[]> {
   const supabase = await getClient()
   const [{ data, error }, saleEnabled] = await Promise.all([
     supabase.from("products").select(PRODUCT_SELECT).eq("status", "active").eq("is_new_arrival", true).order("created_at", { ascending: false }).limit(limit),
-    fetchSaleEnabled(supabase),
+    fetchStorePricing(supabase),
   ])
 
   if (error || !data?.length) {
@@ -275,7 +275,7 @@ export async function fetchBestSellers(limit: number): Promise<Product[]> {
   const supabase = await getClient()
   const [{ data, error }, saleEnabled] = await Promise.all([
     supabase.from("products").select(PRODUCT_SELECT).eq("status", "active").eq("is_best_seller", true).order("review_count", { ascending: false }).limit(limit),
-    fetchSaleEnabled(supabase),
+    fetchStorePricing(supabase),
   ])
 
   if (error || !data?.length) {
@@ -290,7 +290,7 @@ export async function fetchTrendingProducts(limit: number): Promise<Product[]> {
   const supabase = await getClient()
   const [{ data, error }, saleEnabled] = await Promise.all([
     supabase.from("products").select(PRODUCT_SELECT).eq("status", "active").eq("is_featured", true).order("created_at", { ascending: false }).limit(limit),
-    fetchSaleEnabled(supabase),
+    fetchStorePricing(supabase),
   ])
 
   if (!error && data?.length) {
@@ -317,7 +317,7 @@ export async function fetchProductsByCategorySlug(
 
   const [{ data, error }, saleEnabled] = await Promise.all([
     supabase.from("products").select(PRODUCT_SELECT).eq("status", "active").eq("category_id", cat.id).order("created_at", { ascending: false }).limit(limit),
-    fetchSaleEnabled(supabase),
+    fetchStorePricing(supabase),
   ])
 
   if (error || !data) return []

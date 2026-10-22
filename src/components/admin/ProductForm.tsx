@@ -425,7 +425,7 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
                 return;
             }
             if (sal > 0 && sal >= effectiveReg) {
-                alert('Sales (GH₵) should be lower than the main price when set, or leave it empty.');
+                alert('Sale price should be lower than the main price when set, or leave it empty.');
                 setLoading(false);
                 return;
             }
@@ -747,11 +747,11 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
                     {activeTab === 'pricing' && (
                         <div className="space-y-6 max-w-5xl">
                             <p className="text-xs text-gray-600">
-                                Store-wide <strong>Sale / promotion</strong> is managed on the{' '}
+                                Store-wide sale and bulk discounts are managed on the{' '}
                                 <Link href="/admin/sales" className="text-rose-700 font-medium hover:underline">
-                                    Sales
+                                    Sale &amp; discounts
                                 </Link>{' '}
-                                page. Here you set the list price, optional compare-at, and an optional sales reference amount.
+                                page. The sale amount below is used only when <strong>Store-wide sale</strong> is on.
                             </p>
 
                             <div className="grid md:grid-cols-3 gap-6">
@@ -795,7 +795,7 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
                                 </div>
                                 <div>
                                     <label className="block text-sm font-semibold text-gray-900 mb-2">
-                                        Sales (GH₵)
+                                        Sale price (GH₵)
                                     </label>
                                     <div className="relative">
                                         <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-600 font-semibold">GH₵</span>
@@ -810,7 +810,7 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
                                         />
                                     </div>
                                     <p className="text-sm text-gray-500 mt-2">
-                                        Optional promotional amount (lower than price). Stored for reporting; turn on store-wide sale on the Sales page.
+                                        Used only when <strong>Store-wide sale</strong> is ON in Sale &amp; discounts. Leave empty to keep the regular price during sales.
                                     </p>
                                 </div>
                             </div>
@@ -851,7 +851,7 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
                                     </p>
                                 ) : (
                                     <p className="text-rose-800 text-sm">
-                                        Add an optional compare-at above price for a strikethrough, and/or a Sales amount lower than price for promo tracking.
+                                        Add an optional compare-at above price for a strikethrough when no sale is running, and a sale price used when Store-wide sale is on.
                                     </p>
                                 )}
                             </div>

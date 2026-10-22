@@ -119,7 +119,11 @@ function buildCartProductSnapshot(
   const { price, salePrice } = displayPricingForVariant(
     row,
     product.catalogSalePrice ?? null,
-    product.salePromotionEnabled ?? false,
+    {
+      salesActive: product.salePromotionEnabled ?? false,
+      discountPercent: product.discountPercent ?? 0,
+      strictDiscount: product.strictDiscount ?? false,
+    },
   )
 
   return {

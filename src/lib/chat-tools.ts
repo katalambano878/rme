@@ -1,7 +1,7 @@
 import { createAdminClient } from "@/lib/supabase/admin"
 import { listStockFromProduct } from "@/lib/product-metrics"
 import { generateOrderNumber } from "@/lib/utils"
-import { effectivePriceForProduct, effectivePriceForVariant, withResolvedSalePrice } from "@/lib/effective-price"
+import { effectivePriceForProduct, effectivePriceForVariant, parseStorePricing, withResolvedSalePrice, type StorePricing } from "@/lib/effective-price"
 import {
   BRAND_NAME,
   BRAND_TAGLINE,
@@ -77,21 +77,20 @@ const PRODUCT_SELECT = `
 
 // Chat tool prices are read by anonymous users, so the global "sale promotion
 // enabled" toggle should apply here too — exactly like the storefront.
-async function fetchSaleEnabled(client: any): Promise<boolean> {
+async function fetchSaleEnabled(client: any): Promise<StorePricing> {
   try {
     const { data } = await client
       .from("site_settings")
       .select("feature_flags")
       .eq("id", 1)
       .maybeSingle()
-    const flags = (data?.feature_flags as Record<string, unknown> | null) ?? {}
-    return flags.sale_promotion_enabled === true
+    return parseStorePricing(data?.feature_flags)
   } catch {
-    return false
+    return { salesActive: false, discountPercent: 0, strictDiscount: false }
   }
 }
 
-function aggregateProductPricing(p: any, saleEnabled: boolean) {
+function aggregateProductPricing(p: any, saleEnabled: StorePricing | boolean) {
   const priced = withResolvedSalePrice(p)
   const list = Array.isArray(priced?.variants) ? priced.variants : []
   const pricing = effectivePriceForProduct(priced, saleEnabled)
@@ -102,7 +101,7 @@ function aggregateProductPricing(p: any, saleEnabled: boolean) {
   }
 }
 
-function mapProduct(p: any, saleEnabled: boolean): ChatProduct {
+function mapProduct(p: any, saleEnabled: StorePricing | boolean): ChatProduct {
   const { stock, price } = aggregateProductPricing(p, saleEnabled)
   const images = [...(p.product_images || [])].sort(
     (a: any, b: any) => (a.sort_order ?? 0) - (b.sort_order ?? 0),

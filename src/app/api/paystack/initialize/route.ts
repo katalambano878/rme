@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { generateOrderNumber } from "@/lib/utils"
-import { effectivePriceForVariant, withResolvedSalePrice } from "@/lib/effective-price"
+import { effectivePriceForVariant, parseStorePricing, withResolvedSalePrice } from "@/lib/effective-price"
 import { findOption } from "@/lib/variant-options"
 
 export async function POST(req: NextRequest) {
@@ -109,8 +109,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Failed to verify cart" }, { status: 500 })
     }
 
-    const featureFlags = (siteSettingsRes.data?.feature_flags as Record<string, unknown> | null) ?? {}
-    const saleEnabled = featureFlags.sale_promotion_enabled === true
+    const saleEnabled = parseStorePricing(siteSettingsRes.data?.feature_flags)
 
     const productMap = new Map<string, DbProduct>(
       ((productsRes.data as DbProduct[]) || []).map((p) => [p.id, withResolvedSalePrice(p)]),

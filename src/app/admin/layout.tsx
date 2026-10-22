@@ -211,7 +211,7 @@ export default function AdminLayout({
       permissionKey: 'products',
     },
     {
-      title: 'Sales',
+      title: 'Sale & discounts',
       icon: 'ri-price-tag-3-line',
       path: '/admin/sales',
       permissionKey: 'sales',
