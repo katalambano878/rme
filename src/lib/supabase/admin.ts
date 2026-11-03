@@ -1,4 +1,7 @@
-import { createClient as createSupabaseJsClient } from "@supabase/supabase-js"
+import {
+  createClient as createSupabaseJsClient,
+  type SupabaseClient,
+} from "@supabase/supabase-js"
 import { isPlainPostgres } from "@/lib/db/mode"
 import { createClient as createPgClient } from "@/lib/db/supabase-compat"
 
@@ -9,11 +12,12 @@ import { createClient as createPgClient } from "@/lib/db/supabase-compat"
  * Otherwise: hosted Supabase service-role client.
  *
  * Callers treat this as a supabase-js-shaped client; in plain-PG mode the
- * return type is intentionally loose.
+ * compat client implements the subset of that surface the app calls, so it is
+ * typed as a supabase-js client.
  */
-export function createAdminClient(): any {
+export function createAdminClient(): SupabaseClient {
   if (isPlainPostgres()) {
-    return createPgClient()
+    return createPgClient() as unknown as SupabaseClient
   }
 
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL

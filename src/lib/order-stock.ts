@@ -299,3 +299,75 @@ export async function reduceOrderStock(
 
   return { items, errors }
 }
+
+/**
+ * Give an order's stock back when it is cancelled, or take it again when a
+ * cancelled order is reinstated.
+ *
+ * Works only from this order's inventory_movements, so it never guesses:
+ * `order` rows are what payment took (reduceOrderStock); `order_cancel` rows
+ * are what this function has returned or re-taken since. For each variant the
+ * net of all rows should be `-taken` while the order holds stock, and 0 when
+ * it doesn't; we apply only the difference, so repeated calls are harmless.
+ */
+export async function setOrderStockHeld(
+  supabase: SupabaseClient,
+  orderId: string,
+  held: boolean,
+): Promise<{ changed: number; errors: string[] }> {
+  const errors: string[] = []
+  const { data: movements, error } = await supabase
+    .from("inventory_movements")
+    .select("variant_id, quantity_delta, reference_type")
+    .eq("reference_id", orderId)
+    .in("reference_type", ["order", "order_cancel"])
+  if (error) return { changed: 0, errors: [`inventory_movements lookup failed: ${error.message}`] }
+
+  const perVariant = new Map<string, { taken: number; net: number }>()
+  for (const m of (movements || []) as Array<{ variant_id: string | null; quantity_delta: number; reference_type: string }>) {
+    if (!m.variant_id) continue
+    const row = perVariant.get(m.variant_id) ?? { taken: 0, net: 0 }
+    const delta = Number(m.quantity_delta) || 0
+    if (m.reference_type === "order" && delta < 0) row.taken += -delta
+    row.net += delta
+    perVariant.set(m.variant_id, row)
+  }
+
+  let changed = 0
+  for (const [variantId, { taken, net }] of perVariant) {
+    const diff = (held ? -taken : 0) - net
+    if (diff === 0) continue
+
+    const { data: variant, error: vErr } = await supabase
+      .from("variants")
+      .select("stock_quantity")
+      .eq("id", variantId)
+      .maybeSingle()
+    if (vErr || !variant) {
+      errors.push(`variant ${variantId} not found: ${vErr?.message ?? "missing"}`)
+      continue
+    }
+    const next = Math.max(0, (Number(variant.stock_quantity) || 0) + diff)
+    const { error: uErr } = await supabase
+      .from("variants")
+      .update({ stock_quantity: next, updated_at: new Date().toISOString() })
+      .eq("id", variantId)
+    if (uErr) {
+      errors.push(`variant ${variantId} stock update failed: ${uErr.message}`)
+      continue
+    }
+    const { error: mErr } = await supabase.from("inventory_movements").insert({
+      variant_id: variantId,
+      quantity_delta: diff,
+      reason: held ? "order_reinstated" : "order_cancelled",
+      reference_type: "order_cancel",
+      reference_id: orderId,
+    })
+    if (mErr) errors.push(`inventory_movements insert failed: ${mErr.message}`)
+    changed++
+  }
+  return { changed, errors }
+}
+
+/** Statuses in which an order no longer holds stock. */
+export const STOCK_RELEASED_STATUSES = new Set(["cancelled", "refunded"])

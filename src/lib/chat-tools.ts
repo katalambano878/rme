@@ -1,3 +1,4 @@
+import type { SupabaseClient } from "@supabase/supabase-js"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { listStockFromProduct } from "@/lib/product-metrics"
 import { generateOrderNumber } from "@/lib/utils"
@@ -69,6 +70,38 @@ export type ChatCustomerProfile = {
   last_order_at: string | null
 }
 
+// Row shapes read through PRODUCT_SELECT / order selects (supabase-js returns
+// these untyped, so they are described here for the mapping code).
+type ChatVariantRow = {
+  id: string
+  sku?: string | null
+  price: number | string | null
+  sale_price?: number | string | null
+  compare_at_price?: number | string | null
+  stock_quantity?: number | string | null
+}
+
+type ChatProductRow = {
+  id: string
+  name: string
+  slug: string
+  price?: number | string | null
+  sale_price?: number | string | null
+  compare_at_price?: number | string | null
+  quantity?: number | string | null
+  metadata?: Record<string, unknown> | null
+  variants?: ChatVariantRow[] | null
+  product_images?: { url: string; sort_order?: number | null }[] | null
+}
+
+type ChatOrderItemRow = {
+  name_snapshot?: string | null
+  quantity: number
+  unit_price?: number | string | null
+}
+
+type PaymentStatusRow = { status?: string | null }
+
 const PRODUCT_SELECT = `
   id, name, slug, status, description, price, sale_price, compare_at_price, quantity, metadata,
   variants(id, sku, price, sale_price, compare_at_price, stock_quantity),
@@ -77,7 +110,7 @@ const PRODUCT_SELECT = `
 
 // Chat tool prices are read by anonymous users, so the global "sale promotion
 // enabled" toggle should apply here too — exactly like the storefront.
-async function fetchSaleEnabled(client: any): Promise<StorePricing> {
+async function fetchSaleEnabled(client: SupabaseClient): Promise<StorePricing> {
   try {
     const { data } = await client
       .from("site_settings")
@@ -90,7 +123,7 @@ async function fetchSaleEnabled(client: any): Promise<StorePricing> {
   }
 }
 
-function aggregateProductPricing(p: any, saleEnabled: StorePricing | boolean) {
+function aggregateProductPricing(p: ChatProductRow, saleEnabled: StorePricing | boolean) {
   const priced = withResolvedSalePrice(p)
   const list = Array.isArray(priced?.variants) ? priced.variants : []
   const pricing = effectivePriceForProduct(priced, saleEnabled)
@@ -101,10 +134,10 @@ function aggregateProductPricing(p: any, saleEnabled: StorePricing | boolean) {
   }
 }
 
-function mapProduct(p: any, saleEnabled: StorePricing | boolean): ChatProduct {
+function mapProduct(p: ChatProductRow, saleEnabled: StorePricing | boolean): ChatProduct {
   const { stock, price } = aggregateProductPricing(p, saleEnabled)
   const images = [...(p.product_images || [])].sort(
-    (a: any, b: any) => (a.sort_order ?? 0) - (b.sort_order ?? 0),
+    (a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0),
   )
   const moq = 1
   return {
@@ -120,14 +153,14 @@ function mapProduct(p: any, saleEnabled: StorePricing | boolean): ChatProduct {
   }
 }
 
-function paidFromPayments(payments: any[] | undefined) {
+function paidFromPayments(payments: PaymentStatusRow[] | null | undefined) {
   const list = payments || []
   return list.some((p) => p.status === "paid" || p.status === "completed")
 }
 
 // ─── 1. Search Products ───────────────────────────────────────────────────────
 
-export async function searchProducts(supabase: any, query: string, limit = 4): Promise<ChatProduct[]> {
+export async function searchProducts(supabase: SupabaseClient, query: string, limit = 4): Promise<ChatProduct[]> {
   const term = (query || "").trim()
   if (!term) return []
 
@@ -148,7 +181,7 @@ export async function searchProducts(supabase: any, query: string, limit = 4): P
   }
 
   if (data && data.length > 0) {
-    return data.map((p: any) => mapProduct(p, saleEnabled))
+    return data.map((p: ChatProductRow) => mapProduct(p, saleEnabled))
   }
 
   // No exact match — try individual keywords (e.g. "cerave moisturizer" → search "moisturizer")
@@ -162,7 +195,7 @@ export async function searchProducts(supabase: any, query: string, limit = 4): P
       .order("name")
       .limit(limit)
     if (wordData && wordData.length > 0) {
-      return wordData.map((p: any) => mapProduct(p, saleEnabled))
+      return wordData.map((p: ChatProductRow) => mapProduct(p, saleEnabled))
     }
   }
 
@@ -183,7 +216,7 @@ export async function searchProducts(supabase: any, query: string, limit = 4): P
       .order("name")
       .limit(limit)
     if (catProducts && catProducts.length > 0) {
-      return catProducts.map((p: any) => mapProduct(p, saleEnabled))
+      return catProducts.map((p: ChatProductRow) => mapProduct(p, saleEnabled))
     }
   }
 
@@ -192,7 +225,7 @@ export async function searchProducts(supabase: any, query: string, limit = 4): P
 
 // ─── 2. Get Product for Cart ────────────────────────────────────────────────
 
-export async function getProductForCart(supabase: any, slugOrId: string): Promise<ChatProduct | null> {
+export async function getProductForCart(supabase: SupabaseClient, slugOrId: string): Promise<ChatProduct | null> {
   if (!slugOrId?.trim()) return null
   const trimmed = slugOrId.trim()
   const isId = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(trimmed)
@@ -206,7 +239,7 @@ export async function getProductForCart(supabase: any, slugOrId: string): Promis
 
 // ─── 3. Track Order ───────────────────────────────────────────────────────────
 
-export async function trackOrder(supabase: any, orderNumber: string, email: string): Promise<ChatOrder | null> {
+export async function trackOrder(supabase: SupabaseClient, orderNumber: string, email: string): Promise<ChatOrder | null> {
   if (!orderNumber?.trim() || !email?.trim()) return null
   const num = orderNumber.trim()
   const emailLower = email.trim().toLowerCase()
@@ -256,7 +289,7 @@ export async function trackOrder(supabase: any, orderNumber: string, email: stri
     total: Number(row.grand_total) || 0,
     created_at: row.created_at,
     tracking_number: undefined,
-    items: (row.order_items || []).map((i: any) => ({
+    items: (row.order_items || []).map((i: ChatOrderItemRow) => ({
       name: i.name_snapshot || "Item",
       quantity: i.quantity,
       price: Number(i.unit_price) || 0,
@@ -266,7 +299,7 @@ export async function trackOrder(supabase: any, orderNumber: string, email: stri
 
 // ─── 4. Get Customer Orders ───────────────────────────────────────────────────
 
-export async function getCustomerOrders(supabase: any, userId: string, limit = 5): Promise<ChatOrder[]> {
+export async function getCustomerOrders(supabase: SupabaseClient, userId: string, limit = 5): Promise<ChatOrder[]> {
   if (!userId) return []
 
   const { data, error } = await supabase
@@ -284,7 +317,7 @@ export async function getCustomerOrders(supabase: any, userId: string, limit = 5
 
   if (error || !data) return []
 
-  return data.map((o: any) => ({
+  return data.map((o) => ({
     id: o.id,
     order_number: o.order_number,
     status: o.status,
@@ -292,7 +325,7 @@ export async function getCustomerOrders(supabase: any, userId: string, limit = 5
     total: Number(o.grand_total) || 0,
     created_at: o.created_at,
     tracking_number: undefined,
-    items: (o.order_items || []).map((i: any) => ({
+    items: (o.order_items || []).map((i: ChatOrderItemRow) => ({
       name: i.name_snapshot || "Item",
       quantity: i.quantity,
       price: Number(i.unit_price) || 0,
@@ -302,7 +335,7 @@ export async function getCustomerOrders(supabase: any, userId: string, limit = 5
 
 // ─── 5. Check Coupon ──────────────────────────────────────────────────────────
 
-export async function checkCoupon(supabase: any, code: string, cartTotal?: number): Promise<ChatCoupon> {
+export async function checkCoupon(supabase: SupabaseClient, code: string, cartTotal?: number): Promise<ChatCoupon> {
   const trimmed = (code || "").trim().toUpperCase()
   if (!trimmed) return { valid: false, code: trimmed, reason: "No code provided." }
 
@@ -353,7 +386,7 @@ export async function checkCoupon(supabase: any, code: string, cartTotal?: numbe
 // ─── 6. Create Support Ticket ────────────────────────────────────────────────
 
 export async function createSupportTicket(
-  supabase: any,
+  supabase: SupabaseClient,
   params: { userId?: string; email: string; subject: string; description: string; category?: string },
 ): Promise<ChatTicket | null> {
   const { userId, email, subject, description, category } = params
@@ -401,7 +434,7 @@ export async function createSupportTicket(
 // ─── 7. Initiate Return ─────────────────────────────────────────────────────
 
 export async function initiateReturn(
-  supabase: any,
+  supabase: SupabaseClient,
   params: { userId: string; orderId: string; reason: string; description: string },
 ): Promise<ChatReturn | null> {
   const { userId, orderId, reason, description } = params
@@ -441,7 +474,7 @@ export async function initiateReturn(
 
 // ─── 8. Get Recommendations ───────────────────────────────────────────────────
 
-export async function getRecommendations(supabase: any, context?: string): Promise<ChatProduct[]> {
+export async function getRecommendations(supabase: SupabaseClient, context?: string): Promise<ChatProduct[]> {
   let q = supabase.from("products").select(PRODUCT_SELECT).eq("status", "active")
   if (context?.trim()) {
     q = q.or(`name.ilike.%${context.trim()}%,description.ilike.%${context.trim()}%`)
@@ -450,7 +483,7 @@ export async function getRecommendations(supabase: any, context?: string): Promi
 
   if (error || !data) return []
   const saleEnabled = await fetchSaleEnabled(supabase)
-  const mapped = data.map((p: any) => mapProduct(p, saleEnabled)).filter((p: ChatProduct) => p.inStock)
+  const mapped = data.map((p: ChatProductRow) => mapProduct(p, saleEnabled)).filter((p: ChatProduct) => p.inStock)
   return mapped.slice(0, 4)
 }
 
@@ -475,7 +508,7 @@ export function getStoreInfo(topic: string): string {
 
 // ─── 10. Get Customer Profile ────────────────────────────────────────────────
 
-export async function getCustomerProfile(supabase: any, userId: string): Promise<ChatCustomerProfile | null> {
+export async function getCustomerProfile(supabase: SupabaseClient, userId: string): Promise<ChatCustomerProfile | null> {
   if (!userId) return null
 
   const { data: profile } = await supabase.from("profiles").select("full_name, email").eq("id", userId).single()
@@ -571,7 +604,7 @@ function sanitize(input: string): string {
 }
 
 export async function createChatOrder(
-  supabaseFallback: any,
+  supabaseFallback: SupabaseClient,
   params: {
     items: ChatOrderItem[]
     shipping: ChatShippingInfo
@@ -580,7 +613,7 @@ export async function createChatOrder(
     userId?: string | null
   },
 ): Promise<ChatOrderResult> {
-  let admin: any
+  let admin: SupabaseClient
   try {
     admin = createAdminClient()
   } catch {
@@ -650,7 +683,7 @@ export async function createChatOrder(
       return { success: false, message: "Could not find the requested products. They may no longer be available." }
     }
 
-    const productMap = new Map<string, any>(products.map((p: any) => [p.id, p]))
+    const productMap = new Map<string, ChatProductRow>(products.map((p: ChatProductRow) => [p.id, p]))
 
     const saleEnabled = await fetchSaleEnabled(admin)
 
@@ -668,8 +701,8 @@ export async function createChatOrder(
 
     let subtotal = 0
     const lineDetails: {
-      product: any
-      variant: any
+      product: ChatProductRow
+      variant: ChatVariantRow
       qty: number
       unit: number
     }[] = []
@@ -677,7 +710,7 @@ export async function createChatOrder(
     for (const item of items) {
       const p = productMap.get(item.productId)!
       const vars = p.variants || []
-      const sorted = [...vars].sort((a: any, b: any) => Number(a.price) - Number(b.price))
+      const sorted = [...vars].sort((a, b) => Number(a.price) - Number(b.price))
       const v = sorted[0]
       if (!v) return { success: false, message: `Product "${p.name}" has no purchasable variant.` }
       // Honor sale_price / compare_at_price the same way the storefront does,
@@ -852,7 +885,7 @@ export async function createChatOrder(
       total,
       message: `Order ${orderNumber} created (GH₵${total.toFixed(2)}). Open Checkout from the site to pay with Mobile Money.`,
     }
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("[ChatTools] createChatOrder:", err)
     return { success: false, message: "Something went wrong. Please use the checkout page on the website." }
   }

@@ -9,10 +9,59 @@ import { supabase } from '@/lib/supabase';
 // Customer segmentation thresholds — edit here or override in site_settings.feature_flags
 const VIP_THRESHOLD = 1000  // GH₵ lifetime spend to qualify as VIP
 
+type ProfileRow = {
+  id: string;
+  full_name?: string | null;
+  email: string;
+  phone?: string | null;
+  created_at: string;
+};
+
+type CustomerOrderRow = {
+  id: string;
+  user_id: string | null;
+  guest_email: string | null;
+  grand_total: number | string | null;
+  created_at: string;
+  status: string;
+  shipping_address?: {
+    firstName?: string;
+    lastName?: string;
+    full_name?: string;
+    phone?: string;
+  } | null;
+};
+
+type GuestAggregate = {
+  email: string;
+  name: string;
+  phone: string;
+  orders: number;
+  totalSpent: number;
+  firstOrder: Date;
+  lastOrder: Date;
+};
+
+type CustomerListItem = {
+  id: string;
+  name: string;
+  email: string;
+  phone: string;
+  avatar: string;
+  orders: number;
+  totalSpent: number;
+  joined: string;
+  lastOrder: string;
+  status: string;
+  rawJoined: Date;
+  rawLastOrder: Date | null;
+  isGuest: boolean;
+};
+
 export default function AdminCustomersPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCustomers, setSelectedCustomers] = useState<string[]>([]);
-  const [customers, setCustomers] = useState<any[]>([]);
+  const [customers, setCustomers] = useState<CustomerListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [sortOption, setSortOption] = useState('Sort by Join Date');
   const [filterStatus, setFilterStatus] = useState('All Customers');
@@ -43,12 +92,13 @@ export default function AdminCustomersPage() {
 
       if (pError) throw pError;
 
-      const { data: orders } = await supabase
+      const { data: ordersData } = await supabase
         .from('orders')
         .select('id, user_id, guest_email, grand_total, created_at, status, shipping_address');
+      const orders = ordersData as CustomerOrderRow[] | null;
 
       // Process registered users
-      const registeredCustomers = (profiles || []).map((profile: any) => {
+      const registeredCustomers = ((profiles || []) as ProfileRow[]).map((profile): CustomerListItem => {
         const userOrders = orders?.filter(o => o.user_id === profile.id && o.status !== 'cancelled') || [];
         const totalSpent = userOrders.reduce((sum, o) => sum + Number(o.grand_total || 0), 0);
         let lastOrderDate: Date | null = null;
@@ -79,8 +129,8 @@ export default function AdminCustomersPage() {
       });
 
       // Process guest orders (no user_id)
-      const guestOrders = orders?.filter(o => !o.user_id && o.guest_email) || [];
-      const guestMap = new Map<string, any>();
+      const guestOrders = orders?.filter((o): o is CustomerOrderRow & { guest_email: string } => !o.user_id && !!o.guest_email) || [];
+      const guestMap = new Map<string, GuestAggregate>();
 
       guestOrders.forEach(order => {
         const existing = guestMap.get(order.guest_email);
@@ -112,7 +162,7 @@ export default function AdminCustomersPage() {
         }
       });
 
-      const guestCustomers = Array.from(guestMap.values()).map((guest, idx) => {
+      const guestCustomers = Array.from(guestMap.values()).map((guest, idx): CustomerListItem => {
         let status = 'New';
         if (guest.totalSpent > 1000) status = 'VIP';
         else if (guest.orders > 0) status = 'Active';
@@ -165,7 +215,7 @@ export default function AdminCustomersPage() {
     return "Just now";
   }
 
-  const statusColors: any = {
+  const statusColors: Record<string, string> = {
     'New': 'bg-rose-100 text-rose-800',
     'Active': 'bg-rose-100 text-rose-800',
     'VIP': 'bg-purple-100 text-purple-700',

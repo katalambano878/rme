@@ -67,7 +67,7 @@ export async function POST(request: Request) {
       language: data.language || 'en',
       duration: data.duration || 0,
     });
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error('[Transcribe API] Error:', err);
     return NextResponse.json({ error: 'Transcription error' }, { status: 500 });
   }

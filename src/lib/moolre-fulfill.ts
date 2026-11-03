@@ -1,10 +1,9 @@
+import type { SupabaseClient } from "@supabase/supabase-js"
 import { sendOrderConfirmation } from "@/lib/notifications"
 import { reduceOrderStock } from "@/lib/order-stock"
 import { amountMatchesOrder } from "@/lib/moolre-status"
 
-type AdminClient = {
-  from: (table: string) => any
-}
+type AdminClient = SupabaseClient
 
 export type FulfillOrder = {
   id: string
@@ -232,7 +231,7 @@ export async function fulfillMoolrePaidOrder(
   if (orderUpdateErr) console.error("[Moolre fulfill] order update:", orderUpdateErr.message)
 
   try {
-    const stockResult = await reduceOrderStock(supabase as any, order.id)
+    const stockResult = await reduceOrderStock(supabase, order.id)
     if (stockResult.skipped) {
       console.log("[Moolre fulfill] stock skipped", orderNumber)
     } else if (stockResult.errors.length) {

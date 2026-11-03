@@ -6,6 +6,35 @@ import { supabase } from '@/lib/supabase';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { adminImageSrc } from '@/lib/product-image';
 
+type DashboardOrderRow = {
+  id: string;
+  order_number: string;
+  user_id: string | null;
+  guest_email: string | null;
+  status: string;
+  grand_total: number | null;
+  created_at: string;
+  shipping_address: { firstName?: string; lastName?: string; full_name?: string } | null;
+  payments: { status: string; amount?: number | string | null }[] | null;
+};
+
+type RecentOrder = {
+  id: string;
+  displayId: string;
+  customer: string;
+  email: string;
+  date: string;
+  total: number;
+  status: string;
+  paymentStatus: string;
+  items: number;
+};
+
+type LowStockProduct = { name: string; stock: number; status: string };
+type TopProduct = { id: string; name: string; image: string | null; sales: number; revenue: number; stock: number };
+type ChartPoint = { date: string; revenue: number };
+type StockVariant = { stock_quantity: number | string | null };
+
 export default function AdminDashboard() {
   const [dateRange, setDateRange] = useState('7days'); // logic not implemented for this demo, just UI
   const [loading, setLoading] = useState(true);
@@ -46,10 +75,10 @@ export default function AdminDashboard() {
     }
   ]);
 
-  const [recentOrders, setRecentOrders] = useState<any[]>([]);
-  const [lowStockProducts, setLowStockProducts] = useState<any[]>([]);
-  const [topProducts, setTopProducts] = useState<any[]>([]);
-  const [chartData, setChartData] = useState<any[]>([]);
+  const [recentOrders, setRecentOrders] = useState<RecentOrder[]>([]);
+  const [lowStockProducts, setLowStockProducts] = useState<LowStockProduct[]>([]);
+  const [topProducts, setTopProducts] = useState<TopProduct[]>([]);
+  const [chartData, setChartData] = useState<ChartPoint[]>([]);
 
   useEffect(() => {
     async function fetchDashboardData() {
@@ -68,39 +97,39 @@ export default function AdminDashboard() {
 
         if (ordersError) throw ordersError;
 
-        const allOrders = allOrdersData || [];
+        const allOrders = (allOrdersData || []) as DashboardOrderRow[];
 
         // Paid orders helper
-        const isPaid = (o: any) =>
-          (o.payments || []).some((p: any) => p.status === 'paid' || p.status === 'completed') ||
+        const isPaid = (o: DashboardOrderRow) =>
+          (o.payments || []).some((p) => p.status === 'paid' || p.status === 'completed') ||
           o.status === 'paid';
 
         // All-time paid
         const paidOrders = allOrders.filter(isPaid);
-        const totalRevenue    = paidOrders.reduce((s: number, o: any) => s + (Number(o.grand_total) || 0), 0);
+        const totalRevenue    = paidOrders.reduce((s: number, o) => s + (Number(o.grand_total) || 0), 0);
         const totalOrders     = allOrders.length;
         const paidOrderCount  = paidOrders.length;
         const avgOrderValue   = paidOrderCount > 0 ? totalRevenue / paidOrderCount : 0;
 
         const uniqueCustomers = new Set(
-          allOrders.map((o: any) => o.guest_email || o.user_id).filter(Boolean),
+          allOrders.map((o) => o.guest_email || o.user_id).filter(Boolean),
         ).size;
 
         // Current period (last 7 days) metrics
-        const curOrders  = allOrders.filter((o: any) => o.created_at >= periodStartISO);
-        const priorOrders = allOrders.filter((o: any) => o.created_at >= priorStartISO && o.created_at < periodStartISO);
+        const curOrders  = allOrders.filter((o) => o.created_at >= periodStartISO);
+        const priorOrders = allOrders.filter((o) => o.created_at >= priorStartISO && o.created_at < periodStartISO);
 
         const curPaid   = curOrders.filter(isPaid);
         const priorPaid = priorOrders.filter(isPaid);
 
-        const curRevenue   = curPaid.reduce((s: number, o: any) => s + (Number(o.grand_total) || 0), 0);
-        const priorRevenue = priorPaid.reduce((s: number, o: any) => s + (Number(o.grand_total) || 0), 0);
+        const curRevenue   = curPaid.reduce((s: number, o) => s + (Number(o.grand_total) || 0), 0);
+        const priorRevenue = priorPaid.reduce((s: number, o) => s + (Number(o.grand_total) || 0), 0);
 
         const curAOV   = curPaid.length   > 0 ? curRevenue   / curPaid.length   : 0;
         const priorAOV = priorPaid.length > 0 ? priorRevenue / priorPaid.length : 0;
 
-        const curCustomers   = new Set(curOrders.map((o: any)   => o.guest_email || o.user_id).filter(Boolean)).size;
-        const priorCustomers = new Set(priorOrders.map((o: any) => o.guest_email || o.user_id).filter(Boolean)).size;
+        const curCustomers   = new Set(curOrders.map((o)   => o.guest_email || o.user_id).filter(Boolean)).size;
+        const priorCustomers = new Set(priorOrders.map((o) => o.guest_email || o.user_id).filter(Boolean)).size;
 
         function pctChange(cur: number, prior: number): string {
           if (prior === 0) return cur > 0 ? '+100%' : '0%';
@@ -115,12 +144,12 @@ export default function AdminDashboard() {
           return d.toISOString().split('T')[0];
         });
 
-        const chartMap = last7Days.reduce((acc: any, date) => {
+        const chartMap = last7Days.reduce((acc: Record<string, number>, date) => {
           acc[date] = 0;
           return acc;
         }, {});
 
-        paidOrders.forEach((order: any) => {
+        paidOrders.forEach((order) => {
           const date = new Date(order.created_at).toISOString().split('T')[0];
           if (chartMap[date] !== undefined) {
             chartMap[date] += (Number(order.grand_total) || 0);
@@ -176,12 +205,12 @@ export default function AdminDashboard() {
           .limit(5);
 
         if (recentOrdersData) {
-          const formattedRecent = recentOrdersData.map((o: any) => {
-            const addr = o.shipping_address || {};
+          const formattedRecent = (recentOrdersData as DashboardOrderRow[]).map((o): RecentOrder => {
+            const addr: NonNullable<DashboardOrderRow['shipping_address']> = o.shipping_address || {};
             const customerName = (addr.firstName && addr.lastName)
               ? `${addr.firstName.trim()} ${addr.lastName.trim()}`
               : addr.full_name || addr.firstName || o.guest_email?.split('@')[0] || 'Customer';
-            const paymentStatus = (o.payments || []).some((p: any) => p.status === 'paid') ? 'paid' : 'pending';
+            const paymentStatus = (o.payments || []).some((p) => p.status === 'paid') ? 'paid' : 'pending';
             return {
               id: o.id,
               displayId: o.order_number,
@@ -204,10 +233,11 @@ export default function AdminDashboard() {
           .limit(5);
 
         if (lowStockData) {
-          const normalized = lowStockData
-            .map((p: any) => {
+          const normalized =
+            (lowStockData as { name: string; variants: StockVariant[] | null }[])
+            .map((p): LowStockProduct => {
               const stock = (p.variants || []).reduce(
-                (sum: number, v: any) => sum + (Number(v.stock_quantity) || 0),
+                (sum: number, v) => sum + (Number(v.stock_quantity) || 0),
                 0,
               );
               return {
@@ -216,7 +246,7 @@ export default function AdminDashboard() {
                 status: stock === 0 ? 'critical' : 'low',
               };
             })
-            .filter((p: any) => p.stock < 10)
+            .filter((p) => p.stock < 10)
             .slice(0, 5);
           setLowStockProducts(normalized);
         }
@@ -227,7 +257,7 @@ export default function AdminDashboard() {
           .select('product_id, quantity, line_total');
 
         const salesMap = new Map<string, { qty: number; revenue: number }>();
-        for (const item of itemsData ?? []) {
+        for (const item of (itemsData ?? []) as { product_id: string | null; quantity: number | string | null; line_total: number | string | null }[]) {
           if (!item.product_id) continue;
           const prev = salesMap.get(item.product_id) ?? { qty: 0, revenue: 0 };
           salesMap.set(item.product_id, {
@@ -243,16 +273,21 @@ export default function AdminDashboard() {
           .limit(10);
 
         if (productData) {
-          const ranked = productData
-            .map((p: any) => ({
+          const ranked = (productData as {
+            id: string;
+            name: string;
+            product_images: { url: string; sort_order: number | null }[] | null;
+            variants: StockVariant[] | null;
+          }[])
+            .map((p): TopProduct => ({
               id: p.id,
               name: p.name,
-              image: p.product_images?.find((img: any) => img.sort_order === 0)?.url || p.product_images?.[0]?.url || null,
+              image: p.product_images?.find((img) => img.sort_order === 0)?.url || p.product_images?.[0]?.url || null,
               sales: salesMap.get(p.id)?.qty ?? 0,
               revenue: salesMap.get(p.id)?.revenue ?? 0,
-              stock: (p.variants || []).reduce((sum: number, v: any) => sum + (Number(v.stock_quantity) || 0), 0),
+              stock: (p.variants || []).reduce((sum: number, v) => sum + (Number(v.stock_quantity) || 0), 0),
             }))
-            .sort((a: any, b: any) => b.sales - a.sales)
+            .sort((a, b) => b.sales - a.sales)
             .slice(0, 4);
           setTopProducts(ranked);
         }
@@ -267,7 +302,7 @@ export default function AdminDashboard() {
     fetchDashboardData();
   }, []);
 
-  const statusColors: any = {
+  const statusColors: Record<string, string> = {
     'pending': 'bg-amber-100 text-amber-700',
     'processing': 'bg-rose-100 text-rose-800',
     'shipped': 'bg-purple-100 text-purple-700',
@@ -304,7 +339,7 @@ export default function AdminDashboard() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
-            <p className="text-gray-600 mt-1 text-sm">Welcome back! Here's what's happening with your store.</p>
+            <p className="text-gray-600 mt-1 text-sm">Welcome back! Here&apos;s what&apos;s happening with your store.</p>
           </div>
         </div>
 

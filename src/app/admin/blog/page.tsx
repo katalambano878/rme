@@ -17,6 +17,19 @@ type BlogPostListItem = {
   publishDate: string;
 };
 
+type BlogPostQueryRow = {
+  id: string;
+  title: string | null;
+  slug: string | null;
+  excerpt: string | null;
+  category: string | null;
+  cover_image_url: string | null;
+  published: boolean | null;
+  published_at: string | null;
+  updated_at: string | null;
+  created_at: string | null;
+};
+
 const PLACEHOLDER_IMG = null;
 
 export default function AdminBlogPage() {
@@ -37,16 +50,16 @@ export default function AdminBlogPage() {
         .select('id, title, slug, excerpt, category, cover_image_url, published, published_at, updated_at, created_at')
         .order('updated_at', { ascending: false });
       if (error) throw error;
-      const mapped: BlogPostListItem[] = (data ?? []).map((p: any) => {
+      const mapped: BlogPostListItem[] = ((data ?? []) as BlogPostQueryRow[]).map((p) => {
         const published = Boolean(p.published);
         const dateRaw = p.published_at || p.updated_at || p.created_at;
         return {
           id: p.id,
           title: p.title ?? 'Untitled',
           slug: p.slug ?? '',
-          category: (p.category as string)?.trim() || 'Uncategorized',
-          image: (p.cover_image_url as string)?.trim() || PLACEHOLDER_IMG,
-          excerpt: (p.excerpt as string)?.trim() || '—',
+          category: p.category?.trim() || 'Uncategorized',
+          image: p.cover_image_url?.trim() || PLACEHOLDER_IMG,
+          excerpt: p.excerpt?.trim() || '—',
           status: published ? 'Published' : 'Draft',
           publishDate: dateRaw ? new Date(dateRaw).toLocaleDateString(undefined, { dateStyle: 'medium' }) : '—',
         };

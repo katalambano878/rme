@@ -499,7 +499,7 @@ export default function ChatWidget() {
       setIsRecording(true);
       setRecordingDuration(0);
       recordingTimerRef.current = setInterval(() => setRecordingDuration(d => d + 1), 1000);
-    } catch (err: any) {
+    } catch (err) {
       console.error('Mic error:', err);
     }
   }, [stopAllAudio]);

@@ -92,5 +92,8 @@ export const RATE_LIMITS = {
   loginEmail: { maxRequests: 8, windowSeconds: 15 * 60 },
   signup: { maxRequests: 5, windowSeconds: 60 * 60 },
   orderCreate: { maxRequests: 10, windowSeconds: 10 * 60 },
+  // Forgot-password emails/SMS: per IP and per address.
+  passwordReset: { maxRequests: 5, windowSeconds: 60 * 60 },
+  passwordResetEmail: { maxRequests: 3, windowSeconds: 60 * 60 },
   default: { maxRequests: 100, windowSeconds: 60 },
 }

@@ -22,8 +22,8 @@ export async function POST(request: Request) {
         }
 
         return NextResponse.json({ success: true, score: result.score });
-    } catch (error: any) {
-        console.error('[reCAPTCHA API] Error:', error.message);
+    } catch (error: unknown) {
+        console.error('[reCAPTCHA API] Error:', (error as Error).message);
         return NextResponse.json(
             { success: false, error: 'Internal server error' },
             { status: 500 }

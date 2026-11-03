@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
+import { adminFetch } from '@/lib/admin-fetch';
 
 interface Module {
   id: string;
@@ -127,8 +128,9 @@ export default function ModulesPage() {
 
       if (data) {
         setModules(prev => prev.map(m => {
-          const dbState = data.find((d: any) => d.id === m.id);
-          return dbState ? { ...m, enabled: dbState.enabled } : m;
+          const dbState = (data as { id: string; enabled: boolean }[]).find((d) => d.id === m.id);
+          // No saved row means on, matching the admin menu (layout.tsx).
+          return { ...m, enabled: dbState ? dbState.enabled : true };
         }));
       }
     } catch (err) {
@@ -172,14 +174,32 @@ export default function ModulesPage() {
   const [isLocked, setIsLocked] = useState(true);
   const [pin, setPin] = useState('');
   const [pinError, setPinError] = useState('');
+  const [checkingPin, setCheckingPin] = useState(false);
 
-  const handleUnlock = (e: React.FormEvent) => {
+  // The PIN is checked on the server (MODULES_PIN); with none set, the page opens.
+  useEffect(() => {
+    let cancelled = false;
+    adminFetch<{ pinRequired?: boolean }>('/api/admin/modules/unlock')
+      .then((json) => {
+        if (!cancelled && json.pinRequired === false) setIsLocked(false);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const handleUnlock = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (pin === '6526') {
+    setCheckingPin(true);
+    try {
+      await adminFetch('/api/admin/modules/unlock', { method: 'POST', body: JSON.stringify({ pin }) });
       setIsLocked(false);
-    } else {
-      setPinError('Incorrect PIN');
+    } catch (err) {
+      setPinError(err instanceof Error ? err.message : 'Could not check the PIN. Try again.');
       setPin('');
+    } finally {
+      setCheckingPin(false);
     }
   };
 
@@ -213,9 +233,10 @@ export default function ModulesPage() {
             )}
             <button
               type="submit"
-              className="w-full bg-gray-900 hover:bg-rose-600 text-white font-bold py-4 rounded-xl transition-colors text-lg"
+              disabled={checkingPin}
+              className="w-full bg-gray-900 hover:bg-rose-600 text-white font-bold py-4 rounded-xl transition-colors text-lg disabled:opacity-60"
             >
-              Unlock Dashboard
+              {checkingPin ? 'Checking…' : 'Unlock Dashboard'}
             </button>
           </form>
 

@@ -50,7 +50,7 @@ export function useRecaptcha() {
             }
 
             return true;
-        } catch (err: any) {
+        } catch (err: unknown) {
             console.error('[reCAPTCHA] Hook error:', err);
             setError('Verification error. Please try again.');
             return false;

@@ -11,15 +11,52 @@ import { listSkuRaw, listStockFromProduct } from '@/lib/product-metrics';
 import { effectivePriceForProduct, parseStorePricing, withResolvedSalePrice } from '@/lib/effective-price';
 import { adminImageSrc } from '@/lib/product-image';
 
+type ProductListRow = {
+  id: string;
+  name: string;
+  status: string;
+  created_at: string;
+  sku?: string | null;
+  price?: number | string | null;
+  sale_price?: number | string | null;
+  compare_at_price?: number | string | null;
+  quantity?: number | string | null;
+  metadata?: Record<string, unknown> | null;
+  rating_avg?: number | null;
+  categories?: { name: string | null } | null;
+  variants?: {
+    price: number | string | null;
+    sale_price: number | string | null;
+    compare_at_price: number | string | null;
+    stock_quantity: number | string | null;
+    sku: string | null;
+  }[] | null;
+  product_images?: { url: string; sort_order: number | null }[] | null;
+};
+
+type ProductListItem = Omit<ProductListRow, 'price' | 'sku'> & {
+  category: string;
+  image: string | null;
+  variantsCount: number;
+  stock: number;
+  sku: string | null;
+  displaySku: string;
+  price: number;
+  originalPrice: number;
+  onSale: boolean;
+  sales: number;
+  rating: number;
+};
+
 export default function ProductsPage() {
   const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
   const [sortBy, setSortBy] = useState('newest');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedProducts, setSelectedProducts] = useState<string[]>([]);
   const [showFilters, setShowFilters] = useState(false);
-  const [products, setProducts] = useState<any[]>([]);
+  const [products, setProducts] = useState<ProductListItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [categories, setCategories] = useState<any[]>([]);
+  const [categories, setCategories] = useState<{ name: string }[]>([]);
   // Statistics
   const [stats, setStats] = useState({
     total: 0,
@@ -28,7 +65,7 @@ export default function ProductsPage() {
     active: 0
   });
 
-  const statusColors: any = {
+  const statusColors: Record<string, string> = {
     'active': 'bg-rose-100 text-rose-800',
     'draft': 'bg-gray-100 text-gray-700',
     'archived': 'bg-amber-100 text-amber-700',
@@ -77,7 +114,7 @@ export default function ProductsPage() {
       }
 
       if (data) {
-        const transformedProducts = data.map((p: any) => {
+        const transformedProducts = (data as ProductListRow[]).map((p): ProductListItem => {
           const variants = p.variants || [];
           const pricing = effectivePriceForProduct(withResolvedSalePrice(p), saleEnabled);
           const computedStock = listStockFromProduct(p);
@@ -87,7 +124,7 @@ export default function ProductsPage() {
             ...p,
             category: p.categories?.name || 'Uncategorized',
             image:
-              p.product_images?.find((img: any) => img.sort_order === 0)?.url ||
+              p.product_images?.find((img) => img.sort_order === 0)?.url ||
               p.product_images?.[0]?.url ||
               null,
             variantsCount: variants.length,
@@ -159,8 +196,8 @@ export default function ProductsPage() {
       if (error) throw error;
       setProducts(products.filter((p) => p.id !== productId));
       alert('Product deleted successfully');
-    } catch (err: any) {
-      const m = String(err?.message || '')
+    } catch (err) {
+      const m = String((err && typeof err === 'object' && 'message' in err ? err.message : '') || '')
       const blocked =
         /order_items|order item|foreign key|23503|violates foreign key/i.test(m)
       alert(
@@ -298,7 +335,7 @@ export default function ProductsPage() {
             <div className="mt-4 p-4 bg-gray-50 rounded-lg grid md:grid-cols-4 gap-4">
               <select className="px-3 py-2 pr-8 border-2 border-gray-300 rounded-lg text-sm cursor-pointer">
                 <option value="">All Categories</option>
-                {categories.map((cat: any) => <option key={cat.name} value={cat.name}>{cat.name}</option>)}
+                {categories.map((cat) => <option key={cat.name} value={cat.name}>{cat.name}</option>)}
               </select>
               <select className="px-3 py-2 pr-8 border-2 border-gray-300 rounded-lg text-sm cursor-pointer">
                 <option>All Status</option>

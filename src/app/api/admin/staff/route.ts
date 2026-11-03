@@ -52,7 +52,7 @@ export async function POST(request: NextRequest) {
     const email = typeof body.email === 'string' ? body.email.trim().toLowerCase() : '';
     const password = typeof body.password === 'string' ? body.password : '';
     const fullName = typeof body.fullName === 'string' ? body.fullName.trim() : '';
-    let role = typeof body.role === 'string' ? body.role.trim() : 'staff';
+    const role = typeof body.role === 'string' ? body.role.trim() : 'staff';
 
     if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       return NextResponse.json({ error: 'Valid email is required' }, { status: 400 });

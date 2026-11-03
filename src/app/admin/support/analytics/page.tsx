@@ -7,8 +7,29 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 
 const COLORS = ['#f472b6', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16'];
 
+type SupportSummary = {
+  totalConversations: number;
+  totalTickets: number;
+  totalFeedback: number;
+  avgRating: string;
+  aiHandled: number;
+  escalated: number;
+  resolved: number;
+  avgResolutionHours: string;
+  avgFirstResponseMinutes: string;
+};
+
+type SupportAnalytics = {
+  summary?: SupportSummary;
+  categoryBreakdown?: Record<string, number>;
+  sentimentBreakdown?: { positive: number; neutral: number; negative: number };
+  ratingDistribution?: number[];
+  dailyData?: Record<string, string | number | null>[];
+  ticketStatusBreakdown?: Record<string, number>;
+};
+
 export default function SupportAnalyticsPage() {
-  const [data, setData] = useState<any>(null);
+  const [data, setData] = useState<SupportAnalytics | null>(null);
   const [loading, setLoading] = useState(true);
   const [days, setDays] = useState(30);
 
@@ -17,7 +38,7 @@ export default function SupportAnalyticsPage() {
   async function fetchAnalytics() {
     setLoading(true);
     try {
-      setData(await adminFetch(`/api/support/analytics?days=${days}`));
+      setData(await adminFetch<SupportAnalytics>(`/api/support/analytics?days=${days}`));
     } catch (e) {
       console.error('Support analytics failed:', e);
       setData(null);
@@ -39,7 +60,8 @@ export default function SupportAnalyticsPage() {
     );
   }
 
-  const s = data?.summary || {};
+  const s: Partial<SupportSummary> = data?.summary || {};
+  const totalConversations = s.totalConversations ?? 0;
   const catData = Object.entries(data?.categoryBreakdown || {}).map(([name, value]) => ({ name, value }));
   const sentData = [
     { name: 'Positive', value: data?.sentimentBreakdown?.positive || 0 },
@@ -50,8 +72,8 @@ export default function SupportAnalyticsPage() {
   const ticketStatusData = Object.entries(data?.ticketStatusBreakdown || {}).map(([name, value]) => ({ name: name.replace(/_/g, ' '), value }));
   const sentColors = ['#f472b6', '#94a3b8', '#ef4444'];
 
-  const aiRate = s.totalConversations > 0 ? ((s.aiHandled / s.totalConversations) * 100).toFixed(0) : '0';
-  const escalationRate = s.totalConversations > 0 ? ((s.escalated / s.totalConversations) * 100).toFixed(0) : '0';
+  const aiRate = totalConversations > 0 ? (((s.aiHandled ?? 0) / totalConversations) * 100).toFixed(0) : '0';
+  const escalationRate = totalConversations > 0 ? (((s.escalated ?? 0) / totalConversations) * 100).toFixed(0) : '0';
 
   return (
     <div className="space-y-6">
@@ -167,7 +189,7 @@ export default function SupportAnalyticsPage() {
       </div>
 
       {/* Daily Trends */}
-      {data?.dailyData?.length > 0 && (
+      {(data?.dailyData?.length ?? 0) > 0 && (
         <div className="bg-white rounded-xl border border-gray-100 p-4">
           <h3 className="text-sm font-semibold text-gray-900 mb-4">Daily Trends</h3>
           <div className="h-[300px]">

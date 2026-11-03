@@ -12,12 +12,42 @@ interface Product {
     price: number;
     quantity: number;
     category: string;
-    image: string;
+    image: string | null;
     sku: string;
 }
 
 interface CartItem extends Product {
     cartQuantity: number;
+}
+
+interface PosProductRow {
+    id: string;
+    name: string;
+    slug: string;
+    sku: string | null;
+    price: number | string | null;
+    sale_price: number | string | null;
+    compare_at_price: number | string | null;
+    quantity: number | string | null;
+    metadata: Record<string, unknown> | null;
+    categories: { name: string | null } | null;
+    variants: {
+        sku: string | null;
+        price: number | string | null;
+        sale_price: number | string | null;
+        compare_at_price: number | string | null;
+        stock_quantity: number | string | null;
+    }[] | null;
+    product_images: { url: string; sort_order: number | null }[] | null;
+}
+
+interface CompletedOrder {
+    id: string;
+    orderNumber: string;
+    total: number;
+    items: CartItem[];
+    paymentPending?: boolean;
+    paymentUrl?: string;
 }
 
 interface Customer {
@@ -44,7 +74,7 @@ export default function POSPage() {
     const [paymentMethod, setPaymentMethod] = useState('cash');
     const [amountTendered, setAmountTendered] = useState<string>('');
     const [processing, setProcessing] = useState(false);
-    const [completedOrder, setCompletedOrder] = useState<any>(null);
+    const [completedOrder, setCompletedOrder] = useState<CompletedOrder | null>(null);
     const [checkoutError, setCheckoutError] = useState<string | null>(null);
     const [deliveryMethod, setDeliveryMethod] = useState<'pickup' | 'doorstep'>('pickup');
     const [guestDetails, setGuestDetails] = useState({
@@ -87,11 +117,12 @@ export default function POSPage() {
             const storePricing = parseStorePricing(settingsRow?.feature_flags);
 
             if (prodData) {
-                const formatted: Product[] = prodData.map((p: any) => {
+                // PostgREST returns the to-one `categories` relation as an object, not an array.
+                const formatted: Product[] = (prodData as unknown as PosProductRow[]).map((p) => {
                     const computedPrice = effectivePriceForProduct(withResolvedSalePrice(p), storePricing).effective;
                     const computedStock = listStockFromProduct(p);
                     const computedSku = listSkuRaw(p);
-                    const sortedImages = [...(p.product_images || [])].sort((a: any, b: any) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
+                    const sortedImages = [...(p.product_images || [])].sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
                     return {
                         id: p.id,
                         name: p.name,
@@ -353,7 +384,7 @@ export default function POSPage() {
                 }
                 try {
                     const { reduceOrderStock } = await import('@/lib/order-stock');
-                    const stockResult = await reduceOrderStock(supabase as any, order.id);
+                    const stockResult = await reduceOrderStock(supabase, order.id);
                     if (stockResult.errors.length) {
                         console.error('POS stock reduction errors:', stockResult.errors);
                     }
@@ -395,9 +426,10 @@ export default function POSPage() {
                 throw new Error(`Unsupported POS payment method: ${paymentMethod}`);
             }
 
-        } catch (error: any) {
+        } catch (error) {
             console.error('Checkout failed:', error);
-            setCheckoutError(error.message || 'Checkout failed. Please try again.');
+            const message = error && typeof error === 'object' && 'message' in error && typeof error.message === 'string' ? error.message : '';
+            setCheckoutError(message || 'Checkout failed. Please try again.');
         } finally {
             setProcessing(false);
         }
@@ -690,7 +722,7 @@ export default function POSPage() {
                                             <div className="mt-2">
                                                 <button
                                                     onClick={() => {
-                                                        navigator.clipboard.writeText(completedOrder.paymentUrl);
+                                                        navigator.clipboard.writeText(completedOrder.paymentUrl ?? '');
                                                         alert('Payment link copied!');
                                                     }}
                                                     className="text-sm text-rose-700 hover:text-rose-900 font-medium underline"

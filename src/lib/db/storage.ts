@@ -184,7 +184,8 @@ export function createStorageClient(): StorageClient {
             else if (typeof (data as Blob).arrayBuffer === "function") {
               buf = Buffer.from(new Uint8Array(await (data as Blob).arrayBuffer()));
             } else {
-              buf = Buffer.from(data as any);
+              // Untyped callers can still pass e.g. a string; Buffer.from handles it.
+              buf = Buffer.from(data as unknown as string);
             }
             await fs.writeFile(full, buf);
             if (opts?.contentType) {
@@ -194,8 +195,8 @@ export function createStorageClient(): StorageClient {
               );
             }
             return { data: { path: objectPath }, error: null };
-          } catch (e: any) {
-            return { data: null, error: { message: e.message } };
+          } catch (e: unknown) {
+            return { data: null, error: { message: (e as Error).message } };
           }
         },
         async createSignedUrl(objectPath, expiresIn) {
@@ -226,8 +227,8 @@ export function createStorageClient(): StorageClient {
               await fs.rm(full + ".meta.json", { force: true });
             }
             return { data: {}, error: null };
-          } catch (e: any) {
-            return { data: null, error: { message: e.message } };
+          } catch (e: unknown) {
+            return { data: null, error: { message: (e as Error).message } };
           }
         },
       };

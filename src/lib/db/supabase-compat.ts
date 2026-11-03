@@ -27,18 +27,41 @@ import { getPool } from "./pool";
 import { FK_MAP, JSONB_COLUMNS, type FkEdge } from "./fk-map";
 import { createStorageClient, type StorageClient } from "./storage";
 
-type Row = Record<string, any>;
+type Row = Record<string, unknown>;
+
+/**
+ * Row payload handed back to callers. supabase-js returns untyped (`any`) rows
+ * for a client created without a Database generic, and every caller relies on
+ * that, so the shim's public result keeps the same open type. JSON.parse's
+ * return type is exactly that open type.
+ */
+type QueryData = ReturnType<typeof JSON.parse>;
+
+/** Error shape returned in `{ error }` (subset of PostgREST's PostgrestError). */
+export interface CompatError {
+  message: string;
+  code?: string;
+}
+
+export interface QueryResult {
+  data: QueryData;
+  error: CompatError | null;
+  count: number | null;
+}
+
+/** Values the shim passes to pg as query parameters. */
+type SqlParam = unknown;
 type Op = "eq" | "neq" | "gt" | "gte" | "lt" | "lte" | "like" | "ilike" | "is" | "in";
 
 interface Filter {
   kind: "cmp" | "in" | "is" | "or" | "notIn" | "notIs" | "raw";
   col?: string;
   op?: string;
-  value?: any;
-  values?: any[];
+  value?: unknown;
+  values?: unknown[];
   orParts?: string;
   sql?: string;
-  params?: any[];
+  params?: SqlParam[];
 }
 
 interface OrderSpec {
@@ -72,7 +95,7 @@ function ident(name: string): string {
 }
 
 /** Cast uuid-like columns to text when the filter value is not a UUID. */
-function uuidSafeLeft(col: string, value: any): string {
+function uuidSafeLeft(col: string, value: unknown): string {
   const looksUuidCol = col === "id" || col.endsWith("_id");
   if (
     looksUuidCol &&
@@ -244,7 +267,7 @@ function splitTopLevel(s: string): string[] {
 }
 
 // ---- the chainable query builder -------------------------------------------
-class QueryBuilder implements PromiseLike<{ data: any; error: any; count: number | null }> {
+class QueryBuilder implements PromiseLike<QueryResult> {
   private table: string;
   private action: "select" | "insert" | "update" | "upsert" | "delete" = "select";
   private selectStr = "*";
@@ -303,20 +326,20 @@ class QueryBuilder implements PromiseLike<{ data: any; error: any; count: number
     return this;
   }
 
-  eq(col: string, value: any) { return this.cmp(col, "eq", value); }
-  neq(col: string, value: any) { return this.cmp(col, "neq", value); }
-  gt(col: string, value: any) { return this.cmp(col, "gt", value); }
-  gte(col: string, value: any) { return this.cmp(col, "gte", value); }
-  lt(col: string, value: any) { return this.cmp(col, "lt", value); }
-  lte(col: string, value: any) { return this.cmp(col, "lte", value); }
-  like(col: string, value: any) { return this.cmp(col, "like", value); }
-  ilike(col: string, value: any) { return this.cmp(col, "ilike", value); }
+  eq(col: string, value: unknown) { return this.cmp(col, "eq", value); }
+  neq(col: string, value: unknown) { return this.cmp(col, "neq", value); }
+  gt(col: string, value: unknown) { return this.cmp(col, "gt", value); }
+  gte(col: string, value: unknown) { return this.cmp(col, "gte", value); }
+  lt(col: string, value: unknown) { return this.cmp(col, "lt", value); }
+  lte(col: string, value: unknown) { return this.cmp(col, "lte", value); }
+  like(col: string, value: unknown) { return this.cmp(col, "like", value); }
+  ilike(col: string, value: unknown) { return this.cmp(col, "ilike", value); }
 
-  is(col: string, value: any) {
+  is(col: string, value: unknown) {
     this.filters.push({ kind: "is", col, value });
     return this;
   }
-  in(col: string, values: any[]) {
+  in(col: string, values: unknown[]) {
     this.filters.push({ kind: "in", col, values });
     return this;
   }
@@ -324,13 +347,13 @@ class QueryBuilder implements PromiseLike<{ data: any; error: any; count: number
     this.filters.push({ kind: "or", orParts: parts });
     return this;
   }
-  not(col: string, op: string, value: any) {
+  not(col: string, op: string, value: unknown) {
     if (op === "in") this.filters.push({ kind: "notIn", col, value });
     else if (op === "is") this.filters.push({ kind: "notIs", col, value });
     else this.filters.push({ kind: "cmp", col, op: `not_${op}`, value });
     return this;
   }
-  filter(col: string, op: string, value: any) {
+  filter(col: string, op: string, value: unknown) {
     // PostgREST-style textual op. Handle the ones the code uses.
     if (op === "in") {
       // value like "(a,b,c)"
@@ -375,13 +398,13 @@ class QueryBuilder implements PromiseLike<{ data: any; error: any; count: number
     return this;
   }
 
-  private cmp(col: string, op: Op, value: any) {
+  private cmp(col: string, op: Op, value: unknown) {
     this.filters.push({ kind: "cmp", col, op, value });
     return this;
   }
 
   // ---- WHERE construction ---------------------------------------------------
-  private buildWhere(params: any[]): string {
+  private buildWhere(params: SqlParam[]): string {
     const clauses: string[] = [];
     for (const f of this.filters) {
       if (f.kind === "cmp") {
@@ -417,7 +440,7 @@ class QueryBuilder implements PromiseLike<{ data: any; error: any; count: number
     return clauses.length ? `WHERE ${clauses.join(" AND ")}` : "";
   }
 
-  private isClause(col: string, value: any): string {
+  private isClause(col: string, value: unknown): string {
     if (value === null || value === "null") return `${ident(col)} IS NULL`;
     if (value === true || value === "true") return `${ident(col)} IS TRUE`;
     if (value === false || value === "false") return `${ident(col)} IS FALSE`;
@@ -426,7 +449,7 @@ class QueryBuilder implements PromiseLike<{ data: any; error: any; count: number
     throw new Error(`Unsupported is value: ${String(value).slice(0, 40)}`);
   }
 
-  private cmpClause(col: string, op: string, value: any, params: any[]): string {
+  private cmpClause(col: string, op: string, value: unknown, params: SqlParam[]): string {
     const negate = op.startsWith("not_");
     const bare = negate ? op.slice(4) : op;
     const sqlOp: Record<string, string> = {
@@ -453,13 +476,13 @@ class QueryBuilder implements PromiseLike<{ data: any; error: any; count: number
   // eq/ilike/like/gt/lt/gte/lte/is/neq, `in.(a,b,c)` lists, and nested
   // `and(...)` / `or(...)` groups, e.g.
   //   status.in.(approved,active),and(status.eq.pending,paid.gt.0)
-  private orClause(parts: string, params: any[]): string {
+  private orClause(parts: string, params: SqlParam[]): string {
     const segs = splitTopLevel(parts); // commas at top level separate OR terms
     const ors = segs.map((seg) => this.orTerm(seg.trim(), params));
     return `(${ors.join(" OR ")})`;
   }
 
-  private orTerm(seg: string, params: any[]): string {
+  private orTerm(seg: string, params: SqlParam[]): string {
     // Nested logical group: and(...) / or(...)
     const grp = /^(and|or)\(([\s\S]*)\)$/.exec(seg);
     if (grp) {
@@ -529,14 +552,14 @@ class QueryBuilder implements PromiseLike<{ data: any; error: any; count: number
   }
 
   // ---- execution ------------------------------------------------------------
-  async exec(): Promise<{ data: any; error: any; count: number | null }> {
+  async exec(): Promise<QueryResult> {
     try {
       const pool = getPool();
       let rows: Row[] = [];
       let count: number | null = null;
 
       if (this.action === "select") {
-        const params: any[] = [];
+        const params: SqlParam[] = [];
         const where = this.buildWhere(params);
         if (this.wantCount) {
           const cRes = await pool.query(
@@ -593,8 +616,9 @@ class QueryBuilder implements PromiseLike<{ data: any; error: any; count: number
         return { data: rows[0] ?? null, error: null, count };
       }
       return { data: this.headOnly ? null : rows, error: null, count };
-    } catch (err: any) {
-      return { data: null, error: { message: err.message, code: err.code }, count: null };
+    } catch (err: unknown) {
+      const e = err as { message: string; code?: string };
+      return { data: null, error: { message: e.message, code: e.code }, count: null };
     }
   }
 
@@ -701,7 +725,7 @@ class QueryBuilder implements PromiseLike<{ data: any; error: any; count: number
           related = res.rows;
         }
         await this.resolveEmbeds(related, embed.select, embedTable);
-        const grouped = new Map<any, Row[]>();
+        const grouped = new Map<unknown, Row[]>();
         for (const r of related) {
           const k = r[fkCol];
           if (!grouped.has(k)) grouped.set(k, []);
@@ -752,7 +776,7 @@ class QueryBuilder implements PromiseLike<{ data: any; error: any; count: number
         return set;
       }, new Set())
     );
-    const params: any[] = [];
+    const params: SqlParam[] = [];
     const valuesSql = rowsIn
       .map((r) => {
         const ph = cols.map((c) => {
@@ -782,7 +806,7 @@ class QueryBuilder implements PromiseLike<{ data: any; error: any; count: number
 
   private async execUpdate(pool: ReturnType<typeof getPool>): Promise<Row[]> {
     const patch = this.payload as Row;
-    const params: any[] = [];
+    const params: SqlParam[] = [];
     const sets = Object.keys(patch).map((c) => {
       params.push(normalizeValue(patch[c], this.table, c));
       return `${ident(c)} = $${params.length}`;
@@ -795,7 +819,7 @@ class QueryBuilder implements PromiseLike<{ data: any; error: any; count: number
   }
 
   private async execDelete(pool: ReturnType<typeof getPool>): Promise<Row[]> {
-    const params: any[] = [];
+    const params: SqlParam[] = [];
     const where = this.buildWhere(params);
     let sql = `DELETE FROM ${ident(this.table)} ${where}`;
     if (this.returnRows) sql += " RETURNING *";
@@ -804,9 +828,9 @@ class QueryBuilder implements PromiseLike<{ data: any; error: any; count: number
   }
 
   // PromiseLike: allow `await builder`
-  then<TResult1 = any, TResult2 = never>(
-    onfulfilled?: ((value: { data: any; error: any; count: number | null }) => TResult1 | PromiseLike<TResult1>) | null,
-    onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null
+  then<TResult1 = QueryResult, TResult2 = never>(
+    onfulfilled?: ((value: QueryResult) => TResult1 | PromiseLike<TResult1>) | null,
+    onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null
   ): PromiseLike<TResult1 | TResult2> {
     return this.exec().then(onfulfilled, onrejected);
   }
@@ -826,7 +850,7 @@ function singularize(table: string): string {
 // JS value — object, array, string, number, bool — as JSON for jsonb columns).
 // Native arrays pass through only for genuine Postgres array columns
 // (e.g. manual_payments.membership_ids).
-function normalizeValue(v: any, table?: string, column?: string): any {
+function normalizeValue(v: unknown, table?: string, column?: string): unknown {
   if (v === undefined || v === null) return null;
   const isJsonbCol = !!(table && column && JSONB_COLUMNS[table]?.has(column));
   if (isJsonbCol) return JSON.stringify(v);
@@ -839,8 +863,8 @@ function normalizeValue(v: any, table?: string, column?: string): any {
 
 async function callRpc(
   fn: string,
-  args: Record<string, any> = {}
-): Promise<{ data: any; error: any }> {
+  args: Record<string, unknown> = {}
+): Promise<{ data: QueryData; error: CompatError | null }> {
   if (!PG_IDENT.test(fn)) {
     return { data: null, error: { message: `Unsafe function name: ${fn}` } };
   }
@@ -848,7 +872,7 @@ async function callRpc(
     const keys = Object.keys(args);
     const pool = getPool();
     let sql: string;
-    let params: any[];
+    let params: SqlParam[];
     if (keys.length === 0) {
       sql = `SELECT public.${ident(fn)}() AS result`;
       params = [];
@@ -867,8 +891,8 @@ async function callRpc(
     }
     const res = await pool.query(sql, params);
     return { data: res.rows[0]?.result ?? null, error: null };
-  } catch (e: any) {
-    return { data: null, error: { message: e.message || String(e) } };
+  } catch (e: unknown) {
+    return { data: null, error: { message: (e as { message?: string }).message || String(e) } };
   }
 }
 
@@ -1007,7 +1031,7 @@ export interface SupabaseCompatClient {
   from(table: string): QueryBuilder;
   storage: StorageClient;
   auth: ReturnType<typeof createAuthApi>;
-  rpc(fn: string, args?: Record<string, any>): Promise<{ data: any; error: any }>;
+  rpc(fn: string, args?: Record<string, unknown>): Promise<{ data: QueryData; error: CompatError | null }>;
 }
 
 export function createClient(_url?: string, _key?: string): SupabaseCompatClient {
@@ -1119,7 +1143,7 @@ export function applyPostgrestParams(
   return qb;
 }
 
-function coerce(v: string): any {
+function coerce(v: string): string | number | boolean | null {
   if (v === "true") return true;
   if (v === "false") return false;
   if (v === "null") return null;

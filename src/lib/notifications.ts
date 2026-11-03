@@ -81,7 +81,7 @@ function maskPhone(phone: string): string {
     return phone.slice(0, 4) + '****' + phone.slice(-2);
 }
 
-function isDeliverableEmail(email?: string): boolean {
+function isDeliverableEmail(email?: string | null): email is string {
     if (!email) return false;
     const value = String(email).trim().toLowerCase();
     const isGuestPlaceholder = /^guest-\d+@ronnyandme\.com$/.test(value);
@@ -103,8 +103,8 @@ export async function sendEmail({ to, subject, html }: { to: string; subject: st
         const data = await resend.emails.send({ from: EMAIL_FROM, to, subject, html });
         console.log('[Email] Sent successfully to:', to.split('@')[0] + '@***');
         return data;
-    } catch (error: any) {
-        console.error('[Email] Failed:', error.message);
+    } catch (error) {
+        console.error('[Email] Failed:', error instanceof Error ? error.message : error);
         return null;
     }
 }
@@ -135,15 +135,20 @@ async function sendViaTaysend(to: string, message: string, senderFallback?: stri
             body: JSON.stringify({ to, sender_id: from, message, type: "transactional" }),
             signal: AbortSignal.timeout(15000),
         });
-        const result: any = await response.json().catch(() => null);
+        const result = (await response.json().catch(() => null)) as {
+            id?: string;
+            status?: string;
+            error?: { message?: string } | string;
+        } | null;
         const status = String(result?.status || "").toLowerCase();
         if (response.ok && result?.id && !TAYSEND_FAILED_STATUSES.has(status)) {
             return { status: 1, code: "SMS01", provider: "taysend", messageid: result.id, data: [{ messageid: result.id }] };
         }
-        console.warn("[SMS] Taysend failed, falling back:", result?.error?.message || result?.error || status || response.status);
+        const reason = typeof result?.error === "string" ? result.error : result?.error?.message;
+        console.warn("[SMS] Taysend failed, falling back:", reason || status || response.status);
         return null;
-    } catch (error: any) {
-        console.warn("[SMS] Taysend failed, falling back:", error?.message || error);
+    } catch (error) {
+        console.warn("[SMS] Taysend failed, falling back:", error instanceof Error ? error.message : error);
         return null;
     }
 }
@@ -202,38 +207,69 @@ export async function sendSMS({
             console.warn('[SMS] Provider rejected send:', result.code || result.message || 'unknown');
         }
         return result;
-    } catch (error: any) {
-        console.error('[SMS] Error:', error.message);
+    } catch (error) {
+        console.error('[SMS] Error:', error instanceof Error ? error.message : error);
         return null;
     }
 }
 
-export async function sendOrderConfirmation(order: any) {
-    const { id, email, phone: orderPhone, shipping_address, total, grand_total, created_at, order_number, metadata } = order;
+/** The order fields the customer messages below read. */
+export interface NotificationOrder {
+    id?: string;
+    email?: string | null;
+    phone?: string | null;
+    order_number?: string | null;
+    created_at?: string;
+    total?: number | string | null;
+    grand_total?: number | string | null;
+    /** jsonb from orders.shipping_address; read through addressOf(). */
+    shipping_address?: unknown;
+    metadata?: {
+        first_name?: string;
+        last_name?: string;
+        tracking_number?: string;
+    } | null;
+}
+
+type AddressFields = { full_name?: string; firstName?: string; lastName?: string; phone?: string };
+
+function addressOf(order: NotificationOrder): AddressFields {
+    const raw = order.shipping_address;
+    if (!raw || typeof raw !== 'object') return {};
+    const a = raw as Record<string, unknown>;
+    const text = (v: unknown) => (typeof v === 'string' && v.trim() ? v : undefined);
+    return { full_name: text(a.full_name), firstName: text(a.firstName), lastName: text(a.lastName), phone: text(a.phone) };
+}
+
+function customerName(order: NotificationOrder): string {
+    const shipping_address = addressOf(order);
+    const { metadata } = order;
+    if (shipping_address.full_name) return shipping_address.full_name;
+    if (shipping_address.firstName) {
+        return shipping_address.lastName
+            ? `${shipping_address.firstName} ${shipping_address.lastName}`
+            : shipping_address.firstName;
+    }
+    if (metadata?.first_name) {
+        return metadata.last_name ? `${metadata.first_name} ${metadata.last_name}` : metadata.first_name;
+    }
+    return 'Customer';
+}
+
+export async function sendOrderConfirmation(order: NotificationOrder) {
+    const { id, email, phone: orderPhone, total, grand_total, created_at, order_number, metadata } = order;
 
     const orderTotal = total ?? grand_total;
     const baseUrl = BRAND.url;
 
-    const getName = () => {
-        if (shipping_address?.full_name) return shipping_address.full_name;
-        if (shipping_address?.firstName) {
-            return shipping_address.lastName
-                ? `${shipping_address.firstName} ${shipping_address.lastName}`
-                : shipping_address.firstName;
-        }
-        if (metadata?.first_name) {
-            return metadata.last_name ? `${metadata.first_name} ${metadata.last_name}` : metadata.first_name;
-        }
-        return 'Customer';
-    };
-    const name = getName();
-    const phone = orderPhone || shipping_address?.phone;
+    const name = customerName(order);
+    const phone = orderPhone || addressOf(order).phone;
     const trackingNumber = metadata?.tracking_number || '';
     const trackingUrl = `${baseUrl}/track-order?order=${order_number || id}`;
 
     console.log(`[Notification] Preparing for Order #${order_number} | Phone: ${phone ? 'Present' : 'Missing'} | Tracking: ${trackingNumber || 'None'}`);
 
-    let shippingNotes: string[] = [];
+    const shippingNotes: string[] = [];
     try {
         const { data: items } = await supabaseAdmin
             .from('order_items')
@@ -261,7 +297,7 @@ export async function sendOrderConfirmation(order: any) {
 
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#f9fafb;border-radius:12px;overflow:hidden;margin:20px 0;">
   ${emailInfoRow('Order Number', `#${order_number || id}`)}
-  ${emailInfoRow('Order Date', new Date(created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }))}
+  ${emailInfoRow('Order Date', new Date(created_at ?? Date.now()).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }))}
   ${trackingNumber ? emailInfoRow('Tracking', escapeHtml(trackingNumber)) : ''}
   ${emailInfoRow('Total', `GH&#8373;${Number(orderTotal).toFixed(2)}`)}
 </table>
@@ -316,24 +352,12 @@ ${emailButton('View Order in Admin', `${baseUrl}/admin/orders/${id}`)}
     }
 }
 
-export async function sendOrderStatusUpdate(order: any, newStatus: string) {
-    const { id, email, phone: orderPhone, shipping_address, order_number, metadata } = order;
+export async function sendOrderStatusUpdate(order: NotificationOrder, newStatus: string) {
+    const { id, email, phone: orderPhone, order_number, metadata } = order;
     const baseUrl = BRAND.url;
 
-    const getName = () => {
-        if (shipping_address?.full_name) return shipping_address.full_name;
-        if (shipping_address?.firstName) {
-            return shipping_address.lastName
-                ? `${shipping_address.firstName} ${shipping_address.lastName}`
-                : shipping_address.firstName;
-        }
-        if (metadata?.first_name) {
-            return metadata.last_name ? `${metadata.first_name} ${metadata.last_name}` : metadata.first_name;
-        }
-        return 'Customer';
-    };
-    const name = getName();
-    const phone = orderPhone || shipping_address?.phone;
+    const name = customerName(order);
+    const phone = orderPhone || addressOf(order).phone;
     const trackingNumber = metadata?.tracking_number || '';
     const trackingUrl = `${baseUrl}/track-order?order=${order_number || id}`;
 
@@ -428,26 +452,14 @@ ${emailButton('Start Shopping', `${BRAND.url}/shop`)}
     if (phone) await sendSMS({ to: phone, message: `Welcome ${firstName}! Thanks for joining ${BRAND.name}. We've gotcha!!!` });
 }
 
-export async function sendPaymentLink(order: any) {
-    const { id, email, phone: orderPhone, shipping_address, total, grand_total, order_number, metadata } = order;
+export async function sendPaymentLink(order: NotificationOrder) {
+    const { id, email, phone: orderPhone, total, grand_total, order_number } = order;
     const orderTotal = total ?? grand_total;
     const baseUrl = BRAND.url;
     const paymentUrl = `${baseUrl}/pay/${id}`;
 
-    const getName = () => {
-        if (shipping_address?.full_name) return shipping_address.full_name;
-        if (shipping_address?.firstName) {
-            return shipping_address.lastName
-                ? `${shipping_address.firstName} ${shipping_address.lastName}`
-                : shipping_address.firstName;
-        }
-        if (metadata?.first_name) {
-            return metadata.last_name ? `${metadata.first_name} ${metadata.last_name}` : metadata.first_name;
-        }
-        return 'Customer';
-    };
-    const name = getName();
-    const phone = orderPhone || shipping_address?.phone;
+    const name = customerName(order);
+    const phone = orderPhone || addressOf(order).phone;
 
     if (isDeliverableEmail(email)) {
         await sendEmail({
@@ -525,4 +537,33 @@ export async function sendContactMessage(data: { name: string; email: string; su
 ${emailButton('Reply to ' + safeName, `mailto:${safeEmail}?subject=Re: ${encodeURIComponent(subject)}`)}
 `, `New contact from ${safeName}: ${safeSubject}`)
     });
+}
+
+/** Public store URL from config (never the request's Host header). */
+export function storeBaseUrl(): string {
+    return BRAND.url;
+}
+
+/** Forgot-password link, by email and (when we have it) SMS. */
+export async function sendPasswordReset({ email, phone, name, resetUrl }: {
+    email: string;
+    phone?: string | null;
+    name?: string | null;
+    resetUrl: string;
+}) {
+    const greeting = name ? `Hi ${escapeHtml(name)},` : 'Hello,';
+    await sendEmail({
+        to: email,
+        subject: `Reset your ${BRAND.name} password`,
+        html: emailLayout(`
+<h2 style="margin:0 0 12px;color:#111827;font-size:22px;text-align:center;">Reset your password</h2>
+<p style="color:#374151;font-size:14px;line-height:1.7;margin:16px 0;">${greeting}</p>
+<p style="color:#374151;font-size:14px;line-height:1.7;margin:0 0 16px;">We got a request to reset the password for your ${BRAND.name} account. The link below works once and expires in 30 minutes.</p>
+${emailButton('Choose a new password', resetUrl)}
+<p style="color:#6b7280;font-size:13px;line-height:1.6;margin:16px 0 0;">If you didn't ask for this, you can ignore this email. Your password won't change.</p>
+`, 'Reset your password'),
+    });
+    if (phone) {
+        await sendSMS({ to: phone, message: `${BRAND.name}: reset your password here (expires in 30 min): ${resetUrl}. Didn't ask? Ignore this.` });
+    }
 }

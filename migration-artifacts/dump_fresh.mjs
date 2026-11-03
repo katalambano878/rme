@@ -1,11 +1,14 @@
 #!/usr/bin/env node
 /**
  * Fresh full dump from live Supabase (Badawia's Imports).
- * Usage: node migration-artifacts/dump_fresh.js [outdir]
+ * Usage: node migration-artifacts/dump_fresh.mjs [outdir]
  * Reads credentials from env.local or .env.local or .env in repo root.
  */
-const fs = require("fs");
-const path = require("path");
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const OUT = process.argv[2] || "migration-artifacts/dumps";
 const root = path.join(__dirname, "..");

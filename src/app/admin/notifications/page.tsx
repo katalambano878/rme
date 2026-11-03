@@ -3,6 +3,13 @@
 import { useState } from 'react';
 import { supabase } from '@/lib/supabase';
 
+type CampaignRecipient = { email: string | null; phone: string | null; name: string | null };
+
+function errorMessage(err: unknown): string | undefined {
+    if (err && typeof err === 'object' && 'message' in err && typeof err.message === 'string') return err.message;
+    return undefined;
+}
+
 export default function NotificationsPage() {
     const [loading, setLoading] = useState(false);
     const [success, setSuccess] = useState('');
@@ -41,10 +48,10 @@ export default function NotificationsPage() {
 
             const normalizePhone = (p: string) => p.replace(/[\s\-\(\)\.]+/g, '').replace(/^00/, '+');
 
-            const recipients: any[] = [];
-            for (const c of (profiles || [])) {
-                const phones = [c.phone].filter(Boolean).map((p: string) => normalizePhone(p));
-                const emails = [c.email].filter(Boolean).map((e: string) => e.toLowerCase().trim());
+            const recipients: CampaignRecipient[] = [];
+            for (const c of ((profiles || []) as { email: string | null; phone: string | null; full_name: string | null }[])) {
+                const phones = [c.phone].filter((p): p is string => Boolean(p)).map((p) => normalizePhone(p));
+                const emails = [c.email].filter((e): e is string => Boolean(e)).map((e) => e.toLowerCase().trim());
 
                 const uniquePhone = phones.find(p => !seenPhones.has(p)) || null;
                 if (uniquePhone) seenPhones.add(uniquePhone);
@@ -131,11 +138,11 @@ export default function NotificationsPage() {
                     if (emailMatch) totalEmail += parseInt(emailMatch[1]);
                     if (smsMatch) totalSms += parseInt(smsMatch[1]);
                     if (errorMatch) totalErrors += parseInt(errorMatch[1]);
-                } catch (batchErr: any) {
+                } catch (batchErr) {
                     console.error('Campaign batch failed:', batchErr);
                     failedBatches += 1;
                     failedRecipients += batch.length;
-                    lastBatchError = batchErr?.message || 'Failed to send';
+                    lastBatchError = errorMessage(batchErr) || 'Failed to send';
                 }
             }
 
@@ -153,8 +160,8 @@ export default function NotificationsPage() {
                 setSuccess(`Campaign sent successfully! ${sentNote} sent.${errorNote}`);
                 setForm(prev => ({ ...prev, subject: '', message: '' }));
             }
-        } catch (err: any) {
-            setError(err.message);
+        } catch (err) {
+            setError(errorMessage(err) as string);
         } finally {
             setLoading(false);
         }

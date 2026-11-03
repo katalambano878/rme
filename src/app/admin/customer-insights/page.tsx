@@ -17,10 +17,42 @@ const formatCurrency = (amount: number) => {
   }).format(amount);
 };
 
+type InsightProfileRow = {
+  id: string;
+  full_name?: string | null;
+  email: string;
+  phone?: string | null;
+  created_at: string;
+};
+
+type InsightOrderRow = {
+  user_id: string | null;
+  grand_total: number | string | null;
+  created_at: string;
+  status: string;
+};
+
+type CustomerInsight = {
+  id: string;
+  name: string;
+  email: string;
+  phone: string;
+  segment: string;
+  totalSpent: number;
+  orders: number;
+  avgOrderValue: number;
+  lifetimeValue: number;
+  joinDate: string;
+  lastOrder: string;
+  riskLevel: string;
+  engagementScore: number;
+  tags: string[];
+};
+
 export default function CustomerInsightsPage() {
   const [selectedSegment, setSelectedSegment] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
-  const [customers, setCustomers] = useState<any[]>([]);
+  const [customers, setCustomers] = useState<CustomerInsight[]>([]);
   const [loading, setLoading] = useState(true);
 
   // Statistics
@@ -53,13 +85,13 @@ export default function CustomerInsightsPage() {
 
       if (orderError) throw orderError;
 
-      const orders = (rawOrders || []).map((o: any) => ({
+      const orders = ((rawOrders || []) as InsightOrderRow[]).map((o) => ({
         ...o,
         total: Number(o.grand_total) || 0,
       }));
 
       // 3. Aggregate Data
-      const aggregated = profiles.map((profile: any) => {
+      const aggregated = (profiles as InsightProfileRow[]).map((profile): CustomerInsight => {
         const userOrders = orders?.filter(o => o.user_id === profile.id) || [];
         const totalSpent = userOrders.reduce((sum, o) => sum + (o.total || 0), 0);
         const orderCount = userOrders.length;
@@ -136,7 +168,7 @@ export default function CustomerInsightsPage() {
   });
 
   const getSegmentBadge = (segment: string) => {
-    const badges: any = {
+    const badges: Record<string, string> = {
       vip: 'bg-rose-100 text-rose-800',
       returning: 'bg-rose-100 text-rose-800',
       new: 'bg-amber-100 text-amber-700',
@@ -146,7 +178,7 @@ export default function CustomerInsightsPage() {
   };
 
   const getSegmentLabel = (segment: string) => {
-    const labels: any = {
+    const labels: Record<string, string> = {
       vip: 'VIP Customer',
       returning: 'Returning',
       new: 'New Customer',
@@ -156,7 +188,7 @@ export default function CustomerInsightsPage() {
   };
 
   const getRiskBadge = (risk: string) => {
-    const badges: any = {
+    const badges: Record<string, string> = {
       low: 'bg-rose-100 text-rose-800',
       medium: 'bg-amber-100 text-amber-700',
       high: 'bg-red-100 text-red-700'

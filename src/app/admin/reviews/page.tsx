@@ -6,11 +6,34 @@ import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { adminImageSrc } from '@/lib/product-image';
 
+type ReviewRow = {
+  id: string;
+  rating: number;
+  title: string | null;
+  body: string | null;
+  created_at: string;
+  is_published: boolean | null;
+  profiles?: { full_name: string | null; email: string | null } | null;
+  products?: { name: string | null; product_images?: { url: string }[] | null } | null;
+};
+
+type AdminReview = {
+  id: string;
+  customer: { name: string; email: string; avatar: string };
+  product: { name: string; image: string | null };
+  rating: number;
+  title: string | null;
+  comment: string | null;
+  createdAt: string;
+  date: string;
+  status: string;
+};
+
 export default function AdminReviewsPage() {
   const [statusFilter, setStatusFilter] = useState('all');
   const [sortBy, setSortBy] = useState<'date' | 'rating'>('date');
   const [selectedReviews, setSelectedReviews] = useState<string[]>([]);
-  const [reviews, setReviews] = useState<any[]>([]);
+  const [reviews, setReviews] = useState<AdminReview[]>([]);
   const [loading, setLoading] = useState(true);
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -35,12 +58,12 @@ export default function AdminReviewsPage() {
         console.warn('Error fetching reviews:', error);
         // setReviews([]); // Keep empty
       } else if (data) {
-        const formatted = data.map((r: any) => ({
+        const formatted = (data as ReviewRow[]).map((r): AdminReview => ({
           id: r.id,
           customer: {
             name: r.profiles?.full_name || 'Anonymous',
             email: r.profiles?.email || 'N/A',
-            avatar: getInitials(r.profiles?.full_name || r.profiles?.email)
+            avatar: getInitials(r.profiles?.full_name || r.profiles?.email || '')
           },
           product: {
             name: r.products?.name || 'Unknown Product',
@@ -89,7 +112,7 @@ export default function AdminReviewsPage() {
     approved: reviews.filter(r => r.status.toLowerCase() === 'approved').length
   };
 
-  const statusColors: any = {
+  const statusColors: Record<string, string> = {
     'Pending': 'bg-amber-100 text-amber-700',
     'Approved': 'bg-rose-100 text-rose-800'
   };

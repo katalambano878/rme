@@ -12,6 +12,17 @@ interface SalesStat {
     variants: Map<string, { quantity: number; revenue: number }>;
 }
 
+interface SalesItemRow {
+    product_id: string | null;
+    name_snapshot: string | null;
+    sku_snapshot: string | null;
+    options_snapshot: unknown;
+    quantity: number | null;
+    unit_price: number | string | null;
+    line_total: number | string | null;
+    orders?: { id?: string | null } | null;
+}
+
 interface VariantDisplay {
     name: string;
     quantity: number;
@@ -83,8 +94,8 @@ export default function ProductSalesStats({ isOpen, onClose }: { isOpen: boolean
             if (data) {
                 const map = new Map<string, SalesStat>();
 
-                data.forEach((item: any) => {
-                    const pid = item.product_id || item.name_snapshot;
+                (data as SalesItemRow[]).forEach((item) => {
+                    const pid = (item.product_id || item.name_snapshot) as string;
 
                     if (!map.has(pid)) {
                         map.set(pid, {

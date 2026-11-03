@@ -69,10 +69,10 @@ export async function POST(req: NextRequest) {
     // trust client-supplied price/subtotal/total or an attacker can buy
     // anything for GH₵ 1.
     const productIds = Array.from(
-      new Set(items.map((i: any) => i.productId).filter((id: any) => id != null && id !== "null")),
+      new Set(items.map((i: { productId?: unknown }) => i.productId).filter((id: unknown) => id != null && id !== "null")),
     ) as string[]
     const variantIds = Array.from(
-      new Set(items.map((i: any) => i.variantId).filter((id: any) => id != null && id !== "null")),
+      new Set(items.map((i: { variantId?: unknown }) => i.variantId).filter((id: unknown) => id != null && id !== "null")),
     ) as string[]
 
     type DbProduct = {

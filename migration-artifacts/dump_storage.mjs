@@ -1,10 +1,13 @@
 #!/usr/bin/env node
 /**
  * Download storage objects for badawiasimports into migration-artifacts/storage.
- * Usage: node migration-artifacts/dump_storage.js
+ * Usage: node migration-artifacts/dump_storage.mjs
  */
-const fs = require("fs");
-const path = require("path");
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const root = path.join(__dirname, "..");
 function loadEnv() {

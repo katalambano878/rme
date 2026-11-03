@@ -2,6 +2,20 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireStaffArea } from '@/lib/auth';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 
+interface ConversationRow {
+  ai_handled?: boolean | null;
+  is_escalated?: boolean | null;
+  is_resolved?: boolean | null;
+}
+
+interface TicketRow {
+  created_at: string;
+  status: string | null;
+  priority: string | null;
+  resolved_at: string | null;
+  first_response_at: string | null;
+}
+
 export async function GET(req: NextRequest) {
   const auth = await requireStaffArea(req, 'support');
   if (!auth.authenticated) return NextResponse.json({ error: auth.error }, { status: 401 });
@@ -40,35 +54,35 @@ export async function GET(req: NextRequest) {
       .order('date', { ascending: true }),
   ]);
 
-  const conversations = conversationsRes.data || [];
-  const tickets = ticketsRes.data || [];
-  const feedback = feedbackRes.data || [];
-  const categories = categoriesRes.data || [];
-  const sentiments = sentimentRes.data || [];
+  const conversations: ConversationRow[] = conversationsRes.data || [];
+  const tickets: TicketRow[] = ticketsRes.data || [];
+  const feedback: { rating: number }[] = feedbackRes.data || [];
+  const categories: { category: string }[] = categoriesRes.data || [];
+  const sentiments: { sentiment: string | null }[] = sentimentRes.data || [];
 
   const categoryBreakdown: Record<string, number> = {};
-  categories.forEach((c: any) => {
+  categories.forEach((c) => {
     categoryBreakdown[c.category] = (categoryBreakdown[c.category] || 0) + 1;
   });
 
   const sentimentBreakdown = { positive: 0, neutral: 0, negative: 0 };
-  sentiments.forEach((s: any) => {
+  sentiments.forEach((s) => {
     if (s.sentiment === 'positive') sentimentBreakdown.positive++;
     else if (s.sentiment === 'negative') sentimentBreakdown.negative++;
     else sentimentBreakdown.neutral++;
   });
 
   const ratingDist = [0, 0, 0, 0, 0];
-  feedback.forEach((f: any) => { if (f.rating >= 1 && f.rating <= 5) ratingDist[f.rating - 1]++; });
+  feedback.forEach((f) => { if (f.rating >= 1 && f.rating <= 5) ratingDist[f.rating - 1]++; });
 
-  const resolved = tickets.filter((t: any) => t.resolved_at);
+  const resolved = tickets.filter((t): t is TicketRow & { resolved_at: string } => !!t.resolved_at);
   const avgResolutionMs = resolved.length > 0
-    ? resolved.reduce((sum: number, t: any) => sum + (new Date(t.resolved_at).getTime() - new Date(t.created_at).getTime()), 0) / resolved.length
+    ? resolved.reduce((sum: number, t) => sum + (new Date(t.resolved_at).getTime() - new Date(t.created_at).getTime()), 0) / resolved.length
     : 0;
 
-  const responded = tickets.filter((t: any) => t.first_response_at);
+  const responded = tickets.filter((t): t is TicketRow & { first_response_at: string } => !!t.first_response_at);
   const avgFirstResponseMs = responded.length > 0
-    ? responded.reduce((sum: number, t: any) => sum + (new Date(t.first_response_at).getTime() - new Date(t.created_at).getTime()), 0) / responded.length
+    ? responded.reduce((sum: number, t) => sum + (new Date(t.first_response_at).getTime() - new Date(t.created_at).getTime()), 0) / responded.length
     : 0;
 
   return NextResponse.json({
@@ -76,10 +90,10 @@ export async function GET(req: NextRequest) {
       totalConversations: conversations.length,
       totalTickets: tickets.length,
       totalFeedback: feedback.length,
-      avgRating: feedback.length > 0 ? (feedback.reduce((s: number, f: any) => s + f.rating, 0) / feedback.length).toFixed(2) : '0',
-      aiHandled: conversations.filter((c: any) => c.ai_handled).length,
-      escalated: conversations.filter((c: any) => c.is_escalated).length,
-      resolved: conversations.filter((c: any) => c.is_resolved).length,
+      avgRating: feedback.length > 0 ? (feedback.reduce((s: number, f) => s + f.rating, 0) / feedback.length).toFixed(2) : '0',
+      aiHandled: conversations.filter((c) => c.ai_handled).length,
+      escalated: conversations.filter((c) => c.is_escalated).length,
+      resolved: conversations.filter((c) => c.is_resolved).length,
       avgResolutionHours: (avgResolutionMs / 3600000).toFixed(1),
       avgFirstResponseMinutes: (avgFirstResponseMs / 60000).toFixed(1),
     },
@@ -88,17 +102,17 @@ export async function GET(req: NextRequest) {
     ratingDistribution: ratingDist,
     dailyData: dailyRes.error ? [] : (dailyRes.data || []),
     ticketStatusBreakdown: {
-      open: tickets.filter((t: any) => t.status === 'open').length,
-      in_progress: tickets.filter((t: any) => t.status === 'in_progress').length,
-      waiting_customer: tickets.filter((t: any) => t.status === 'waiting_customer').length,
-      resolved: tickets.filter((t: any) => t.status === 'resolved').length,
-      closed: tickets.filter((t: any) => t.status === 'closed').length,
+      open: tickets.filter((t) => t.status === 'open').length,
+      in_progress: tickets.filter((t) => t.status === 'in_progress').length,
+      waiting_customer: tickets.filter((t) => t.status === 'waiting_customer').length,
+      resolved: tickets.filter((t) => t.status === 'resolved').length,
+      closed: tickets.filter((t) => t.status === 'closed').length,
     },
     ticketPriorityBreakdown: {
-      low: tickets.filter((t: any) => t.priority === 'low').length,
-      medium: tickets.filter((t: any) => t.priority === 'medium').length,
-      high: tickets.filter((t: any) => t.priority === 'high').length,
-      urgent: tickets.filter((t: any) => t.priority === 'urgent').length,
+      low: tickets.filter((t) => t.priority === 'low').length,
+      medium: tickets.filter((t) => t.priority === 'medium').length,
+      high: tickets.filter((t) => t.priority === 'high').length,
+      urgent: tickets.filter((t) => t.priority === 'urgent').length,
     },
   });
 }

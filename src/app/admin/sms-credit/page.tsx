@@ -79,7 +79,7 @@ export default function BuySmsPage() {
         body: JSON.stringify({ package_id: packageId }),
       });
       writePending(checkout.id);
-      window.location.href = checkout.checkout_url;
+      window.location.assign(checkout.checkout_url);
     } catch (err) {
       setPaying(false);
       setError(err instanceof Error ? err.message : 'Could not start payment.');

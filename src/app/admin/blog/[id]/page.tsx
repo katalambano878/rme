@@ -3,13 +3,13 @@
 import Link from 'next/link';
 import { use, useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
-import BlogPostForm from '@/components/admin/BlogPostForm';
+import BlogPostForm, { type BlogPostRow } from '@/components/admin/BlogPostForm';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export default function AdminEditBlogPostPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
-  const [row, setRow] = useState<Record<string, unknown> | null>(null);
+  const [row, setRow] = useState<Partial<BlogPostRow> | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -76,7 +76,7 @@ export default function AdminEditBlogPostPage({ params }: { params: Promise<{ id
       ) : error ? (
         <div className="rounded-xl border border-red-200 bg-red-50 p-6 text-red-900 text-sm">{error}</div>
       ) : row ? (
-        <BlogPostForm mode="edit" postId={id} initialData={row as any} />
+        <BlogPostForm mode="edit" postId={id} initialData={row} />
       ) : null}
     </div>
   );

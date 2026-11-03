@@ -12,7 +12,7 @@ import { query } from "@/lib/db/pool"
  * Hosted Supabase fallback: service-role getUser + profiles.role.
  */
 
-function usePlainPg(): boolean {
+function isPlainPgMode(): boolean {
   return (
     process.env.NEXT_PUBLIC_USE_PLAIN_PG === "true" ||
     !!(process.env.DATABASE_URL || process.env.POSTGRES_URL)
@@ -143,7 +143,7 @@ export async function proxy(request: NextRequest) {
   }
   const token = tokens[0]
 
-  if (usePlainPg()) {
+  if (isPlainPgMode()) {
     let verified: Awaited<ReturnType<typeof verifyPlainPgAdmin>> = { ok: false }
     for (const candidate of tokens) {
       verified = await verifyPlainPgAdmin(candidate)

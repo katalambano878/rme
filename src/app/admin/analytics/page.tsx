@@ -7,14 +7,35 @@ import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 import { LineChart, Line, BarChart, Bar, PieChart, Pie, AreaChart, Area, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
+interface SalesPoint { date: string; sales: number; orders: number; fullDate: number }
+interface CategoryRevenue { name: string; value: number }
+interface TopProduct { name: string; revenue: number; units: number }
+interface PaymentStatusRow { status: string | null }
+interface AnalyticsOrderRow {
+  id: string;
+  created_at: string;
+  grand_total: number | string | null;
+  status?: string;
+  payments?: PaymentStatusRow[] | null;
+}
+interface AnalyticsItemRow {
+  quantity: number;
+  unit_price: number | string | null;
+  line_total: number | string | null;
+  product_id: string;
+  products?: { name?: string | null; category_id?: string | null; categories?: { name?: string | null } | null } | null;
+}
+
+const NO_SALES_DATA: Pick<SalesPoint, 'date' | 'sales'>[] = [{ date: 'No Data', sales: 0 }];
+
 export default function AnalyticsPage() {
   const [timeRange, setTimeRange] = useState('30days');
   const [reportType, setReportType] = useState('overview');
   const [loading, setLoading] = useState(true);
 
-  const [salesData, setSalesData] = useState<any[]>([]);
-  const [categoryRevenue, setCategoryRevenue] = useState<any[]>([]);
-  const [topProducts, setTopProducts] = useState<any[]>([]);
+  const [salesData, setSalesData] = useState<SalesPoint[]>([]);
+  const [categoryRevenue, setCategoryRevenue] = useState<CategoryRevenue[]>([]);
+  const [topProducts, setTopProducts] = useState<TopProduct[]>([]);
 
   const [metrics, setMetrics] = useState({
     revenue: 0,
@@ -38,7 +59,7 @@ export default function AnalyticsPage() {
 
       // Current period boundaries
       const now = new Date();
-      let startDate = new Date();
+      const startDate = new Date();
       if (timeRange === '7days')  startDate.setDate(now.getDate() - 7);
       if (timeRange === '30days') startDate.setDate(now.getDate() - 30);
       if (timeRange === '90days') startDate.setDate(now.getDate() - 90);
@@ -53,7 +74,7 @@ export default function AnalyticsPage() {
       const isoStart     = startDate.toISOString();
       const isoPrevStart = prevStartDate.toISOString();
 
-      const isPaid = (o: any) => o.payments?.some((p: any) => p.status === 'completed' || p.status === 'paid');
+      const isPaid = (o: AnalyticsOrderRow) => o.payments?.some((p) => p.status === 'completed' || p.status === 'paid');
 
       // Fetch current + previous period in parallel
       const [{ data: rawOrders, error: orderError }, { data: rawPrevOrders }] = await Promise.all([
@@ -73,26 +94,26 @@ export default function AnalyticsPage() {
 
       if (orderError) throw orderError;
 
-      const orders     = (rawOrders     || []).filter(isPaid).map((o: any) => ({ ...o, total: Number(o.grand_total) || 0 }));
-      const prevOrders = (rawPrevOrders || []).filter(isPaid).map((o: any) => ({ total: Number(o.grand_total) || 0 }));
+      const orders     = ((rawOrders     || []) as AnalyticsOrderRow[]).filter(isPaid).map((o) => ({ ...o, total: Number(o.grand_total) || 0 }));
+      const prevOrders = ((rawPrevOrders || []) as AnalyticsOrderRow[]).filter(isPaid).map((o) => ({ total: Number(o.grand_total) || 0 }));
 
-      let validItems: any[] = [];
+      let validItems: AnalyticsItemRow[] = [];
       if (orders.length > 0) {
-        const orderIds = orders.map((o: any) => o.id);
+        const orderIds = orders.map((o) => o.id);
         const { data: fetchedItems } = await supabase
           .from('order_items')
           .select('quantity, unit_price, line_total, product_id, products!inner(name, category_id, categories(name))')
           .in('order_id', orderIds);
-        if (fetchedItems) validItems = fetchedItems;
+        if (fetchedItems) validItems = fetchedItems as AnalyticsItemRow[];
       }
 
       // Current period metrics
-      const totalRevenue = orders.reduce((s: number, o: any) => s + o.total, 0);
+      const totalRevenue = orders.reduce((s: number, o) => s + o.total, 0);
       const totalOrders  = orders.length;
       const aov          = totalOrders > 0 ? totalRevenue / totalOrders : 0;
 
       // Previous period metrics
-      const prevRevenue = prevOrders.reduce((s: number, o: any) => s + o.total, 0);
+      const prevRevenue = prevOrders.reduce((s: number, o) => s + o.total, 0);
       const prevTotal   = prevOrders.length;
       const prevAov     = prevTotal > 0 ? prevRevenue / prevTotal : 0;
 
@@ -111,7 +132,7 @@ export default function AnalyticsPage() {
       });
 
       // Process Sales Chart Data (Group by Date with Zero-Filling)
-      const salesMap: Record<string, any> = {};
+      const salesMap: Record<string, SalesPoint> = {};
 
       // Initialize map with all dates in range
       const d = new Date(startDate);
@@ -138,7 +159,7 @@ export default function AnalyticsPage() {
       setSalesData(Object.values(salesMap));
 
       // Process Category Revenue
-      const catMap: Record<string, any> = {};
+      const catMap: Record<string, CategoryRevenue> = {};
       validItems.forEach(item => {
         const catName = item.products?.categories?.name || 'Uncategorized';
         if (!catMap[catName]) catMap[catName] = { name: catName, value: 0 };
@@ -146,10 +167,10 @@ export default function AnalyticsPage() {
         const itemRevenue = Number(item.line_total) || (Number(item.unit_price) * item.quantity) || 0;
         catMap[catName].value += itemRevenue;
       });
-      const catArray = Object.values(catMap).map((c: any) => ({ name: c.name, value: c.value }));
+      const catArray = Object.values(catMap).map((c) => ({ name: c.name, value: c.value }));
       setCategoryRevenue(catArray);
 
-      const prodMap: Record<string, any> = {};
+      const prodMap: Record<string, TopProduct> = {};
       validItems.forEach(item => {
         const pName = item.products?.name || 'Unknown';
         if (!prodMap[pName]) prodMap[pName] = { name: pName, revenue: 0, units: 0 };
@@ -157,7 +178,7 @@ export default function AnalyticsPage() {
         prodMap[pName].revenue += itemRevenue;
         prodMap[pName].units += item.quantity;
       });
-      const topProdArray = Object.values(prodMap).sort((a: any, b: any) => b.revenue - a.revenue).slice(0, 5);
+      const topProdArray = Object.values(prodMap).sort((a, b) => b.revenue - a.revenue).slice(0, 5);
       setTopProducts(topProdArray);
 
     } catch (err) {
@@ -265,7 +286,7 @@ export default function AnalyticsPage() {
           </div>
           <div style={{ width: '100%', height: 350 }}>
             <ResponsiveContainer>
-              <AreaChart data={salesData.length > 0 ? salesData : [{ date: 'No Data', sales: 0 }]}>
+              <AreaChart data={salesData.length > 0 ? salesData : NO_SALES_DATA}>
                 <defs>
                   <linearGradient id="colorSales" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor="#10b981" stopOpacity={0.3} />

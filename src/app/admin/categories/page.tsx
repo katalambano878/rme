@@ -12,13 +12,32 @@ import {
   getSelfAndDescendantIds,
 } from '@/lib/category-tree';
 
+type AdminCategory = {
+  id: string;
+  name: string;
+  slug: string;
+  description?: string | null;
+  image_url?: string | null;
+  parent_id?: string | null;
+  sort_order?: number | string | null;
+  is_active?: boolean | null;
+  status?: string | null;
+  featured_on_home?: boolean | null;
+  metadata?: { featured?: boolean } | null;
+};
+
+function errorMessage(err: unknown): string | undefined {
+  if (err && typeof err === 'object' && 'message' in err && typeof err.message === 'string') return err.message;
+  return undefined;
+}
+
 export default function AdminCategoriesPage() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
-  const [editingCategory, setEditingCategory] = useState<any>(null);
+  const [editingCategory, setEditingCategory] = useState<AdminCategory | null>(null);
   const [activeTab, setActiveTab] = useState('all');
 
-  const [categories, setCategories] = useState<any[]>([]);
+  const [categories, setCategories] = useState<AdminCategory[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -52,7 +71,7 @@ export default function AdminCategoriesPage() {
     }
   };
 
-  const handleEdit = (category: any) => {
+  const handleEdit = (category: AdminCategory) => {
     setEditingCategory(category);
     const active =
       typeof category.is_active === 'boolean'
@@ -85,8 +104,8 @@ export default function AdminCategoriesPage() {
       if (error) throw error;
       setCategories(categories.filter((c) => c.id !== categoryId));
       alert('Category deleted successfully');
-    } catch (err: any) {
-      alert('Error deleting: ' + (err?.message ?? 'Please try again.'));
+    } catch (err) {
+      alert('Error deleting: ' + (errorMessage(err) ?? 'Please try again.'));
     }
   };
 
@@ -114,8 +133,8 @@ export default function AdminCategoriesPage() {
 
       setFormData({ ...formData, image_url: normalizePublicImageSrc(publicUrl) });
 
-    } catch (error: any) {
-      alert('Error uploading image: ' + (error?.message || 'Upload failed'));
+    } catch (error) {
+      alert('Error uploading image: ' + (errorMessage(error) || 'Upload failed'));
     } finally {
       setUploading(false);
       e.target.value = '';
@@ -172,9 +191,9 @@ export default function AdminCategoriesPage() {
       setFormData({ name: '', slug: '', description: '', image_url: '', parent_id: '', featured: false, status: 'active' });
       fetchCategories();
 
-    } catch (err: any) {
+    } catch (err) {
       console.error(err);
-      alert('Error saving category: ' + err.message);
+      alert('Error saving category: ' + errorMessage(err));
     } finally {
       setSaving(false);
     }

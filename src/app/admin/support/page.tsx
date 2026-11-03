@@ -4,74 +4,115 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 
+type SupportStats = {
+  tickets: { open: number; urgent: number; resolved_week: number };
+  conversations: { today: number; total: number; week: number };
+  ai_performance: { resolution_rate: number; escalated: number };
+  satisfaction: { avg_rating: number; total_reviews: number };
+  ai_memories: { total: number; customers_with_memory: number };
+  knowledge_base: { total_articles: number };
+};
+
+type DashboardStatsRow = {
+  open_tickets?: number;
+  total_today?: number;
+  unresolved_chats?: number;
+  escalated_today?: number;
+  avg_satisfaction?: number;
+};
+
+type RecentConversation = {
+  id: string;
+  session_id?: string | null;
+  customer_name?: string | null;
+  customer_email?: string | null;
+  summary?: string | null;
+  sentiment?: string | null;
+  category?: string | null;
+  message_count?: number | null;
+  is_escalated?: boolean | null;
+  is_resolved?: boolean | null;
+  updated_at: string;
+};
+
+type OpenTicket = {
+  id: string;
+  ticket_number: string;
+  subject: string;
+  status: string;
+  priority: string;
+  customer_name?: string | null;
+  customer_email?: string | null;
+  created_at: string;
+};
+
 export default function SupportDashboard() {
-  const [stats, setStats] = useState<any>(null);
-  const [recentConversations, setRecentConversations] = useState<any[]>([]);
-  const [openTickets, setOpenTickets] = useState<any[]>([]);
+  const [stats, setStats] = useState<SupportStats | null>(null);
+  const [recentConversations, setRecentConversations] = useState<RecentConversation[]>([]);
+  const [openTickets, setOpenTickets] = useState<OpenTicket[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // Runs once on mount, while `loading` is still its initial `true`.
   useEffect(() => {
+    async function fetchDashboard() {
+      const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString();
+
+      const [statsRes, convosRes, ticketsRes, totalConvosRes, weekConvosRes, urgentRes, resolvedWeekRes, reviewCountRes, memoryRes, kbRes] = await Promise.all([
+        supabase.rpc('get_support_dashboard_stats'),
+        supabase.from('chat_conversations').select('*').order('updated_at', { ascending: false }).limit(15),
+        supabase.from('support_tickets').select('*').in('status', ['open', 'in_progress', 'waiting_customer']).order('created_at', { ascending: false }).limit(10),
+        supabase.from('chat_conversations').select('id', { count: 'exact', head: true }),
+        supabase.from('chat_conversations').select('id', { count: 'exact', head: true }).gte('created_at', weekAgo),
+        supabase.from('support_tickets').select('id', { count: 'exact', head: true }).eq('priority', 'urgent').in('status', ['open', 'in_progress']),
+        supabase.from('support_tickets').select('id', { count: 'exact', head: true }).eq('status', 'resolved').gte('updated_at', weekAgo),
+        supabase.from('support_feedback').select('id', { count: 'exact', head: true }),
+        supabase.from('ai_memory').select('customer_id', { count: 'exact', head: true }),
+        supabase.from('support_knowledge_base').select('id', { count: 'exact', head: true }),
+      ]);
+
+      const flat = statsRes.data as DashboardStatsRow | null;
+      const totalConvos = totalConvosRes.count ?? 0;
+      const weekConvos = weekConvosRes.count ?? 0;
+      const resolvedRate = totalConvos > 0
+        ? Math.round(((totalConvosRes.count ?? 0) > 0 ? ((flat?.open_tickets ?? 0) / Math.max(totalConvos, 1)) * 100 : 0))
+        : 0;
+
+      const mapped: SupportStats = {
+        tickets: {
+          open: flat?.open_tickets ?? 0,
+          urgent: urgentRes.count ?? 0,
+          resolved_week: resolvedWeekRes.count ?? 0,
+        },
+        conversations: {
+          today: flat?.total_today ?? 0,
+          total: totalConvos,
+          week: weekConvos,
+        },
+        ai_performance: {
+          resolution_rate: totalConvos > 0 ? Math.round(((totalConvos - (flat?.unresolved_chats ?? 0)) / totalConvos) * 100) : 0,
+          escalated: flat?.escalated_today ?? 0,
+        },
+        satisfaction: {
+          avg_rating: flat?.avg_satisfaction ?? 0,
+          total_reviews: reviewCountRes.count ?? 0,
+        },
+        ai_memories: {
+          total: memoryRes.count ?? 0,
+          customers_with_memory: 0,
+        },
+        knowledge_base: {
+          total_articles: kbRes.count ?? 0,
+        },
+      };
+
+      setStats(mapped);
+      setRecentConversations(convosRes.data || []);
+      setOpenTickets(ticketsRes.data || []);
+      setLoading(false);
+    }
+
     fetchDashboard();
   }, []);
-
-  async function fetchDashboard() {
-    setLoading(true);
-
-    const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString();
-
-    const [statsRes, convosRes, ticketsRes, totalConvosRes, weekConvosRes, urgentRes, resolvedWeekRes, reviewCountRes, memoryRes, kbRes] = await Promise.all([
-      supabase.rpc('get_support_dashboard_stats'),
-      supabase.from('chat_conversations').select('*').order('updated_at', { ascending: false }).limit(15),
-      supabase.from('support_tickets').select('*').in('status', ['open', 'in_progress', 'waiting_customer']).order('created_at', { ascending: false }).limit(10),
-      supabase.from('chat_conversations').select('id', { count: 'exact', head: true }),
-      supabase.from('chat_conversations').select('id', { count: 'exact', head: true }).gte('created_at', weekAgo),
-      supabase.from('support_tickets').select('id', { count: 'exact', head: true }).eq('priority', 'urgent').in('status', ['open', 'in_progress']),
-      supabase.from('support_tickets').select('id', { count: 'exact', head: true }).eq('status', 'resolved').gte('updated_at', weekAgo),
-      supabase.from('support_feedback').select('id', { count: 'exact', head: true }),
-      supabase.from('ai_memory').select('customer_id', { count: 'exact', head: true }),
-      supabase.from('support_knowledge_base').select('id', { count: 'exact', head: true }),
-    ]);
-
-    const flat = statsRes.data as Record<string, any> | null;
-    const totalConvos = totalConvosRes.count ?? 0;
-    const weekConvos = weekConvosRes.count ?? 0;
-    const resolvedRate = totalConvos > 0
-      ? Math.round(((totalConvosRes.count ?? 0) > 0 ? ((flat?.open_tickets ?? 0) / Math.max(totalConvos, 1)) * 100 : 0))
-      : 0;
-
-    const mapped = {
-      tickets: {
-        open: flat?.open_tickets ?? 0,
-        urgent: urgentRes.count ?? 0,
-        resolved_week: resolvedWeekRes.count ?? 0,
-      },
-      conversations: {
-        today: flat?.total_today ?? 0,
-        total: totalConvos,
-        week: weekConvos,
-      },
-      ai_performance: {
-        resolution_rate: totalConvos > 0 ? Math.round(((totalConvos - (flat?.unresolved_chats ?? 0)) / totalConvos) * 100) : 0,
-        escalated: flat?.escalated_today ?? 0,
-      },
-      satisfaction: {
-        avg_rating: flat?.avg_satisfaction ?? 0,
-        total_reviews: reviewCountRes.count ?? 0,
-      },
-      ai_memories: {
-        total: memoryRes.count ?? 0,
-        customers_with_memory: 0,
-      },
-      knowledge_base: {
-        total_articles: kbRes.count ?? 0,
-      },
-    };
-
-    setStats(mapped);
-    setRecentConversations(convosRes.data || []);
-    setOpenTickets(ticketsRes.data || []);
-    setLoading(false);
-  }
 
   const sentimentIcon = (s: string) => {
     if (s === 'positive') return <i className="ri-emotion-happy-line text-rose-500" />;

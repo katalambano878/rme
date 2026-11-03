@@ -4,12 +4,25 @@ import Link from 'next/link';
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import { downloadCsv } from '@/lib/admin-csv';
+import { setOrderStockHeld, STOCK_RELEASED_STATUSES } from '@/lib/order-stock';
 import {
   readOrdersViewState,
   writeOrdersViewState,
   type OrdersViewTab,
 } from '@/lib/admin-orders-view-state';
 import ProductSalesStats from './ProductSalesStats';
+
+/** The parts of the orders.shipping_address jsonb this page reads. */
+interface ShippingAddressJson {
+  firstName?: string;
+  lastName?: string;
+  full_name?: string;
+}
+
+/** A row as fetchOrders selects it. */
+interface OrderRow extends Omit<Order, 'order_items' | 'payment_status' | 'payment_method' | 'email' | 'total' | 'phone' | 'is_pos_sale' | 'is_confirmed'> {
+  order_items?: { quantity: number; name_snapshot: string | null }[] | null;
+}
 
 interface Order {
   id: string;
@@ -19,13 +32,13 @@ interface Order {
   status: string;
   created_at: string;
   guest_phone?: string;
-  shipping_address?: any;
-  billing_address?: any;
+  shipping_address?: ShippingAddressJson | null;
+  billing_address?: ShippingAddressJson | null;
   notes?: string | null;
   payments?: { status: string; provider: string }[];
   order_items?: {
     quantity: number;
-    name_snapshot?: string;
+    product_name?: string | null;
   }[];
   // computed client-side
   payment_status: string;
@@ -153,7 +166,7 @@ export default function AdminOrdersPage() {
     ];
     const productNames = new Set<string>();
     orders.forEach(o => {
-      o.order_items?.forEach((item: any) => {
+      o.order_items?.forEach((item) => {
         if (item.product_name) productNames.add(item.product_name);
       });
     });
@@ -197,8 +210,8 @@ export default function AdminOrdersPage() {
 
       if (error) throw error;
 
-      const normalized: Order[] = (ordersData || []).map((o: any) => {
-        const paidPayment = o.payments?.find((p: any) => p.status === 'completed' || p.status === 'paid');
+      const normalized: Order[] = ((ordersData || []) as unknown as OrderRow[]).map((o) => {
+        const paidPayment = o.payments?.find((p) => p.status === 'completed' || p.status === 'paid');
         const { isPaid, isPos, isConfirmed } = classifyOrder({
           status: o.status,
           payments: o.payments,
@@ -219,7 +232,7 @@ export default function AdminOrdersPage() {
             paidPayment?.provider ||
             o.payments?.[0]?.provider ||
             (isPos ? 'pos' : 'N/A'),
-          order_items: o.order_items?.map((item: any) => ({
+          order_items: o.order_items?.map((item) => ({
             quantity: item.quantity,
             product_name: item.name_snapshot,
           })),
@@ -245,6 +258,7 @@ export default function AdminOrdersPage() {
     'out_for_delivery': 'bg-blue-100 text-blue-700 border-blue-200',
     'delivered': 'bg-rose-100 text-rose-800 border-rose-200',
     'cancelled': 'bg-red-100 text-red-700 border-red-200',
+    'refunded': 'bg-red-100 text-red-700 border-red-200',
     'awaiting_payment': 'bg-gray-100 text-gray-700 border-gray-200'
   };
 
@@ -325,6 +339,17 @@ export default function AdminOrdersPage() {
 
         if (error) throw error;
 
+        // Cancelling returns stock; moving a cancelled order back takes it again.
+        const stockErrors: string[] = [];
+        for (const o of orders.filter(o => selectedOrders.includes(o.id))) {
+          const wasReleased = STOCK_RELEASED_STATUSES.has(o.status);
+          const nowReleased = STOCK_RELEASED_STATUSES.has(newStatus);
+          if (wasReleased === nowReleased) continue;
+          const stock = await setOrderStockHeld(supabase, o.id, !nowReleased);
+          stockErrors.push(...stock.errors);
+        }
+        if (stockErrors.length > 0) console.error('[order stock]', stockErrors);
+
         const updatedIds = new Set(selectedOrders);
         setOrders(prev => {
           const next = prev.map(o =>
@@ -357,10 +382,19 @@ export default function AdminOrdersPage() {
 
         await fetchOrders();
         setSelectedOrders([]);
-        alert(`${selectedOrders.length} orders updated to ${newStatus}`);
+        alert(
+          stockErrors.length > 0
+            ? `${selectedOrders.length} orders updated to ${newStatus}, but some stock could not be updated: ${stockErrors[0]}`
+            : `${selectedOrders.length} orders updated to ${newStatus}`,
+        );
       } catch (error) {
         console.error('Error updating orders:', error);
-        alert('Failed to update orders');
+        const message = error && typeof error === 'object' && 'message' in error ? String((error as { message: unknown }).message) : '';
+        alert(
+          /downgrade/i.test(message)
+            ? 'Some selected orders are already paid or in progress, so they cannot be cancelled or set back to pending. Mark those as Refunded instead.'
+            : message ? `Failed to update orders: ${message}` : 'Failed to update orders',
+        );
       }
     } else if (action === 'Export') {
       exportOrdersCsv(orders.filter(o => selectedOrders.includes(o.id)), 'selected-orders.csv');
@@ -460,7 +494,7 @@ export default function AdminOrdersPage() {
       customerEmail.includes(searchQuery.toLowerCase());
     const matchesStatus = statusFilter === 'all' || order.status === statusFilter;
     const matchesProduct = productFilter === 'all' || 
-      order.order_items?.some((item: any) => item.product_name === productFilter);
+      order.order_items?.some((item) => item.product_name === productFilter);
     return matchesViewTab && matchesSearch && matchesStatus && matchesProduct;
   }).sort((a, b) => {
     if (sortBy === 'total') return b.total - a.total;

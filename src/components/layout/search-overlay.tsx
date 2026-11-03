@@ -33,13 +33,37 @@ export function SearchOverlay({ open, onClose }: SearchOverlayProps) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  useEffect(() => {
-    if (open) {
-      requestAnimationFrame(() => inputRef.current?.focus())
-    } else {
+  // Reset the search when the overlay closes (adjusted during render, not in an effect).
+  const [prevOpen, setPrevOpen] = useState(open)
+  if (prevOpen !== open) {
+    setPrevOpen(open)
+    if (!open) {
       setQuery("")
       setResults([])
       setError(null)
+    }
+  }
+
+  // When the (open) search term changes: clear results for an empty term, else start loading.
+  const trimmedQuery = debouncedQuery.trim()
+  const searchKey = `${open ? 1 : 0}|${trimmedQuery}`
+  const [prevSearchKey, setPrevSearchKey] = useState(searchKey)
+  if (prevSearchKey !== searchKey) {
+    setPrevSearchKey(searchKey)
+    if (open) {
+      if (trimmedQuery.length < 1) {
+        setResults([])
+        setLoading(false)
+      } else {
+        setLoading(true)
+      }
+      setError(null)
+    }
+  }
+
+  useEffect(() => {
+    if (open) {
+      requestAnimationFrame(() => inputRef.current?.focus())
     }
   }, [open])
 
@@ -54,16 +78,9 @@ export function SearchOverlay({ open, onClose }: SearchOverlayProps) {
   useEffect(() => {
     if (!open) return
     const q = debouncedQuery.trim()
-    if (q.length < 1) {
-      setResults([])
-      setLoading(false)
-      setError(null)
-      return
-    }
+    if (q.length < 1) return
 
     const ac = new AbortController()
-    setLoading(true)
-    setError(null)
 
     fetch(`/api/products/search?q=${encodeURIComponent(q)}`, {
       signal: ac.signal,

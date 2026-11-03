@@ -1,12 +1,26 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 
+type ConversationRow = {
+  id: string;
+  session_id?: string | null;
+  customer_name?: string | null;
+  customer_email?: string | null;
+  summary?: string | null;
+  sentiment?: string | null;
+  category?: string | null;
+  messages?: unknown;
+  message_count?: number | null;
+  is_escalated?: boolean | null;
+  is_resolved?: boolean | null;
+  updated_at: string;
+};
+
 export default function ConversationsPage() {
-  const [conversations, setConversations] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [conversations, setConversations] = useState<ConversationRow[]>([]);
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [sentimentFilter, setSentimentFilter] = useState('');
@@ -15,6 +29,10 @@ export default function ConversationsPage() {
   const [total, setTotal] = useState(0);
   const limit = 20;
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Loading until the results for the current filters/page have arrived.
+  const queryKey = `${page}|${debouncedSearch}|${sentimentFilter}|${resolvedFilter}`;
+  const [loadedKey, setLoadedKey] = useState<string | null>(null);
+  const loading = loadedKey !== queryKey;
 
   // Debounce search input (400ms)
   useEffect(() => {
@@ -28,58 +46,60 @@ export default function ConversationsPage() {
     };
   }, [search]);
 
-  const fetchConversations = useCallback(async () => {
-    setLoading(true);
-    const offset = (page - 1) * limit;
+  useEffect(() => {
+    async function fetchConversations() {
+      const key = `${page}|${debouncedSearch}|${sentimentFilter}|${resolvedFilter}`;
+      const offset = (page - 1) * limit;
 
-    let query = supabase
-      .from('chat_conversations')
-      .select('*', { count: 'exact' });
+      let query = supabase
+        .from('chat_conversations')
+        .select('*', { count: 'exact' });
 
-    if (debouncedSearch) {
-      query = query.or(
-        `customer_name.ilike.%${debouncedSearch}%,customer_email.ilike.%${debouncedSearch}%,summary.ilike.%${debouncedSearch}%,session_id.ilike.%${debouncedSearch}%`
-      );
-    }
-    if (sentimentFilter) {
-      query = query.eq('sentiment', sentimentFilter);
-    }
-    if (resolvedFilter === 'true') {
-      query = query.eq('is_resolved', true);
-    } else if (resolvedFilter === 'false') {
-      query = query.or('is_resolved.eq.false,is_resolved.is.null');
-    } else if (resolvedFilter === 'escalated') {
-      query = query.eq('is_escalated', true);
+      if (debouncedSearch) {
+        query = query.or(
+          `customer_name.ilike.%${debouncedSearch}%,customer_email.ilike.%${debouncedSearch}%,summary.ilike.%${debouncedSearch}%,session_id.ilike.%${debouncedSearch}%`
+        );
+      }
+      if (sentimentFilter) {
+        query = query.eq('sentiment', sentimentFilter);
+      }
+      if (resolvedFilter === 'true') {
+        query = query.eq('is_resolved', true);
+      } else if (resolvedFilter === 'false') {
+        query = query.or('is_resolved.eq.false,is_resolved.is.null');
+      } else if (resolvedFilter === 'escalated') {
+        query = query.eq('is_escalated', true);
+      }
+
+      const { data, count, error } = await query
+        .order('updated_at', { ascending: false })
+        .range(offset, offset + limit - 1);
+
+      if (error) {
+        console.error('Search error:', error);
+        setConversations([]);
+        setTotal(0);
+      } else {
+        setConversations(data || []);
+        setTotal(count ?? data?.length ?? 0);
+      }
+      setLoadedKey(key);
     }
 
-    const { data, count, error } = await query
-      .order('updated_at', { ascending: false })
-      .range(offset, offset + limit - 1);
-
-    if (error) {
-      console.error('Search error:', error);
-      setConversations([]);
-      setTotal(0);
-    } else {
-      setConversations(data || []);
-      setTotal(count ?? data?.length ?? 0);
-    }
-    setLoading(false);
+    fetchConversations();
   }, [page, debouncedSearch, sentimentFilter, resolvedFilter]);
 
-  useEffect(() => { fetchConversations(); }, [fetchConversations]);
-
   // Extract a snippet from messages that matches the search term
-  const findMatchSnippet = (messages: any, term: string): string | null => {
+  const findMatchSnippet = (messages: unknown, term: string): string | null => {
     if (!term || !messages) return null;
-    let msgs = messages;
+    let msgs: unknown = messages;
     if (typeof msgs === 'string') {
       try { msgs = JSON.parse(msgs); } catch { return null; }
     }
     if (!Array.isArray(msgs)) return null;
     const lower = term.toLowerCase();
     for (const msg of msgs) {
-      const content = msg?.content || '';
+      const content: string = (msg && typeof msg === 'object' && 'content' in msg && typeof msg.content === 'string' && msg.content) || '';
       const idx = content.toLowerCase().indexOf(lower);
       if (idx !== -1) {
         const start = Math.max(0, idx - 30);

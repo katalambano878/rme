@@ -28,6 +28,42 @@ import { verifyMoolrePayment } from '@/lib/moolre-status';
  * }
  */
 
+interface MoolreCallbackMeta {
+    original_order_number?: string;
+    customer_email?: string;
+    email?: string;
+}
+
+/** Fields read from Moolre's callback `data` object (see the payload above). */
+interface MoolreCallbackData {
+    externalref?: string;
+    external_reference?: string;
+    orderRef?: string;
+    metadata?: MoolreCallbackMeta;
+    transactionid?: string;
+    thirdpartyref?: string;
+    txstatus?: number | string;
+    txtstatus?: number | string;
+    payer?: string;
+    payee?: string;
+}
+
+/**
+ * The parsed callback body. It is whatever the caller sent (JSON or form
+ * fields), so these are the fields the handler reads, not a guarantee.
+ */
+interface MoolreCallbackBody {
+    status?: number | string;
+    message?: string;
+    secret?: string;
+    reference?: string;
+    externalref?: string;
+    orderRef?: string;
+    external_reference?: string;
+    metadata?: MoolreCallbackMeta;
+    data?: MoolreCallbackData;
+}
+
 export async function POST(req: Request) {
     console.log('[Callback] POST received at', new Date().toISOString());
 
@@ -39,7 +75,7 @@ export async function POST(req: Request) {
             return NextResponse.json({ success: false, message: 'Too many requests' }, { status: 429 });
         }
 
-        let body: any = {};
+        let body: MoolreCallbackBody = {};
         const contentType = req.headers.get('content-type') || '';
 
         try {
@@ -47,14 +83,14 @@ export async function POST(req: Request) {
                 body = await req.json();
             } else if (contentType.includes('form')) {
                 const formData = await req.formData();
-                body = Object.fromEntries(formData.entries());
+                body = Object.fromEntries(formData.entries()) as MoolreCallbackBody;
             } else {
                 const rawText = await req.text();
                 try {
                     body = JSON.parse(rawText);
                 } catch {
                     try {
-                        body = Object.fromEntries(new URLSearchParams(rawText).entries());
+                        body = Object.fromEntries(new URLSearchParams(rawText).entries()) as MoolreCallbackBody;
                     } catch {
                         console.warn('[Callback] Could not parse body');
                     }
@@ -92,7 +128,7 @@ export async function POST(req: Request) {
         // ============================================================
         // EXTRACT FIELDS — Moolre nests payment data inside body.data
         // ============================================================
-        const data = body.data || {};
+        const data: MoolreCallbackData = body.data || {};
 
         const rawExternalRef =
             data.externalref ||
@@ -163,7 +199,7 @@ export async function POST(req: Request) {
                 }, { status: 400 });
             }
 
-            const meta = data.metadata || body.metadata || {};
+            const meta: MoolreCallbackMeta = data.metadata || body.metadata || {};
             const result = await fulfillMoolrePaidOrder(supabaseAdmin, {
                 orderNumber: merchantOrderRef,
                 paidAmount,
@@ -240,8 +276,8 @@ export async function POST(req: Request) {
             return NextResponse.json({ success: false, message: 'Payment not successful' });
         }
 
-    } catch (error: any) {
-        console.error('[Callback] Critical Error:', error.message);
+    } catch (error: unknown) {
+        console.error('[Callback] Critical Error:', (error as Error).message);
         return NextResponse.json({ success: false, message: 'Internal server error' }, { status: 500 });
     }
 }

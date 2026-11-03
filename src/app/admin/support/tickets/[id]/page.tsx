@@ -12,15 +12,57 @@ const PRIORITY_OPTIONS = ['low', 'medium', 'high', 'urgent'];
 // (support_tickets has no resolution column).
 const RESOLUTION_PREFIX = 'Resolution: ';
 
+type Ticket = {
+  id: string;
+  ticket_number: string;
+  subject: string;
+  description?: string | null;
+  status: string;
+  priority: string;
+  channel?: string | null;
+  user_id?: string | null;
+  customer_name?: string | null;
+  customer_email?: string | null;
+  assigned_to?: string | null;
+  conversation_id?: string | null;
+  tags?: string[] | null;
+  sla_deadline?: string | null;
+  created_at: string;
+  first_response_at?: string | null;
+  resolved_at?: string | null;
+  closed_at?: string | null;
+};
+
+type TicketUpdate = Partial<Pick<Ticket, 'status' | 'priority' | 'assigned_to' | 'resolved_at'>>;
+
+type TicketMessage = {
+  id: string;
+  user_id?: string | null;
+  message: string;
+  is_internal?: boolean | null;
+  created_at: string;
+};
+
+type ChatMessage = { role?: string; content?: string };
+
+type LinkedConversation = {
+  id: string;
+  session_id?: string | null;
+  messages?: unknown;
+  summary?: string | null;
+  sentiment?: string | null;
+  customer_name?: string | null;
+};
+
 export default function TicketDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
-  const [ticket, setTicket] = useState<any>(null);
-  const [messages, setMessages] = useState<any[]>([]);
+  const [ticket, setTicket] = useState<Ticket | null>(null);
+  const [messages, setMessages] = useState<TicketMessage[]>([]);
   const [loading, setLoading] = useState(true);
   const [reply, setReply] = useState('');
   const [isInternal, setIsInternal] = useState(false);
   const [sending, setSending] = useState(false);
-  const [conversation, setConversation] = useState<any>(null);
+  const [conversation, setConversation] = useState<LinkedConversation | null>(null);
   const [staffList, setStaffList] = useState<{ id: string; label: string }[]>([]);
   const [updateError, setUpdateError] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -34,7 +76,7 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
       .select('id, full_name, email')
       .in('role', ['staff', 'admin', 'superadmin'])
       .then(({ data }) => {
-        setStaffList((data || []).map((p: any) => ({ id: p.id, label: p.full_name || p.email || p.id })));
+        setStaffList(((data || []) as { id: string; full_name: string | null; email: string | null }[]).map((p) => ({ id: p.id, label: p.full_name || p.email || p.id })));
       });
   }, []);
 
@@ -42,7 +84,7 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
     setLoading(true);
     const [ticketRes, msgsRes] = await Promise.all([
       supabase.from('support_tickets').select('*').eq('id', id).single(),
-      adminFetch<{ data?: any[] }>(`/api/support/tickets/${id}/messages`).catch(() => ({ data: [] as any[] })),
+      adminFetch<{ data?: TicketMessage[] }>(`/api/support/tickets/${id}/messages`).catch(() => ({ data: [] as TicketMessage[] })),
     ]);
     setTicket(ticketRes.data);
     setMessages(msgsRes.data || []);
@@ -78,14 +120,14 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
   }
 
   /** Saves ticket fields; the UI only changes once the server accepts them. */
-  async function updateTicket(updates: any): Promise<boolean> {
+  async function updateTicket(updates: TicketUpdate): Promise<boolean> {
     setUpdateError('');
     try {
-      const res = await adminFetch<{ data?: any }>('/api/support/tickets', {
+      const res = await adminFetch<{ data?: Partial<Ticket> }>('/api/support/tickets', {
         method: 'PATCH',
         body: JSON.stringify({ id, ...updates }),
       });
-      setTicket((prev: any) => ({ ...prev, ...(res.data || updates) }));
+      setTicket((prev) => ({ ...prev, ...(res.data || updates) } as Ticket));
       return true;
     } catch (err) {
       setUpdateError(err instanceof Error ? err.message : 'Could not update ticket');
@@ -116,10 +158,10 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
   const statusColors: Record<string, string> = { open: 'bg-blue-100 text-blue-700', in_progress: 'bg-yellow-100 text-yellow-700', waiting_customer: 'bg-purple-100 text-purple-700', resolved: 'bg-rose-100 text-rose-700', closed: 'bg-gray-200 text-gray-600' };
   const senderColors: Record<string, string> = { customer: 'bg-blue-600', agent: 'bg-rose-600', system: 'bg-gray-500' };
   // support_messages only stores user_id: the ticket owner is the customer, anyone else is staff.
-  const senderOf = (msg: any) =>
+  const senderOf = (msg: TicketMessage) =>
     !msg.user_id ? 'system' : ticket.user_id && msg.user_id === ticket.user_id ? 'customer' : 'agent';
   const senderLabels: Record<string, string> = { customer: 'Customer', agent: 'Staff', system: 'System' };
-  const resolutionMsg = [...messages].reverse().find((m: any) => typeof m.message === 'string' && m.message.startsWith(RESOLUTION_PREFIX));
+  const resolutionMsg = [...messages].reverse().find((m) => typeof m.message === 'string' && m.message.startsWith(RESOLUTION_PREFIX));
   const resolution = resolutionMsg ? resolutionMsg.message.slice(RESOLUTION_PREFIX.length) : '';
 
   return (
@@ -176,10 +218,10 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
                 <Link href={`/admin/support/conversations/${conversation.id}`} className="text-xs text-rose-600 hover:text-rose-700 font-medium">View full →</Link>
               </div>
               <div className="max-h-40 overflow-y-auto space-y-2 bg-gray-50 rounded-lg p-3">
-                {(Array.isArray(conversation.messages) ? conversation.messages : typeof conversation.messages === 'string' ? (() => { try { return JSON.parse(conversation.messages); } catch { return []; } })() : []).slice(-6).map((m: any, i: number) => (
+                {(Array.isArray(conversation.messages) ? conversation.messages : typeof conversation.messages === 'string' ? (() => { try { return JSON.parse(conversation.messages); } catch { return []; } })() : [] as ChatMessage[]).slice(-6).map((m: ChatMessage, i: number) => (
                   <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                     <div className={`max-w-[80%] rounded-lg px-3 py-1.5 text-xs ${m.role === 'user' ? 'bg-rose-100 text-rose-800' : 'bg-white text-gray-700 border border-gray-100'}`}>
-                      {m.content?.slice(0, 150)}{m.content?.length > 150 ? '...' : ''}
+                      {m.content?.slice(0, 150)}{(m.content?.length ?? 0) > 150 ? '...' : ''}
                     </div>
                   </div>
                 ))}
@@ -199,7 +241,7 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
                   <p className="text-sm">No messages yet. Start the conversation below.</p>
                 </div>
               )}
-              {messages.map((msg: any) => {
+              {messages.map((msg) => {
                 const sender = senderOf(msg);
                 return (
                 <div key={msg.id} className={`flex gap-3 ${msg.is_internal ? 'bg-amber-50/50 -mx-4 px-4 py-2 border-l-2 border-amber-300' : ''}`}>
@@ -321,10 +363,10 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
           </div>
 
           {/* Tags */}
-          {ticket.tags?.length > 0 && (
+          {(ticket.tags?.length ?? 0) > 0 && (
             <div className="bg-white rounded-xl border border-gray-100 p-4">
               <h3 className="text-sm font-semibold text-gray-900 mb-2">Tags</h3>
-              <div className="flex flex-wrap gap-1">{ticket.tags.map((t: string) => <span key={t} className="px-2 py-0.5 text-[10px] bg-gray-100 text-gray-600 rounded-full">{t}</span>)}</div>
+              <div className="flex flex-wrap gap-1">{ticket.tags?.map((t: string) => <span key={t} className="px-2 py-0.5 text-[10px] bg-gray-100 text-gray-600 rounded-full">{t}</span>)}</div>
             </div>
           )}
         </div>

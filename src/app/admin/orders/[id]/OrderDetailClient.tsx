@@ -10,6 +10,7 @@ import { BRAND_NAME } from '@/lib/brand';
 import { buildDisplaySku } from '@/lib/sku-display';
 import { normalizeShippingAddress, isAddressComplete } from '@/lib/shipping-address';
 import { adminImageSrc } from '@/lib/product-image';
+import { setOrderStockHeld, STOCK_RELEASED_STATUSES } from '@/lib/order-stock';
 
 // Toggle to re-enable the per-order fraud detection alert in the admin UI.
 const FRAUD_DETECTION_ENABLED = false;
@@ -27,8 +28,61 @@ interface FraudAnalysis {
   reasons: string[];
 }
 
+interface OrderItemRow {
+  id: string;
+  product_id: string | null;
+  name_snapshot: string | null;
+  sku_snapshot: string | null;
+  options_snapshot: Record<string, string> | null;
+  quantity: number;
+  unit_price: number | string;
+  line_total: number | string | null;
+  products: { product_images: { url: string }[] | null } | null;
+}
+
+interface ShipmentRow {
+  id: string;
+  tracking_number: string | null;
+  carrier: string | null;
+  status: string | null;
+  created_at: string;
+}
+
+interface OrderRow {
+  id: string;
+  order_number: string;
+  status: string;
+  created_at: string;
+  user_id: string | null;
+  guest_email: string | null;
+  guest_phone: string | null;
+  grand_total: number | string;
+  subtotal: number | string | null;
+  discount_total: number | string | null;
+  tax_total: number | string | null;
+  shipping_address: unknown;
+  notes: string | null;
+  payments: { status: string; provider: string; provider_ref: string | null }[] | null;
+  order_items: OrderItemRow[] | null;
+}
+
+/** The order as this page shows it: the row plus fields derived on load. */
+interface DetailOrder extends Omit<OrderRow, 'order_items'> {
+  email: string;
+  phone: string;
+  total: number;
+  payment_status: 'paid' | 'pending';
+  payment_method: string;
+  payment_transaction_id: string;
+  shipping_method: string;
+  shipment: ShipmentRow | null;
+  metadata: { tracking_number: string; moolre_reference?: string };
+  order_items: (OrderItemRow & { product_name: string | null; variant_name: string; sku: string; total_price: number })[];
+  _recentOrderCount: number;
+}
+
 export default function OrderDetailClient({ orderId }: OrderDetailClientProps) {
-  const [order, setOrder] = useState<any>(null);
+  const [order, setOrder] = useState<DetailOrder | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showStatusMenu, setShowStatusMenu] = useState(false);
@@ -89,30 +143,31 @@ export default function OrderDetailClient({ orderId }: OrderDetailClientProps) {
         .single();
 
       if (error) throw error;
+      const row = data as unknown as OrderRow;
 
       // Tracking numbers live on the order's latest shipments row (orders has no metadata column).
       const { data: shipmentRows } = await supabase
         .from('shipments')
         .select('id, tracking_number, carrier, status, created_at')
-        .eq('order_id', data.id)
+        .eq('order_id', row.id)
         .order('created_at', { ascending: false })
         .limit(1);
-      const shipment = shipmentRows?.[0] || null;
+      const shipment = (shipmentRows?.[0] as ShipmentRow | undefined) || null;
 
-      const paidPayment = data.payments?.find((p: any) => p.status === 'completed' || p.status === 'paid');
-      const normalizedOrder = {
-        ...data,
-        email: data.guest_email || '',
-        phone: data.guest_phone || '',
-        total: Number(data.grand_total) || 0,
+      const paidPayment = row.payments?.find((p) => p.status === 'completed' || p.status === 'paid');
+      const normalizedOrder: DetailOrder = {
+        ...row,
+        email: row.guest_email || '',
+        phone: row.guest_phone || '',
+        total: Number(row.grand_total) || 0,
         payment_status: paidPayment ? 'paid' : 'pending',
-        payment_method: paidPayment?.provider || data.payments?.[0]?.provider || 'N/A',
+        payment_method: paidPayment?.provider || row.payments?.[0]?.provider || 'N/A',
         payment_transaction_id: paidPayment?.provider_ref || '',
         shipping_method: 'Standard',
         shipment,
         metadata: { tracking_number: shipment?.tracking_number || '' },
-        order_items: (data.order_items || []).map((item: any) => {
-          const opts = item.options_snapshot as Record<string, string> | null
+        order_items: (row.order_items || []).map((item) => {
+          const opts = item.options_snapshot
           const variantParts = [opts?.size, opts?.color].filter(Boolean)
           return {
             ...item,
@@ -122,16 +177,17 @@ export default function OrderDetailClient({ orderId }: OrderDetailClientProps) {
             total_price: Number(item.line_total) || (Number(item.unit_price) * item.quantity),
           }
         }),
+        _recentOrderCount: 0,
       };
 
       // Fraud signals: check for repeat orders from the same email in the last 48h
       let recentOrderCount = 0;
-      if (data.guest_email) {
+      if (row.guest_email) {
         const since48h = new Date(Date.now() - 48 * 3600 * 1000).toISOString();
         const { count } = await supabase
           .from('orders')
           .select('id', { count: 'exact', head: true })
-          .eq('guest_email', data.guest_email)
+          .eq('guest_email', row.guest_email)
           .gte('created_at', since48h);
         recentOrderCount = count ?? 0;
       }
@@ -139,9 +195,9 @@ export default function OrderDetailClient({ orderId }: OrderDetailClientProps) {
 
       setOrder(normalizedOrder);
       setTrackingNumber(shipment?.tracking_number || '');
-      setAdminNotes(data.notes || '');
+      setAdminNotes(row.notes || '');
 
-    } catch (err: any) {
+    } catch (err) {
       console.error('Error fetching order:', err);
       setError('Failed to load order details');
     } finally {
@@ -150,6 +206,7 @@ export default function OrderDetailClient({ orderId }: OrderDetailClientProps) {
   };
 
   const handleUpdateStatus = async (newStatus?: string) => {
+    if (!order) return;
     try {
       const statusToUpdate = newStatus || order.status;
       const isPaid = order.payment_status === 'paid' || order.status === 'paid';
@@ -157,7 +214,7 @@ export default function OrderDetailClient({ orderId }: OrderDetailClientProps) {
       // Guard the risky jumps: cancelling/refunding money already taken, or shipping unpaid orders.
       if (statusToUpdate !== order.status) {
         if (isPaid && ['cancelled', 'refunded'].includes(statusToUpdate)) {
-          if (!confirm(`This order has been paid. Mark it as ${statusLabel(statusToUpdate)}? Stock and money are not returned automatically.`)) return;
+          if (!confirm(`This order has been paid. Mark it as ${statusLabel(statusToUpdate)}? Its stock goes back automatically; refund the money in Moolre yourself.`)) return;
         } else if (!isPaid && ['shipped', 'out_for_delivery', 'delivered'].includes(statusToUpdate)) {
           if (!confirm(`This order has not been paid yet. Move it to ${statusLabel(statusToUpdate)} anyway?`)) return;
         }
@@ -207,6 +264,17 @@ export default function OrderDetailClient({ orderId }: OrderDetailClientProps) {
 
       const statusChanged = statusToUpdate !== order.status;
 
+      // Cancelling returns this order's stock; reinstating takes it again.
+      const wasReleased = STOCK_RELEASED_STATUSES.has(order.status);
+      const nowReleased = STOCK_RELEASED_STATUSES.has(statusToUpdate);
+      if (statusChanged && wasReleased !== nowReleased) {
+        const stock = await setOrderStockHeld(supabase, order.id, !nowReleased);
+        if (stock.errors.length > 0) {
+          console.error('[order stock]', stock.errors);
+          alert(`Status saved, but stock could not be fully updated: ${stock.errors[0]}`);
+        }
+      }
+
       if (statusChanged || (trackingChanged && nextTracking)) {
         // Get auth token for notification API
         const { data: { session } } = await supabase.auth.getSession();
@@ -237,7 +305,8 @@ export default function OrderDetailClient({ orderId }: OrderDetailClientProps) {
       setShowStatusMenu(false);
     } catch (err) {
       console.error('Error updating order:', err);
-      alert('Failed to update order');
+      const message = err && typeof err === 'object' && 'message' in err ? String((err as { message: unknown }).message) : '';
+      alert(message ? `Failed to update order: ${message}` : 'Failed to update order');
     } finally {
       setStatusUpdating(false);
     }
@@ -247,6 +316,7 @@ export default function OrderDetailClient({ orderId }: OrderDetailClientProps) {
 
   const handleResendNotification = async () => {
     if (!order) return;
+    if (!order) return;
 
     try {
       setResendingNotification(true);
@@ -255,7 +325,7 @@ export default function OrderDetailClient({ orderId }: OrderDetailClientProps) {
       const { data: { session } } = await supabase.auth.getSession();
       const authToken = session?.access_token;
 
-      const shippingAddress = normalizeShippingAddress(order.shipping_address);
+      const shippingAddress = normalizeShippingAddress(order.shipping_address as Record<string, unknown> | null);
       const customerName =
         shippingAddress.fullName ||
         order.email?.split('@')[0] ||
@@ -287,27 +357,34 @@ export default function OrderDetailClient({ orderId }: OrderDetailClientProps) {
       }
 
       alert('Notification sent successfully! (Email + SMS if phone available)');
-    } catch (err: any) {
+    } catch (err) {
       console.error('Error resending notification:', err);
-      alert(`Failed to resend notification: ${err.message || 'Unknown error'}`);
+      alert(`Failed to resend notification: ${err instanceof Error ? err.message : 'Unknown error'}`);
     } finally {
       setResendingNotification(false);
     }
   };
 
-  const statusOptions = ['pending', 'processing', 'shipped', 'out_for_delivery', 'delivered', 'cancelled'];
+  // The database refuses to move a paid / in-progress order back to pending or
+  // cancelled (it guards against late payment callbacks), so those orders are
+  // ended with "Refunded" instead. Either way the stock goes back.
+  const progressed = ['paid', 'processing', 'shipped', 'out_for_delivery', 'delivered'].includes(order?.status ?? '');
+  const statusOptions = progressed
+    ? ['processing', 'shipped', 'out_for_delivery', 'delivered', 'refunded']
+    : ['pending', 'processing', 'shipped', 'out_for_delivery', 'delivered', 'cancelled'];
   const statusLabel = (s: string) => {
     if (s === 'shipped') return 'Packaged';
     if (s === 'out_for_delivery') return 'With Rider';
     return s.charAt(0).toUpperCase() + s.slice(1);
   };
-  const statusColors: any = {
+  const statusColors: Record<string, string> = {
     'pending': 'bg-amber-100 text-amber-700 border-amber-200',
     'processing': 'bg-rose-100 text-rose-800 border-rose-200',
     'shipped': 'bg-purple-100 text-purple-700 border-purple-200',
     'out_for_delivery': 'bg-blue-100 text-blue-700 border-blue-200',
     'delivered': 'bg-rose-100 text-rose-800 border-rose-200',
     'cancelled': 'bg-red-100 text-red-700 border-red-200',
+    'refunded': 'bg-red-100 text-red-700 border-red-200',
     'awaiting_payment': 'bg-gray-100 text-gray-700 border-gray-200'
   };
 
@@ -317,7 +394,7 @@ export default function OrderDetailClient({ orderId }: OrderDetailClientProps) {
   const currentStatus = order.status || 'pending';
   // Normalize shipping address so the UI works regardless of which checkout
   // flow created the order (storefront / chat / POS / legacy).
-  const shippingAddress = normalizeShippingAddress(order.shipping_address);
+  const shippingAddress = normalizeShippingAddress(order.shipping_address as Record<string, unknown> | null);
   const customerName = shippingAddress.fullName || order.email?.split('@')[0] || 'Customer';
   const addressComplete = isAddressComplete(shippingAddress);
 
@@ -336,7 +413,7 @@ export default function OrderDetailClient({ orderId }: OrderDetailClientProps) {
     const reasons: string[] = [];
     const total = order.total || 0;
     const isGuest = !order.user_id;
-    const totalQty = (order.order_items || []).reduce((s: number, i: any) => s + (i.quantity || 0), 0);
+    const totalQty = (order.order_items || []).reduce((s: number, i) => s + (i.quantity || 0), 0);
 
     if (total > 1500) reasons.push(`Very high order value (GH₵${total.toFixed(2)})`);
     else if (total > 600) reasons.push(`High order value (GH₵${total.toFixed(2)})`);
@@ -407,12 +484,12 @@ export default function OrderDetailClient({ orderId }: OrderDetailClientProps) {
                 </tr>
               </thead>
               <tbody>
-                {order?.order_items?.map((item: any) => (
+                {order?.order_items?.map((item) => (
                   <tr key={item.id} className="border-b border-gray-200">
                     <td className="py-2 px-2 font-medium">{item.product_name}</td>
                     <td className="py-2 px-2 text-sm">{item.variant_name || '-'}</td>
                     <td className="py-2 px-2 text-center font-bold">{item.quantity}</td>
-                    <td className="py-2 px-2 text-right">GH₵ {item.unit_price?.toFixed(2)}</td>
+                    <td className="py-2 px-2 text-right">GH₵ {Number(item.unit_price).toFixed(2)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -427,7 +504,7 @@ export default function OrderDetailClient({ orderId }: OrderDetailClientProps) {
               {trackingNumber && <p><span className="font-semibold">Tracking #:</span> {trackingNumber}</p>}
             </div>
             <div className="text-right">
-              <p>Subtotal: GH₵ {order?.subtotal?.toFixed(2)}</p>
+              <p>Subtotal: GH₵ {Number(order?.subtotal ?? 0).toFixed(2)}</p>
               <p>Shipping: Confirmed by store</p>
               <p className="font-bold text-lg border-t border-gray-400 pt-1 mt-1">Total: GH₵ {order?.total?.toFixed(2)}</p>
             </div>
@@ -479,13 +556,13 @@ export default function OrderDetailClient({ orderId }: OrderDetailClientProps) {
               </div>
 
               <div className="space-y-4">
-                {order.order_items?.map((item: any) => (
+                {order.order_items?.map((item) => (
                   <div key={item.id} className="flex items-start space-x-4 p-4 bg-gray-50 rounded-lg">
                     <div className="w-20 h-20 bg-white rounded-lg overflow-hidden border border-gray-200 flex items-center justify-center relative">
                       {item.products?.product_images?.[0]?.url ? (
                         <img
                           src={adminImageSrc(item.products.product_images[0].url, 96)}
-                          alt={item.product_name}
+                          alt={item.product_name ?? ''}
                           className="w-full h-full object-cover"
                         />
                       ) : (
@@ -503,7 +580,7 @@ export default function OrderDetailClient({ orderId }: OrderDetailClientProps) {
                       </p>
                     </div>
                     <div className="text-right">
-                      <p className="font-semibold text-gray-900 mb-1">GH₵ {item.unit_price?.toFixed(2)}</p>
+                      <p className="font-semibold text-gray-900 mb-1">GH₵ {Number(item.unit_price).toFixed(2)}</p>
                       <p className="text-sm text-gray-600">Qty: {item.quantity}</p>
                     </div>
                   </div>
@@ -513,7 +590,7 @@ export default function OrderDetailClient({ orderId }: OrderDetailClientProps) {
               <div className="mt-6 pt-6 border-t border-gray-200 space-y-3">
                 <div className="flex justify-between text-gray-700">
                   <span>Subtotal</span>
-                  <span>GH₵ {order.subtotal?.toFixed(2)}</span>
+                  <span>GH₵ {Number(order.subtotal ?? 0).toFixed(2)}</span>
                 </div>
                 <div className="flex justify-between text-gray-700">
                   <span>Shipping</span>
@@ -521,12 +598,12 @@ export default function OrderDetailClient({ orderId }: OrderDetailClientProps) {
                 </div>
                 <div className="flex justify-between text-gray-700">
                   <span>Tax</span>
-                  <span>GH₵ {order.tax_total?.toFixed(2)}</span>
+                  <span>GH₵ {Number(order.tax_total ?? 0).toFixed(2)}</span>
                 </div>
-                {order.discount_total > 0 && (
+                {Number(order.discount_total) > 0 && (
                   <div className="flex justify-between text-rose-700 font-semibold">
                     <span>Discount</span>
-                    <span>-GH₵ {order.discount_total?.toFixed(2)}</span>
+                    <span>-GH₵ {Number(order.discount_total).toFixed(2)}</span>
                   </div>
                 )}
                 <div className="flex justify-between text-xl font-bold text-gray-900 pt-3 border-t border-gray-200">

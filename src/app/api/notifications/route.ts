@@ -198,8 +198,8 @@ export async function POST(request: Request) {
                             results.sms++;
                         }
                     }
-                } catch (err: any) {
-                    console.error(`[Campaign] Failed for ${recipient.email || recipient.phone}:`, err.message);
+                } catch (err: unknown) {
+                    console.error(`[Campaign] Failed for ${recipient.email || recipient.phone}:`, (err as Error).message);
                     results.errors++;
                 }
             }
@@ -212,7 +212,7 @@ export async function POST(request: Request) {
 
         return NextResponse.json({ error: 'Invalid notification type' }, { status: 400 });
 
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error('Notification API Error:', error);
         return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
     }

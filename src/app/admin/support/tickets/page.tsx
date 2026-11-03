@@ -9,10 +9,23 @@ import { adminFetch } from '@/lib/admin-fetch';
 const STATUS_TABS = ['all', 'open', 'in_progress', 'waiting_customer', 'resolved', 'closed'];
 const PRIORITY_OPTIONS = ['all', 'urgent', 'high', 'medium', 'low'];
 
+type TicketRow = {
+  id: string;
+  ticket_number: string;
+  subject: string;
+  status: string;
+  priority: string;
+  category?: string | null;
+  customer_name?: string | null;
+  customer_email?: string | null;
+  assigned_to?: string | null;
+  sla_deadline?: string | null;
+  created_at: string;
+};
+
 export default function TicketsPage() {
   const searchParams = useSearchParams();
-  const [tickets, setTickets] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [tickets, setTickets] = useState<TicketRow[]>([]);
   const [statusTab, setStatusTab] = useState('all');
   const [priorityFilter, setPriorityFilter] = useState('all');
   const [search, setSearch] = useState('');
@@ -20,9 +33,16 @@ export default function TicketsPage() {
   const [total, setTotal] = useState(0);
   const [showNewModal, setShowNewModal] = useState(searchParams.get('new') === '1');
   const limit = 20;
+  // Reference time for SLA badges, refreshed whenever a page of tickets loads.
+  const [now, setNow] = useState(() => Date.now());
 
-  const fetchTickets = useCallback(async () => {
-    setLoading(true);
+  // Loading until the tickets for the current filters/page have arrived, or while refreshing.
+  const queryKey = `${page}|${statusTab}|${priorityFilter}|${search}`;
+  const [loadedKey, setLoadedKey] = useState<string | null>(null);
+  const [reloading, setReloading] = useState(false);
+  const loading = reloading || loadedKey !== queryKey;
+
+  const queryTickets = useCallback(async () => {
     const from = (page - 1) * limit;
     const to = from + limit - 1;
 
@@ -36,13 +56,28 @@ export default function TicketsPage() {
     if (priorityFilter !== 'all') query = query.eq('priority', priorityFilter);
     if (search) query = query.or(`ticket_number.ilike.%${search}%,subject.ilike.%${search}%,customer_email.ilike.%${search}%,customer_name.ilike.%${search}%`);
 
-    const { data, count } = await query;
-    setTickets(data || []);
-    setTotal(count || 0);
-    setLoading(false);
+    return query;
   }, [page, statusTab, priorityFilter, search]);
 
-  useEffect(() => { fetchTickets(); }, [fetchTickets]);
+  useEffect(() => {
+    async function loadTickets() {
+      const { data, count } = await queryTickets();
+      setTickets(data || []);
+      setNow(Date.now());
+      setTotal(count || 0);
+      setLoadedKey(queryKey);
+    }
+    loadTickets();
+  }, [queryTickets, queryKey]);
+
+  const fetchTickets = async () => {
+    setReloading(true);
+    const { data, count } = await queryTickets();
+    setTickets(data || []);
+    setNow(Date.now());
+    setTotal(count || 0);
+    setReloading(false);
+  };
 
   const priorityBadge = (p: string) => {
     const c: Record<string, string> = { urgent: 'bg-red-100 text-red-700 ring-1 ring-red-200', high: 'bg-orange-100 text-orange-700', medium: 'bg-blue-100 text-blue-700', low: 'bg-gray-100 text-gray-600' };
@@ -54,10 +89,9 @@ export default function TicketsPage() {
     return <span className={`px-2 py-0.5 text-[10px] font-bold uppercase rounded-full ${c[s] || c.open}`}>{s.replace(/_/g, ' ')}</span>;
   };
 
-  const slaStatus = (ticket: any) => {
+  const slaStatus = (ticket: TicketRow) => {
     if (!ticket.sla_deadline || ticket.status === 'resolved' || ticket.status === 'closed') return null;
     const deadline = new Date(ticket.sla_deadline).getTime();
-    const now = Date.now();
     const hoursLeft = (deadline - now) / 3600000;
     if (hoursLeft < 0) return <span className="text-[9px] font-bold text-red-600 bg-red-50 px-1.5 py-0.5 rounded">SLA BREACHED</span>;
     if (hoursLeft < 2) return <span className="text-[9px] font-bold text-orange-600 bg-orange-50 px-1.5 py-0.5 rounded">SLA &lt;2h</span>;

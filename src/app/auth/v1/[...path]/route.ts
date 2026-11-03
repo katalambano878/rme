@@ -6,10 +6,14 @@ import {
   verifyAccessToken,
   getUserById,
   updateUserPassword,
+  revokeSessions,
+  createPasswordReset,
+  resetPasswordWithToken,
   updateUserMetadata,
 } from "@/lib/db/auth";
 import { isPlainPostgres } from "@/lib/db/mode";
 import { checkRateLimit, getClientIdentifier, RATE_LIMITS } from "@/lib/rate-limit";
+import { sendPasswordReset, storeBaseUrl } from "@/lib/notifications";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -103,9 +107,9 @@ export async function POST(
   const url = req.nextUrl;
   const contentType = req.headers.get("content-type") || "";
 
-  let body: Record<string, any> = {};
+  let body: Record<string, unknown> = {};
   if (contentType.includes("application/json")) {
-    body = (await req.json().catch(() => ({}))) as Record<string, any>;
+    body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
   } else if (contentType.includes("application/x-www-form-urlencoded")) {
     const text = await req.text();
     body = Object.fromEntries(new URLSearchParams(text));
@@ -164,11 +168,46 @@ export async function POST(
   }
 
   if (slug === "logout") {
-    return NextResponse.json({}, { status: 204, headers: cors() });
+    // Ends the session on the server too, not just in the browser.
+    const token = (req.headers.get("authorization") || "").replace(/^Bearer\s+/i, "").trim();
+    if (!token) return gotrueError("No authorization header", 401, "no_authorization");
+    const scope = req.nextUrl.searchParams.get("scope") || "global";
+    if (scope !== "global" && scope !== "local") {
+      return gotrueError("Unsupported logout scope", 400);
+    }
+    const { error } = await revokeSessions(token, scope);
+    if (error) return gotrueError(error, 401, "invalid_token");
+    return new NextResponse(null, { status: 204, headers: cors() });
   }
 
   if (slug === "recover") {
-    // Password recovery email not wired in staging shim yet
+    // Always the same reply, so the form can't be used to find out who has an account.
+    const email = String(body.email || "").trim().toLowerCase().slice(0, 254);
+    const ipLimit = checkRateLimit(`reset:${getClientIdentifier(req)}`, RATE_LIMITS.passwordReset);
+    if (!ipLimit.success) return tooManyAttempts(ipLimit.resetIn);
+    if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      const emailLimit = checkRateLimit(`reset-email:${email}`, RATE_LIMITS.passwordResetEmail);
+      if (emailLimit.success) {
+        const reset = await createPasswordReset(email).catch((err) => {
+          console.error("[auth] reset token failed:", err instanceof Error ? err.message : err);
+          return null;
+        });
+        if (reset) {
+          const resetUrl = `${storeBaseUrl()}/auth/reset-password?token=${encodeURIComponent(reset.token)}`;
+          await sendPasswordReset({ ...reset, resetUrl }).catch((err) =>
+            console.error("[auth] reset message failed:", err instanceof Error ? err.message : err)
+          );
+        }
+      }
+    }
+    return NextResponse.json({}, { status: 200, headers: cors() });
+  }
+
+  if (slug === "reset") {
+    const limited = checkRateLimit(`reset-use:${getClientIdentifier(req)}`, RATE_LIMITS.login);
+    if (!limited.success) return tooManyAttempts(limited.resetIn);
+    const { error } = await resetPasswordWithToken(String(body.token || ""), String(body.password || ""));
+    if (error) return gotrueError(error, 400);
     return NextResponse.json({}, { status: 200, headers: cors() });
   }
 
@@ -178,12 +217,14 @@ export async function POST(
 /** Only the profile fields the app uses; anything else a client sends is dropped. */
 const USER_METADATA_KEYS = ["full_name", "phone", "avatar_url"] as const;
 
-function userMetadataFrom(body: Record<string, any>): Record<string, string> {
+function userMetadataFrom(body: Record<string, unknown>): Record<string, string> {
   const raw = body.data || body.user_metadata;
   const out: Record<string, string> = {};
   if (!raw || typeof raw !== "object") return out;
+  const fields = raw as Record<string, unknown>;
   for (const key of USER_METADATA_KEYS) {
-    if (typeof raw[key] === "string") out[key] = raw[key].trim().slice(0, 200);
+    const value = fields[key];
+    if (typeof value === "string") out[key] = value.trim().slice(0, 200);
   }
   return out;
 }
@@ -207,7 +248,7 @@ export async function PUT(
   const verified = await verifyAccessToken(token);
   if (!verified) return gotrueError("Invalid JWT", 401, "invalid_token");
 
-  const body = (await req.json().catch(() => ({}))) as Record<string, any>;
+  const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
 
   if (body.password) {
     // Changing the password signs out every other session (see passwordVersion).

@@ -8,6 +8,12 @@ const RECAPTCHA_SECRET_KEY = process.env.RECAPTCHA_SECRET_KEY || '';
 // Minimum score to pass verification (0.0 = bot, 1.0 = human)
 const MIN_SCORE = 0.5;
 
+/** The subset of Google's reCAPTCHA v3 global the client code calls. */
+interface GrecaptchaV3 {
+    ready(cb: () => void): void;
+    execute(siteKey: string, opts: { action: string }): Promise<string>;
+}
+
 /**
  * Client-side: Execute reCAPTCHA v3 and return a token.
  * Must be called in the browser after the reCAPTCHA script has loaded.
@@ -22,13 +28,13 @@ export async function executeRecaptcha(action: string): Promise<string | null> {
     try {
         // Wait for grecaptcha to be ready
         return await new Promise<string>((resolve, reject) => {
-            const w = window as any;
+            const w = window as Window & { grecaptcha?: GrecaptchaV3 };
             if (!w.grecaptcha) {
                 reject(new Error('reCAPTCHA script not loaded'));
                 return;
             }
             w.grecaptcha.ready(() => {
-                w.grecaptcha
+                w.grecaptcha!
                     .execute(RECAPTCHA_SITE_KEY, { action })
                     .then(resolve)
                     .catch(reject);
@@ -85,8 +91,8 @@ export async function verifyRecaptcha(
         }
 
         return { success: true, score: data.score };
-    } catch (error: any) {
-        console.error('[reCAPTCHA] Verification error:', error.message);
+    } catch (error: unknown) {
+        console.error('[reCAPTCHA] Verification error:', (error as Error).message);
         return { success: false, error: 'reCAPTCHA verification request failed' };
     }
 }

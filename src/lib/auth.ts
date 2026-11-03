@@ -1,4 +1,5 @@
 import { NextRequest } from 'next/server';
+import type { User } from '@supabase/supabase-js';
 import { supabaseAdmin } from './supabase-admin';
 import { canAccessAdminPanel } from './admin-role-access';
 
@@ -9,7 +10,7 @@ import { canAccessAdminPanel } from './admin-role-access';
 
 export interface AuthResult {
     authenticated: boolean;
-    user?: any;
+    user?: User;
     role?: string;
     error?: string;
 }
@@ -125,8 +126,8 @@ export async function verifyAuth(
         }
 
         return { authenticated: true, user };
-    } catch (err: any) {
-        return { authenticated: false, error: err.message || 'Auth verification failed' };
+    } catch (err: unknown) {
+        return { authenticated: false, error: (err as Error).message || 'Auth verification failed' };
     }
 }
 
@@ -161,8 +162,8 @@ export async function verifyAdminToken(token: string): Promise<AuthResult> {
         }
 
         return { authenticated: true, user, role: profile.role };
-    } catch (err: any) {
-        return { authenticated: false, error: err.message || 'Auth failed' };
+    } catch (err: unknown) {
+        return { authenticated: false, error: (err as Error).message || 'Auth failed' };
     }
 }
 
@@ -186,7 +187,7 @@ export async function requireStaffArea(
     const { data: profile } = await supabaseAdmin
         .from('profiles')
         .select('permissions')
-        .eq('id', auth.user.id)
+        .eq('id', auth.user!.id)
         .maybeSingle();
     const permissions = (profile?.permissions || {}) as Record<string, unknown>;
     // Matches staffCanAccessPath: a staff row with no flags saved yet has every area.

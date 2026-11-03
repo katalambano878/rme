@@ -7,13 +7,27 @@ import { supabase } from '@/lib/supabase';
 import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
 
+type CustomerProfile = {
+    id: string;
+    full_name?: string | null;
+    email: string;
+    phone?: string | null;
+};
+
+type CustomerOrder = {
+    id: string;
+    created_at: string;
+    status: string;
+    grand_total: number | null;
+};
+
 export default function CustomerDetailsPage() {
     const router = useRouter();
     const params = useParams();
     const customerId = params.id as string;
     
-    const [customer, setCustomer] = useState<any>(null);
-    const [orders, setOrders] = useState<any[]>([]);
+    const [customer, setCustomer] = useState<CustomerProfile | null>(null);
+    const [orders, setOrders] = useState<CustomerOrder[]>([]);
     const [loading, setLoading] = useState(true);
 
   // eslint-disable-next-line react-hooks/exhaustive-deps

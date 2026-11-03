@@ -6,7 +6,7 @@ import { supabase } from '@/lib/supabase';
 import { useRouter } from 'next/navigation';
 import { SITE_DOMAIN, BRAND_NAME } from '@/lib/brand';
 import { SUPABASE_STORAGE_BUCKET } from '@/lib/supabase-storage';
-import { sortCategoriesForDisplay, categoryOptionLabel } from '@/lib/category-tree';
+import { sortCategoriesForDisplay, categoryOptionLabel, type CategoryLike } from '@/lib/category-tree';
 import { money } from '@/lib/format-money';
 import { adminImageSrc, normalizePublicImageSrc } from '@/lib/product-image';
 import { ACCEPT_PRODUCT_IMAGES, prepareImageForUpload } from '@/lib/browser-image-upload';
@@ -15,7 +15,61 @@ import { planVariantSync, type DesiredVariant } from '@/lib/admin-variant-sync';
 
 const DEFAULT_CUSTOM_HEX = '#888888';
 
+type NumLike = number | string | null;
+
+export type ProductFormVariant = {
+    id?: string;
+    name?: string | null;
+    color?: string | null;
+    colorHex?: string | null;
+    option2?: string | null;
+    sku?: string | null;
+    price?: NumLike;
+    compare_at_price?: NumLike;
+    sale_price?: NumLike;
+    quantity?: NumLike;
+    stock?: NumLike;
+    stock_quantity?: NumLike;
+};
+
+export type ProductFormImage = { id?: string; url: string; position: number; alt_text?: string };
+
+export type ProductFormInitialData = {
+    id?: string;
+    name?: string | null;
+    slug?: string | null;
+    category_id?: string | null;
+    description?: string | null;
+    status?: string | null;
+    sku?: string | null;
+    price?: NumLike;
+    compare_at_price?: NumLike;
+    sale_price?: NumLike;
+    quantity?: number | string;
+    moq?: number | string | null;
+    is_featured?: boolean | null;
+    featured?: boolean;
+    seo_title?: string | null;
+    seo_description?: string | null;
+    tags?: string[] | null;
+    metadata?: {
+        low_stock_threshold?: number | string | null;
+        preorder_shipping?: string | null;
+        sales_price?: NumLike;
+        sale_price?: NumLike;
+        [key: string]: unknown;
+    } | null;
+    product_variants?: ProductFormVariant[];
+    variants?: ProductFormVariant[];
+    product_images?: ProductFormImage[];
+};
+
 type VariantFormData = { id?: string; price: string; stock: string; sku: string; salePrice: string };
+
+function errorMessage(err: unknown): string | undefined {
+    if (err && typeof err === 'object' && 'message' in err && typeof err.message === 'string') return err.message;
+    return undefined;
+}
 
 /** URL-safe slug from product title (keeps admin slug in sync until the user edits it). */
 function slugifyProductName(name: string): string {
@@ -28,7 +82,7 @@ function slugifyProductName(name: string): string {
 }
 
 /** Price = selling price; compare_at optional higher list price; sale_price = dedicated sale price column. */
-function initialSaleFields(initialData?: any) {
+function initialSaleFields(initialData?: ProductFormInitialData | null) {
     if (!initialData) {
         return { regularPrice: '', salePrice: '', compareAtOptional: '' };
     }
@@ -49,14 +103,14 @@ function initialSaleFields(initialData?: any) {
 }
 
 interface ProductFormProps {
-    initialData?: any;
+    initialData?: ProductFormInitialData | null;
     isEditMode?: boolean;
 }
 
 export default function ProductForm({ initialData, isEditMode = false }: ProductFormProps) {
     const router = useRouter();
     const [loading, setLoading] = useState(false);
-    const [categories, setCategories] = useState<any[]>([]);
+    const [categories, setCategories] = useState<CategoryLike[]>([]);
     const [publicOrigin, setPublicOrigin] = useState(`https://${SITE_DOMAIN}`);
     useEffect(() => {
         setPublicOrigin(typeof window !== 'undefined' ? window.location.origin.replace(/\/$/, '') : `https://${SITE_DOMAIN}`);
@@ -112,7 +166,7 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
     const sizePresets = ['XS', 'S', 'M', 'L', 'XL', 'XXL', '3XL'];
 
     // Parse existing variants to extract unique colors and sizes
-    const existingVariants = (initialData?.product_variants || initialData?.variants || []).map((v: any) => ({
+    const existingVariants = (initialData?.product_variants || initialData?.variants || []).map((v) => ({
         ...v,
         stock: v.stock ?? v.stock_quantity ?? v.quantity ?? 0,
         color: String(v.color ?? v.option2 ?? '').trim(),
@@ -122,7 +176,7 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
 
     const [selectedColors, setSelectedColors] = useState<{ name: string; hex: string }[]>(() => {
         const colors: { name: string; hex: string }[] = [];
-        existingVariants.forEach((v: any) => {
+        existingVariants.forEach((v) => {
             if (!v.color || colors.some(c => sameOptionValue(c.name, v.color))) return;
             const preset = colorPresets.find(c => sameOptionValue(c.name, v.color));
             colors.push({ name: v.color, hex: normalizeHex(v.colorHex) || preset?.hex || DEFAULT_CUSTOM_HEX });
@@ -132,7 +186,7 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
 
     const [selectedSizes, setSelectedSizes] = useState<string[]>(() => {
         const sizes: string[] = [];
-        existingVariants.forEach((v: any) => {
+        existingVariants.forEach((v) => {
             if (v.size && !sizes.some(s => sameOptionValue(s, v.size))) sizes.push(v.size);
         });
         return sizes;
@@ -148,7 +202,7 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
     // Store variant data (db id, price, stock) in a map keyed by "color|||size"
     const [variantData, setVariantData] = useState<Record<string, VariantFormData>>(() => {
         const data: Record<string, VariantFormData> = {};
-        existingVariants.forEach((v: any) => {
+        existingVariants.forEach((v) => {
             const key = buildVariantKey(v.color || '', v.size || '');
             if (data[key]) return;
             data[key] = {
@@ -161,7 +215,7 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
         });
         return data;
     });
-    const initialOptionVariantCount = existingVariants.filter((v: any) => v.color || v.size).length;
+    const initialOptionVariantCount = existingVariants.filter((v) => v.color || v.size).length;
 
     const emptyVariantData = (): VariantFormData => ({ price: regularPrice, stock: '0', sku: '', salePrice: '' });
 
@@ -266,7 +320,7 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
     };
 
     // Images
-    const [images, setImages] = useState<any[]>(initialData?.product_images || []);
+    const [images, setImages] = useState<ProductFormImage[]>(initialData?.product_images || []);
     const [uploading, setUploading] = useState(false);
 
     // SEO
@@ -364,8 +418,8 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
 
             setImages([...images, { url: normalizePublicImageSrc(publicUrl), position: images.length }]);
 
-        } catch (error: any) {
-            alert('Error uploading image: ' + (error?.message || 'Upload failed'));
+        } catch (error) {
+            alert('Error uploading image: ' + (errorMessage(error) || 'Upload failed'));
         } finally {
             setUploading(false);
             e.target.value = '';
@@ -401,7 +455,7 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
             const hasVariants = variants.length > 0;
             const variantStockTotal = hasVariants
                 ? variants.reduce((sum, v) => sum + (parseInt(v.stock) || 0), 0)
-                : parseInt(stock) || 0;
+                : parseInt(String(stock)) || 0;
 
             const reg = parseFloat(regularPrice) || 0;
             const sal = parseFloat(salePrice) || 0;
@@ -455,8 +509,8 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
                 compare_at_price: compareAtStored,
                 sale_price: hasPromoSalesPrice ? sal : null,
                 sku: sku || generateSku(), // Auto-generate if empty
-                quantity: hasVariants ? variantStockTotal : (parseInt(stock) || 0),
-                moq: parseInt(moq) || 1,
+                quantity: hasVariants ? variantStockTotal : (parseInt(String(stock)) || 0),
+                moq: parseInt(String(moq)) || 1,
                 status: status.toLowerCase(),
                 is_featured: featured,
                 seo_title: seoTitle,
@@ -465,7 +519,7 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
                 metadata: {
                     ...restMeta,
                     ...(hasPromoSalesPrice ? { sales_price: sal } : {}),
-                    low_stock_threshold: parseInt(lowStockThreshold) || 5,
+                    low_stock_threshold: parseInt(String(lowStockThreshold)) || 5,
                     preorder_shipping: preorderShipping.trim() || null,
                     on_sale: metaOnSale,
                 }
@@ -568,9 +622,9 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
             alert(isEditMode ? 'Product updated successfully!' : 'Product created successfully!');
             router.push('/admin/products');
 
-        } catch (err: any) {
+        } catch (err) {
             console.error('Error saving product:', err);
-            alert(`Error: ${err.message}`);
+            alert(`Error: ${errorMessage(err)}`);
         } finally {
             setLoading(false);
         }
@@ -911,7 +965,7 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
                                                         This product has <strong>{variantCombinations.length} variants</strong>. Manage each variant&apos;s
                                                         stock in the <strong>Variants tab</strong>.
                                                         Total across all variants:{' '}
-                                                        <strong>{variants.reduce((sum: number, v: any) => sum + (parseInt(v.stock) || 0), 0)}</strong>.
+                                                        <strong>{variants.reduce((sum: number, v) => sum + (parseInt(v.stock) || 0), 0)}</strong>.
                                                     </span>
                                                 </p>
                                             </div>
@@ -1258,7 +1312,7 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
                             </div>
 
                             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                                {images.map((img: any, index: number) => (
+                                {images.map((img, index: number) => (
                                     <div key={index} className="relative group">
                                         <div className="aspect-square bg-gray-100 rounded-xl overflow-hidden border-2 border-gray-200">
                                             <img src={adminImageSrc(img.url, 200)} alt={`Product ${index + 1}`} className="w-full h-full object-cover" />

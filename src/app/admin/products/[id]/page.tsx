@@ -1,13 +1,25 @@
 'use client';
 
 import { use, useEffect, useState } from 'react';
-import ProductForm from '@/components/admin/ProductForm';
+import ProductForm, { type ProductFormInitialData } from '@/components/admin/ProductForm';
 import { supabase } from '@/lib/supabase';
 import { findOption } from '@/lib/variant-options';
 
+type ProductVariantRow = {
+  id: string;
+  sku: string | null;
+  price: number | string | null;
+  compare_at_price: number | string | null;
+  sale_price: number | string | null;
+  stock_quantity: number | string | null;
+  option_values: unknown;
+};
+
+type ProductImageRow = { id: string; url: string; sort_order: number | null; alt: string | null };
+
 export default function EditProductPage({ params }: { params: Promise<{ id: string }> }) {
   const resolvedParams = use(params);
-  const [productData, setProductData] = useState<any>(null);
+  const [productData, setProductData] = useState<ProductFormInitialData | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -26,7 +38,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
 
         if (error) throw error;
 
-        const normalizedVariants = (data?.variants || []).map((variant: any) => {
+        const normalizedVariants = ((data?.variants || []) as ProductVariantRow[]).map((variant) => {
           const sizeOption = findOption(variant.option_values, 'size');
           const colorOption = findOption(variant.option_values, 'color');
 
@@ -44,7 +56,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
           };
         });
 
-        const normalizedImages = (data?.product_images || []).map((image: any) => ({
+        const normalizedImages = ((data?.product_images || []) as ProductImageRow[]).map((image) => ({
           id: image.id,
           url: image.url,
           position: image.sort_order ?? 0,
@@ -60,7 +72,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
           compare_at_price: data?.compare_at_price ?? firstVariant?.compare_at_price ?? '',
           sku: data?.sku || firstVariant?.sku || '',
           quantity: normalizedVariants.reduce(
-            (sum: number, variant: any) => sum + (Number(variant.quantity) || 0),
+            (sum: number, variant) => sum + (Number(variant.quantity) || 0),
             0,
           ),
           featured: data?.is_featured ?? false,

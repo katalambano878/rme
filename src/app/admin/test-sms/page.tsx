@@ -48,25 +48,28 @@ export default function SmsDebuggerPage() {
     return normalizeSmsRecipient(phone);
   }, [phone]);
 
-  const loadStatus = useCallback(async () => {
+  const fetchStatus = useCallback(async (): Promise<StatusState> => {
     const { data: { session } } = await supabase.auth.getSession();
     const token = session?.access_token || '';
     const res = await getSmsDebuggerStatus(token);
     if (!res.ok) {
-      setStatus({ loading: false, error: res.error || 'Failed to load status' });
-      return;
+      return { loading: false, error: res.error || 'Failed to load status' };
     }
-    setStatus({
+    return {
       loading: false,
       endpoint: res.endpoint,
       smsVas: res.smsVas,
       moolreEmbed: res.moolreEmbed,
-    });
+    };
   }, []);
 
+  const loadStatus = useCallback(async () => {
+    setStatus(await fetchStatus());
+  }, [fetchStatus]);
+
   useEffect(() => {
-    void loadStatus();
-  }, [loadStatus]);
+    void fetchStatus().then(setStatus);
+  }, [fetchStatus]);
 
   const getToken = async () => {
     const { data: { session } } = await supabase.auth.getSession();

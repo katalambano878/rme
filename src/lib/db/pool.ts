@@ -3,7 +3,7 @@
 // Replaces the Supabase/PostgREST data plane. Every ported edge function talks
 // to Postgres through the supabase-compat client, which uses this pool.
 
-import { Pool, types } from "pg";
+import { Pool, types, type QueryResultRow } from "pg";
 
 // --- PostgREST-faithful type parsing ---------------------------------------
 // Supabase (PostgREST) serializes these as JSON strings/numbers; node-postgres
@@ -47,11 +47,11 @@ export function getPool(): Pool {
   return _pool;
 }
 
-export async function query<T = any>(
+export async function query<T = QueryResultRow>(
   text: string,
   params: unknown[] = []
 ): Promise<{ rows: T[]; rowCount: number }> {
   const pool = getPool();
-  const res = await pool.query(text, params as any[]);
+  const res = await pool.query(text, params);
   return { rows: res.rows as T[], rowCount: res.rowCount ?? 0 };
 }

@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname, useRouter } from 'next/navigation';
+import type { User } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
 import { BRAND_LOGO_ALT, BRAND_LOGO_SRC } from '@/lib/brand';
 import { canAccessAdminPanel, canManageStaffRoles } from '@/lib/admin-role-access';
@@ -19,11 +20,15 @@ export default function AdminLayout({
 }) {
   const pathname = usePathname();
   const router = useRouter();
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  // Open on desktop, closed on mobile (set once on mount; the loading screen renders first,
+  // so the server/client value never reaches hydrated markup).
+  const [isSidebarOpen, setIsSidebarOpen] = useState(
+    () => typeof window === 'undefined' || window.innerWidth >= 1024,
+  );
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [showUserMenu, setShowUserMenu] = useState(false);
-  const [user, setUser] = useState<any>(null);
+  const [user, setUser] = useState<User | null>(null);
   const [userRole, setUserRole] = useState<string | null>(null);
   const [userPermissions, setUserPermissions] = useState<Record<string, unknown> | null>(null);
 
@@ -132,7 +137,9 @@ export default function AdminLayout({
           return;
         }
         if (data) {
-          setEnabledModules(data.filter((m: any) => m.enabled).map((m: any) => m.id));
+          // A module with no saved row is on; only an explicit "off" hides it.
+          const off = new Set((data as { id: string; enabled: boolean | null }[]).filter((m) => m.enabled === false).map((m) => m.id));
+          setEnabledModules(ALL_MODULE_IDS.filter((id) => !off.has(id)));
         }
       } catch (err) {
         console.warn('Fetch modules failed, showing all:', err);
@@ -140,23 +147,6 @@ export default function AdminLayout({
       }
     }
     fetchModules();
-  }, []);
-
-  // Screen size check for initial state
-  useEffect(() => {
-    const handleResize = () => {
-      if (window.innerWidth < 1024) {
-        // Only set to false if it's currently true? 
-        // Actually, let's just default to open on desktop, closed on mobile on mount only
-      }
-    };
-
-    // Set initial state based on width
-    if (window.innerWidth < 1024) {
-      setIsSidebarOpen(false);
-    }
-
-    // Optional: Auto-close on resize to mobile? For now, leave as is.
   }, []);
 
   const handleLogout = async () => {

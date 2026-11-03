@@ -4,7 +4,11 @@
 
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
-import { discountRowToAdminCoupon } from '@/lib/discount-map';
+import { discountRowToAdminCoupon, type DiscountRow } from '@/lib/discount-map';
+
+type DiscountRecord = DiscountRow & { created_at?: string | null };
+type AdminCoupon = ReturnType<typeof discountRowToAdminCoupon> & { _raw: DiscountRecord };
+type DiscountType = 'percent' | 'fixed' | 'free_shipping';
 
 /** 'YYYY-MM-DD' from a date input → ISO timestamp for 23:59:59.999 that day in the admin's timezone. */
 function endOfLocalDay(date: string): string {
@@ -22,8 +26,8 @@ function toLocalDateInput(iso: string): string {
 export default function AdminCouponsPage() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
-  const [editingCoupon, setEditingCoupon] = useState<any>(null);
-  const [coupons, setCoupons] = useState<any[]>([]);
+  const [editingCoupon, setEditingCoupon] = useState<AdminCoupon | null>(null);
+  const [coupons, setCoupons] = useState<AdminCoupon[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -58,7 +62,7 @@ export default function AdminCouponsPage() {
       if (error) {
         console.warn('Discounts table fetch error:', error);
       } else if (data) {
-        setCoupons(data.map((row) => ({ ...discountRowToAdminCoupon(row), _raw: row })));
+        setCoupons((data as DiscountRecord[]).map((row) => ({ ...discountRowToAdminCoupon(row), _raw: row })));
       }
     } catch (err) {
       console.error(err);
@@ -79,7 +83,7 @@ export default function AdminCouponsPage() {
     setShowAddModal(true);
   };
 
-  const handleEdit = (coupon: any) => {
+  const handleEdit = (coupon: AdminCoupon) => {
     const typeMap: Record<string, 'percent' | 'fixed' | 'free_shipping'> = {
       'Percentage': 'percent',
       'Fixed Amount': 'fixed',
@@ -112,7 +116,7 @@ export default function AdminCouponsPage() {
       alert('End date cannot be before the start date.'); return;
     }
     setSaving(true);
-    const payload: any = {
+    const payload: Omit<DiscountRow, 'id' | 'uses_count' | 'description'> = {
       code: form.code.trim().toUpperCase(),
       discount_type: form.discount_type,
       value: form.discount_type === 'free_shipping' ? null : value,
@@ -123,7 +127,7 @@ export default function AdminCouponsPage() {
       ends_at: form.ends_at ? endOfLocalDay(form.ends_at) : null,
       is_active: form.is_active,
     };
-    let error: any = null;
+    let error: { message: string } | null = null;
     if (showEditModal && editingCoupon) {
       ({ error } = await supabase.from('discounts').update(payload).eq('id', editingCoupon.id));
     } else {
@@ -340,7 +344,7 @@ export default function AdminCouponsPage() {
                 <label className="block text-sm font-semibold text-gray-700 mb-1">Discount Type</label>
                 <select
                   value={form.discount_type}
-                  onChange={e => setForm(f => ({ ...f, discount_type: e.target.value as any }))}
+                  onChange={e => setForm(f => ({ ...f, discount_type: e.target.value as DiscountType }))}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-rose-400 focus:border-rose-400 cursor-pointer"
                 >
                   <option value="percent">Percentage (%)</option>

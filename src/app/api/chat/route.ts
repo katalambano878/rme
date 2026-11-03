@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import {
   searchProducts,
@@ -40,6 +40,49 @@ const groqKey = process.env.GROQ_API_KEY;
 // ─── Types ──────────────────────────────────────────────────────────────────
 
 type MessageRole = 'user' | 'assistant' | 'system' | 'tool';
+
+/** What the chat handlers reply with (fields persistConversation reads). */
+interface ChatReply {
+  message?: string;
+  products?: ChatProduct[];
+  orderCard?: ChatOrder;
+  ticketCard?: ChatTicket;
+  returnCard?: ChatReturn;
+  couponCard?: ChatCoupon;
+}
+
+/** A row from the get_ai_memories RPC. */
+interface AiMemory {
+  type?: string | null;
+  content?: string | null;
+}
+
+type CreateChatOrderParams = Parameters<typeof createChatOrder>[1];
+
+/**
+ * Tool-call arguments parsed from the model's JSON. The shape follows the
+ * LLM_TOOLS schemas; nothing guarantees it, so the tools validate their input.
+ */
+interface ToolArgs {
+  query: string;
+  slug_or_id: string;
+  order_number: string;
+  email?: string;
+  limit?: number;
+  code: string;
+  cart_total?: number;
+  subject: string;
+  description: string;
+  category?: string;
+  order_id: string;
+  reason: string;
+  context?: string;
+  topic: string;
+  items?: CreateChatOrderParams['items'];
+  shipping?: CreateChatOrderParams['shipping'];
+  delivery_method?: string;
+  payment_method?: string;
+}
 
 interface ChatMessage {
   role: 'user' | 'assistant';
@@ -451,14 +494,15 @@ async function detectAuth(request: Request): Promise<{ userId: string | null; em
     if (!authToken) return { userId: null, email: null };
 
     const decoded = decodeURIComponent(authToken);
-    let tokenData: any;
+    let tokenData: unknown;
     try {
       tokenData = JSON.parse(decoded);
     } catch {
       tokenData = decoded;
     }
 
-    const accessToken = typeof tokenData === 'string' ? tokenData : tokenData?.[0] || tokenData?.access_token;
+    const tokenObj = tokenData as { 0?: unknown; access_token?: unknown } | null | undefined;
+    const accessToken = typeof tokenData === 'string' ? tokenData : tokenObj?.[0] || tokenObj?.access_token;
     if (!accessToken) return { userId: null, email: null };
 
     const supabase = createClient(supabaseUrl, supabaseKey, {
@@ -547,7 +591,7 @@ export async function POST(request: Request) {
     }
 
     // Fetch AI memories for context (writer needed because ai_memory has RLS)
-    let aiMemories: any[] = [];
+    let aiMemories: AiMemory[] = [];
     if (userId) {
       try {
         const { data: memData, error: memErr } = await supabaseWriter.rpc('get_ai_memories', {
@@ -576,7 +620,7 @@ export async function POST(request: Request) {
             .limit(3);
           if (kbArticles && kbArticles.length > 0) {
             kbContext = '\n\nKNOWLEDGE BASE (use these to answer if relevant):\n' +
-              kbArticles.map((a: any) => `- ${a.title}: ${a.content.slice(0, 200)}`).join('\n');
+              kbArticles.map((a: { title: string; content: string }) => `- ${a.title}: ${a.content.slice(0, 200)}`).join('\n');
           }
         }
       } catch {}
@@ -589,7 +633,7 @@ export async function POST(request: Request) {
         siteHits.map(h => `[${h.title}] (${h.path}): ${h.content.slice(0, 300)}...`).join('\n');
     }
 
-    let result: any;
+    let result: ChatReply;
     if (groqKey) {
       result = await handleWithAI(supabase, supabaseWriter, messages, userText, groqKey, userId, userEmail, profile, pagePath, aiMemories, kbContext, cartItems, clientIp);
     } else {
@@ -617,7 +661,7 @@ export async function POST(request: Request) {
     }
 
     return NextResponse.json(result);
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error('[Chat API] Error:', err);
     return NextResponse.json(
       { message: 'Something went wrong. Please try again.', quickReplies: ['Try again'] },
@@ -629,14 +673,14 @@ export async function POST(request: Request) {
 // ─── Conversation Persistence ───────────────────────────────────────────────
 
 async function persistConversation(
-  supabase: any,
+  supabase: SupabaseClient,
   sessionId: string,
   userId: string | null,
   userEmail: string | null,
   profile: ChatCustomerProfile | null,
   previousMessages: ChatMessage[],
   userText: string,
-  result: any,
+  result: ChatReply,
   pagePath?: string
 ) {
   const allMessages = [
@@ -667,7 +711,7 @@ async function persistConversation(
 
   // Intent detection
   let intent = null;
-  if (result.products?.length > 0) intent = 'product_search';
+  if ((result.products?.length ?? 0) > 0) intent = 'product_search';
   else if (result.orderCard) intent = 'order_tracking';
   else if (result.ticketCard) intent = 'support_ticket';
   else if (result.returnCard) intent = 'return_request';
@@ -676,7 +720,7 @@ async function persistConversation(
   else if (/\b(thank|bye)\b/i.test(lower)) intent = 'closing';
 
   // Auto-resolution: if AI provided a helpful answer (product, order, coupon info)
-  const isResolved = !!(result.products?.length > 0 || result.orderCard || result.couponCard);
+  const isResolved = !!((result.products?.length ?? 0) > 0 || result.orderCard || result.couponCard);
   const isEscalated = !!(result.ticketCard);
 
   // Build conversation summary from last exchange
@@ -738,12 +782,12 @@ async function persistConversation(
         content: `Had a negative experience: "${userText.slice(0, 150)}"`,
         importance: 'high',
         source_conversation_id: existingConv.id,
-      }).then(() => {}).catch(() => {});
+      }).then(() => {}, () => {});
     }
 
     // Auto-save preference memories from product searches
-    if (category === 'product' && result.products?.length > 0 && (userId || userEmail)) {
-      const productNames = result.products.slice(0, 3).map((p: any) => p.name).join(', ');
+    if (category === 'product' && (result.products?.length ?? 0) > 0 && (userId || userEmail)) {
+      const productNames = result.products!.slice(0, 3).map((p) => p.name).join(', ');
       await supabase.from('ai_memory').insert({
         customer_id: userId || null,
         customer_email: userEmail || null,
@@ -751,14 +795,14 @@ async function persistConversation(
         content: `Interested in: ${productNames}`,
         importance: 'normal',
         source_conversation_id: existingConv.id,
-      }).then(() => {}).catch(() => {});
+      }).then(() => {}, () => {});
     }
   }
 }
 
 // ─── Rule-Based Fallback ────────────────────────────────────────────────────
 
-async function handleWithoutAI(supabase: any, _supabaseWriter: any, userText: string, profile: ChatCustomerProfile | null) {
+async function handleWithoutAI(supabase: SupabaseClient, _supabaseWriter: SupabaseClient, userText: string, profile: ChatCustomerProfile | null) {
   const lower = userText.toLowerCase();
 
   if (/\b(hi|hello|hey|good morning|good afternoon|good evening)\b/i.test(userText)) {
@@ -884,8 +928,8 @@ async function handleWithoutAI(supabase: any, _supabaseWriter: any, userText: st
 // ─── AI Handler with Function Calling (Groq) ───────────────────────────────
 
 async function handleWithAI(
-  supabase: any,
-  supabaseWriter: any,
+  supabase: SupabaseClient,
+  supabaseWriter: SupabaseClient,
   messages: ChatMessage[],
   userText: string,
   apiKey: string,
@@ -893,7 +937,7 @@ async function handleWithAI(
   userEmail: string | null,
   profile: ChatCustomerProfile | null,
   pagePath?: string,
-  aiMemories?: any[],
+  aiMemories?: AiMemory[],
   kbContext?: string,
   cartItems?: { id: string; name: string; price: number; quantity: number; slug: string }[],
   clientIp?: string,
@@ -932,7 +976,7 @@ async function handleWithAI(
     { role: 'user', content: userText },
   ];
 
-  let allProducts: ChatProduct[] = [];
+  const allProducts: ChatProduct[] = [];
   let allActions: ChatAction[] = [];
   let orderCard: ChatOrder | undefined;
   let ticketCard: ChatTicket | undefined;
@@ -974,7 +1018,7 @@ async function handleWithAI(
 
       for (const tc of toolCalls) {
         const fnName = tc.function?.name;
-        let args: any = {};
+        let args = {} as ToolArgs;
         try { args = JSON.parse(tc.function?.arguments || '{}'); } catch {}
 
         const toolResult = await executeToolCall(supabase, supabaseWriter, fnName, args, userId, userEmail, profile, cartItems, clientIp);
@@ -1057,7 +1101,7 @@ async function handleWithAI(
       couponCard,
       quickReplies,
     };
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error('[Chat API] AI handler error:', err);
     return await handleWithoutAI(supabase, supabaseWriter, userText, profile);
   }
@@ -1066,17 +1110,17 @@ async function handleWithAI(
 // ─── Tool Call Executor ─────────────────────────────────────────────────────
 
 async function executeToolCall(
-  supabase: any,
-  supabaseWriter: any,
+  supabase: SupabaseClient,
+  supabaseWriter: SupabaseClient,
   fnName: string,
-  args: any,
+  args: ToolArgs,
   userId: string | null,
   userEmail: string | null,
   profile: ChatCustomerProfile | null,
   cartItems?: { id: string; name: string; price: number; quantity: number; slug: string }[],
   clientIp?: string,
 ): Promise<{
-  data: any;
+  data: unknown;
   products?: ChatProduct[];
   orderCard?: ChatOrder;
   ticketCard?: ChatTicket;
@@ -1318,14 +1362,14 @@ async function executeToolCall(
       }
       const orderResult = await createChatOrder(supabase, {
         items: args.items || [],
-        shipping: args.shipping || {},
+        shipping: args.shipping || ({} as CreateChatOrderParams['shipping']),
         deliveryMethod: args.delivery_method || 'standard',
         paymentMethod: args.payment_method || 'moolre',
         userId,
       });
 
       const result: {
-        data: any;
+        data: unknown;
         paymentAction?: ChatAction;
         quickReplies?: string[];
       } = {

@@ -1,4 +1,4 @@
-import { createClient as createSupabaseJsClient } from '@supabase/supabase-js';
+import { createClient as createSupabaseJsClient, type SupabaseClient } from '@supabase/supabase-js';
 import { isPlainPostgres } from './db/mode';
 import { createClient as createPgClient } from './db/supabase-compat';
 
@@ -41,13 +41,15 @@ function getAdminClient() {
   return _client;
 }
 
-export const supabaseAdmin: any = new Proxy(
+// Typed as a supabase-js client: the compat client implements the subset of
+// that surface the app calls (see src/lib/supabase/admin.ts).
+export const supabaseAdmin = new Proxy(
   {},
   {
     get(_target, prop, receiver) {
-      const client = getAdminClient() as any;
+      const client = getAdminClient() as object;
       const value = Reflect.get(client, prop, receiver);
       return typeof value === 'function' ? value.bind(client) : value;
     },
   },
-);
+) as SupabaseClient;

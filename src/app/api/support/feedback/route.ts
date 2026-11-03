@@ -10,7 +10,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Too many feedback submissions.' }, { status: 429 });
   }
 
-  let body: any;
+  let body: Record<string, unknown> | null | undefined;
   try {
     body = await req.json();
   } catch {

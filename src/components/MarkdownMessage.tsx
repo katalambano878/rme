@@ -91,7 +91,7 @@ function parseBlocks(content: string): Block[] {
       blocks.push({ type: 'numbered-list', items });
     } else {
       // Collect consecutive paragraph lines
-      let paraLines: string[] = [];
+      const paraLines: string[] = [];
       while (i < lines.length) {
         const nextLine = lines[i];
         if (nextLine.match(/^\s*[-*•]\s+/) || nextLine.match(/^\s*\d+[.)]\s+/)) break;

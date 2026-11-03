@@ -89,6 +89,13 @@ export async function generateMetadata({
   }
 }
 
+/** Offer price validity for the JSON-LD: 30 days from now, as YYYY-MM-DD. */
+function priceValidUntil(): string {
+  return new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
+    .toISOString()
+    .split("T")[0]
+}
+
 export default async function ProductPage({
   params,
 }: {
@@ -130,9 +137,7 @@ export default async function ProductPage({
       url: `${siteUrl}/products/${product.slug}`,
       priceCurrency: "GHS",
       price: price.toFixed(2),
-      priceValidUntil: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
-        .toISOString()
-        .split("T")[0],
+      priceValidUntil: priceValidUntil(),
       availability:
         product.stock > 0
           ? "https://schema.org/InStock"

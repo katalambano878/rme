@@ -6,10 +6,36 @@ import { supabase } from '@/lib/supabase';
 import { adminFetch } from '@/lib/admin-fetch';
 import MarkdownMessage from '@/components/MarkdownMessage';
 
+type ChatMessage = { role?: string; content?: string };
+
+type Conversation = {
+  id: string;
+  session_id?: string | null;
+  user_id?: string | null;
+  customer_email?: string | null;
+  customer_name?: string | null;
+  summary?: string | null;
+  category?: string | null;
+  sentiment?: string | null;
+  intent?: string | null;
+  page_context?: string | null;
+  tags?: string[] | null;
+  messages?: unknown;
+  metadata?: Record<string, unknown> | string | null;
+  message_count?: number | null;
+  is_resolved?: boolean | null;
+  is_escalated?: boolean;
+  ai_handled?: boolean | null;
+  created_at: string;
+  updated_at: string;
+};
+
+type MemoryRow = { id: string; memory_type: string; content: string };
+
 export default function ConversationDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
-  const [conversation, setConversation] = useState<any>(null);
-  const [memories, setMemories] = useState<any[]>([]);
+  const [conversation, setConversation] = useState<Conversation | null>(null);
+  const [memories, setMemories] = useState<MemoryRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [newMemory, setNewMemory] = useState('');
   const [memoryType, setMemoryType] = useState('context');
@@ -57,12 +83,14 @@ export default function ConversationDetailPage({ params }: { params: Promise<{ i
   }
 
   async function toggleResolved() {
+    if (!conversation) return;
     const newVal = !conversation.is_resolved;
     await supabase.from('chat_conversations').update({ is_resolved: newVal }).eq('id', id);
     setConversation({ ...conversation, is_resolved: newVal });
   }
 
   async function createTicketFromConversation() {
+    if (!conversation) return;
     // Tickets need a customer email (the API returns 400 without one), so ask when the chat has none.
     let customerEmail = (conversation.customer_email || '').trim();
     if (!customerEmail) {
@@ -70,9 +98,9 @@ export default function ConversationDetailPage({ params }: { params: Promise<{ i
       if (!customerEmail) return;
     }
     setCreatingTicket(true);
-    let data: any;
+    let data: { data?: { ticket_number?: string } } | undefined;
     try {
-      data = await adminFetch('/api/support/tickets', {
+      data = await adminFetch<{ data?: { ticket_number?: string } }>('/api/support/tickets', {
         method: 'POST',
         body: JSON.stringify({
         subject: conversation.summary || `Chat conversation from ${conversation.customer_name || conversation.customer_email || 'customer'}`,
@@ -109,14 +137,13 @@ export default function ConversationDetailPage({ params }: { params: Promise<{ i
     return <div className="text-center p-12"><p className="text-gray-500">Conversation not found</p></div>;
   }
 
-  let parsedMessages = conversation.messages;
+  let parsedMessages: unknown = conversation.messages;
   if (typeof parsedMessages === 'string') {
     try { parsedMessages = JSON.parse(parsedMessages); } catch { parsedMessages = []; }
   }
-  if (!Array.isArray(parsedMessages)) parsedMessages = [];
-  const messages: any[] = parsedMessages;
+  const messages: ChatMessage[] = Array.isArray(parsedMessages) ? parsedMessages : [];
 
-  let meta = conversation.metadata || {};
+  let meta: Record<string, unknown> | string = conversation.metadata || {};
   if (typeof meta === 'string') {
     try { meta = JSON.parse(meta); } catch { meta = {}; }
   }
@@ -168,7 +195,7 @@ export default function ConversationDetailPage({ params }: { params: Promise<{ i
               <span className="ml-auto text-xs text-rose-500">{messages.length || conversation.message_count || 0} messages</span>
             </div>
             <div className="max-h-[600px] overflow-y-auto p-4 space-y-3 bg-gray-50/50">
-              {messages.map((msg: any, i: number) => (
+              {messages.map((msg, i: number) => (
                 <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                   <div className={`max-w-[80%] rounded-2xl px-4 py-2.5 text-sm ${msg.role === 'user' ? 'bg-pink-100 text-rose-900 border border-rose-200/80 rounded-br-sm' : 'bg-white text-gray-800 rounded-bl-sm border border-gray-100 shadow-sm'}`}>
                     <MarkdownMessage content={msg.content || ''} isUserMessage={msg.role === 'user'} />
@@ -219,9 +246,9 @@ export default function ConversationDetailPage({ params }: { params: Promise<{ i
               <div className="flex justify-between"><span className="text-gray-500">Page</span><span className="text-xs font-mono">{conversation.page_context || '—'}</span></div>
               <div className="flex justify-between"><span className="text-gray-500">Started</span><span className="text-xs">{new Date(conversation.created_at).toLocaleString()}</span></div>
               <div className="flex justify-between"><span className="text-gray-500">Last Active</span><span className="text-xs">{new Date(conversation.updated_at).toLocaleString()}</span></div>
-              {conversation.tags?.length > 0 && (
+              {(conversation.tags?.length ?? 0) > 0 && (
                 <div className="pt-2 flex flex-wrap gap-1">
-                  {conversation.tags.map((t: string) => <span key={t} className="px-2 py-0.5 text-[10px] bg-gray-100 text-gray-600 rounded-full">{t}</span>)}
+                  {conversation.tags?.map((t: string) => <span key={t} className="px-2 py-0.5 text-[10px] bg-gray-100 text-gray-600 rounded-full">{t}</span>)}
                 </div>
               )}
             </div>

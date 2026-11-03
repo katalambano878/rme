@@ -32,7 +32,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Text too long' }, { status: 413 });
     }
 
-    let cleaned = text
+    const cleaned = text
       .replace(/GH₵/g, 'Ghana Cedis ')
       .replace(/\*\*/g, '')
       .replace(/\*/g, '')
@@ -72,7 +72,7 @@ export async function POST(request: Request) {
         'Cache-Control': 'no-cache',
       },
     });
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error('[Speak API] Error:', err);
     return NextResponse.json({ error: 'Speech generation error' }, { status: 500 });
   }

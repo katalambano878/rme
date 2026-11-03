@@ -40,6 +40,12 @@ export function Navbar() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
   const hydrated = useHydrated()
+  // Leaving the home page drops the solid-hero state (adjusted during render, not in an effect).
+  const [prevIsHome, setPrevIsHome] = useState(isHome)
+  if (prevIsHome !== isHome) {
+    setPrevIsHome(isHome)
+    if (!isHome) setHeroSolid(false)
+  }
   const storedCartCount = useCartStore((s) => s.getItemCount())
   const openCart = useCartStore((s) => s.openCart)
   const storedWishlistCount = useWishlistStore((s) => s.items.length)
@@ -47,10 +53,7 @@ export function Navbar() {
   const wishlistCount = hydrated ? storedWishlistCount : 0
 
   useEffect(() => {
-    if (!isHome) {
-      setHeroSolid(false)
-      return
-    }
+    if (!isHome) return
     const onScroll = () => setHeroSolid(window.scrollY > 2)
     onScroll()
     window.addEventListener("scroll", onScroll, { passive: true })

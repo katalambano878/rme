@@ -170,7 +170,7 @@ async function guardProfileWrite(
   }
   if (method === "POST") return null;
   const probe = createClient().from(table).select("id, role");
-  applyPostgrestParams(probe as any, req.nextUrl.searchParams);
+  applyPostgrestParams(probe, req.nextUrl.searchParams);
   const { data, error } = await probe;
   if (error) return error.message || "Could not check target rows";
   const targets = (Array.isArray(data) ? data : data ? [data] : []) as { id: string; role: string }[];
@@ -248,7 +248,7 @@ export async function GET(
     params.delete(rowFilter[0]);
     params.append(rowFilter[0], `eq.${rowFilter[1]}`);
   }
-  applyPostgrestParams(qb as any, params, {
+  applyPostgrestParams(qb, params, {
     preferSingle: preferSingle(req),
   });
 
@@ -287,8 +287,19 @@ export async function POST(
   const denied = await guardProfileWrite(req, table, authz.auth, body, "POST");
   if (denied) return jsonError(denied, 403);
 
+  // supabase-js .upsert() is a POST with Prefer: resolution=merge-duplicates.
+  const upsert = (req.headers.get("prefer") || "").includes("resolution=merge-duplicates");
+  if (upsert && ADMIN_ONLY_TABLES.has(table) && !(authz.auth.kind === "service" || authz.auth.role === "superadmin")) {
+    // An upsert can overwrite an existing admin row, which guardProfileWrite only checks on PATCH.
+    return jsonError("Only a superadmin can upsert this table", 403);
+  }
+  const onConflict = req.nextUrl.searchParams.get("on_conflict") || undefined;
+  if (onConflict && !onConflict.split(",").every((c) => PG_IDENT.test(c.trim()))) {
+    return jsonError("Invalid on_conflict");
+  }
+
   const client = createClient();
-  let qb = client.from(table).insert(body);
+  let qb = upsert ? client.from(table).upsert(body, { onConflict }) : client.from(table).insert(body);
   if (preferReturn(req) || preferSingle(req)) {
     qb = qb.select("*") as typeof qb;
   }
@@ -323,7 +334,7 @@ export async function PATCH(
 
   const client = createClient();
   let qb = client.from(table).update(body);
-  applyPostgrestParams(qb as any, req.nextUrl.searchParams);
+  applyPostgrestParams(qb, req.nextUrl.searchParams);
   if (preferReturn(req) || preferSingle(req)) {
     qb = qb.select("*") as typeof qb;
   }
@@ -352,7 +363,7 @@ export async function DELETE(
 
   const client = createClient();
   let qb = client.from(table).delete();
-  applyPostgrestParams(qb as any, req.nextUrl.searchParams);
+  applyPostgrestParams(qb, req.nextUrl.searchParams);
   if (preferReturn(req)) {
     qb = qb.select("*") as typeof qb;
   }

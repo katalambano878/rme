@@ -46,8 +46,8 @@ export default function AdminLoginPage() {
         router.push('/admin');
         router.refresh();
       }
-    } catch (err: any) {
-      setError(err.message || 'Login failed');
+    } catch (err) {
+      setError((err instanceof Error && err.message) || 'Login failed');
     } finally {
       setIsLoading(false);
     }
@@ -94,9 +94,14 @@ export default function AdminLoginPage() {
             </div>
 
             <div>
-              <label className="block text-sm font-semibold text-gray-900 mb-2">
-                Password
-              </label>
+              <div className="flex items-center justify-between mb-2">
+                <label className="block text-sm font-semibold text-gray-900">
+                  Password
+                </label>
+                <Link href="/auth/forgot-password" className="text-xs font-medium text-rose-700 hover:underline">
+                  Forgot password?
+                </Link>
+              </div>
               <div className="relative">
                 <i className="ri-lock-line absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 text-lg"></i>
                 <input

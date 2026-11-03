@@ -45,7 +45,7 @@ export async function POST(
     );
   }
 
-  const args = (await req.json().catch(() => ({}))) as Record<string, any>;
+  const args = (await req.json().catch(() => ({}))) as Record<string, unknown>;
   const client = createClient();
   const { data, error } = await client.rpc(fn, args);
   if (error) {

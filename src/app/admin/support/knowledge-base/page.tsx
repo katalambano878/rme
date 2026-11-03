@@ -5,14 +5,26 @@ import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { adminFetch } from '@/lib/admin-fetch';
 
+type KnowledgeArticle = {
+  id: string;
+  title: string;
+  content: string;
+  category?: string | null;
+  tags?: string[] | null;
+  is_published: boolean;
+  source?: string | null;
+  helpful_count?: number | null;
+  not_helpful_count?: number | null;
+};
+
 export default function KnowledgeBasePage() {
   const searchParams = useSearchParams();
-  const [articles, setArticles] = useState<any[]>([]);
+  const [articles, setArticles] = useState<KnowledgeArticle[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('');
   const [showModal, setShowModal] = useState(searchParams.get('new') === '1');
-  const [editingArticle, setEditingArticle] = useState<any>(null);
+  const [editingArticle, setEditingArticle] = useState<KnowledgeArticle | null>(null);
   const [error, setError] = useState('');
 
   useEffect(() => { fetchArticles(); }, [search, categoryFilter]);
@@ -23,7 +35,7 @@ export default function KnowledgeBasePage() {
     if (search) params.set('search', search);
     if (categoryFilter) params.set('category', categoryFilter);
     try {
-      const data = await adminFetch<{ data?: any[] }>(`/api/support/knowledge-base?${params}`);
+      const data = await adminFetch<{ data?: KnowledgeArticle[] }>(`/api/support/knowledge-base?${params}`);
       setArticles(data.data || []);
       setError('');
     } catch (e) {
@@ -43,7 +55,7 @@ export default function KnowledgeBasePage() {
     fetchArticles();
   }
 
-  async function togglePublish(article: any) {
+  async function togglePublish(article: KnowledgeArticle) {
     try {
       await adminFetch('/api/support/knowledge-base', {
         method: 'PATCH',
@@ -55,7 +67,7 @@ export default function KnowledgeBasePage() {
     fetchArticles();
   }
 
-  const categories = [...new Set(articles.map(a => a.category).filter(Boolean))];
+  const categories = [...new Set(articles.map(a => a.category).filter((c): c is string => Boolean(c)))];
   const sourceColors: Record<string, string> = { manual: 'bg-blue-100 text-blue-700', auto_learned: 'bg-purple-100 text-purple-700', ticket_resolution: 'bg-rose-100 text-rose-700' };
 
   return (
@@ -114,7 +126,7 @@ export default function KnowledgeBasePage() {
               <div className="flex items-start justify-between mb-2">
                 <div className="flex items-center gap-2 flex-wrap">
                   {article.category && <span className="text-[10px] font-semibold uppercase bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded">{article.category}</span>}
-                  <span className={`text-[9px] font-bold uppercase px-1.5 py-0.5 rounded ${sourceColors[article.source] || 'bg-gray-100 text-gray-600'}`}>{article.source?.replace(/_/g, ' ')}</span>
+                  <span className={`text-[9px] font-bold uppercase px-1.5 py-0.5 rounded ${sourceColors[article.source ?? ''] || 'bg-gray-100 text-gray-600'}`}>{article.source?.replace(/_/g, ' ')}</span>
                 </div>
                 <div className={`w-2 h-2 rounded-full ${article.is_published ? 'bg-rose-500' : 'bg-gray-300'}`} title={article.is_published ? 'Published' : 'Draft'} />
               </div>
@@ -147,7 +159,7 @@ export default function KnowledgeBasePage() {
   );
 }
 
-function ArticleModal({ article, onClose, onSaved }: { article: any; onClose: () => void; onSaved: () => void }) {
+function ArticleModal({ article, onClose, onSaved }: { article: KnowledgeArticle | null; onClose: () => void; onSaved: () => void }) {
   const [form, setForm] = useState({
     title: article?.title || '',
     content: article?.content || '',

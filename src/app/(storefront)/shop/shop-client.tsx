@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useMemo, useEffect } from "react"
+import { useState, useMemo } from "react"
 import Link from "next/link"
 import { useSearchParams } from "next/navigation"
 import { motion } from "framer-motion"
@@ -105,6 +105,30 @@ export default function ShopPageClient({
   // /shop?q=term (search box Enter) narrows the list to matching names.
   const searchTerm = (searchParams.get("q") ?? "").trim().toLowerCase()
 
+  // ?category= and ?filter=best-sellers in the URL win over the current
+  // selection (and over a restored one, which is why restore re-applies them).
+  const applyUrlFilters = () => {
+    const cat = searchParams.get("category")
+    if (cat) {
+      setSelectedCategories([cat.toLowerCase()])
+    }
+    const filter = searchParams.get("filter")
+    if (filter === "best-sellers") setSort("best-sellers")
+  }
+
+  // Re-sync derived state when its inputs change, during render rather than
+  // in an effect (https://react.dev/learn/you-might-not-need-an-effect).
+  const [syncedMaxPrice, setSyncedMaxPrice] = useState(maxPrice)
+  if (syncedMaxPrice !== maxPrice) {
+    setSyncedMaxPrice(maxPrice)
+    setPriceRange([MIN_PRICE, maxPrice])
+  }
+  const [syncedParams, setSyncedParams] = useState<typeof searchParams | null>(null)
+  if (syncedParams !== searchParams) {
+    setSyncedParams(searchParams)
+    applyUrlFilters()
+  }
+
   useListPositionMemory(
     `shop-position:${searchParams.toString()}`,
     { selectedCategories, sort, inStockOnly, visibleCount },
@@ -115,21 +139,9 @@ export default function ShopPageClient({
       if (typeof saved.visibleCount === "number" && saved.visibleCount > ITEMS_PER_PAGE) {
         setVisibleCount(saved.visibleCount)
       }
+      applyUrlFilters()
     },
   )
-
-  useEffect(() => {
-    setPriceRange([MIN_PRICE, maxPrice])
-  }, [maxPrice])
-
-  useEffect(() => {
-    const cat = searchParams.get("category")
-    if (cat) {
-      setSelectedCategories([cat.toLowerCase()])
-    }
-    const filter = searchParams.get("filter")
-    if (filter === "best-sellers") setSort("best-sellers")
-  }, [searchParams])
 
   const filteredProducts = useMemo(() => {
     let result = [...products]

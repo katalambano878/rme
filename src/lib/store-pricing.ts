@@ -1,12 +1,14 @@
+import type { SupabaseClient } from "@supabase/supabase-js"
+import type { SupabaseCompatClient } from "@/lib/db/supabase-compat"
 import {
   DEFAULT_STORE_PRICING,
   parseStorePricing,
   type StorePricing,
 } from "@/lib/effective-price"
 
-export async function fetchStorePricing(client: {
-  from: (table: string) => any
-}): Promise<StorePricing> {
+export async function fetchStorePricing(
+  client: Pick<SupabaseClient, "from"> | Pick<SupabaseCompatClient, "from">,
+): Promise<StorePricing> {
   try {
     const { data } = await client
       .from("site_settings")

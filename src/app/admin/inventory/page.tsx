@@ -7,12 +7,39 @@ import { downloadCsv } from '@/lib/admin-csv';
 import { buildDisplaySku } from '@/lib/sku-display';
 import { listPriceFromProduct, listSkuRaw, listStockFromProduct } from '@/lib/product-metrics';
 
+type InventoryProductRow = {
+  id: string;
+  name: string;
+  slug: string;
+  sku: string | null;
+  price: number | string | null;
+  quantity: number | string | null;
+  categories: { name: string | null } | { name: string | null }[] | null;
+  variants: { sku: string | null; price: number | string | null; stock_quantity: number | string | null }[] | null;
+};
+
+type InventoryItem = {
+  id: string;
+  name: string;
+  slug: string;
+  sku: string;
+  displaySku: string;
+  category: string;
+  currentStock: number;
+  reorderLevel: number;
+  reorderQuantity: number;
+  price: number;
+  cost: number;
+  status: string;
+  supplier: string;
+};
+
 export default function InventoryManagementPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [stockFilter, setStockFilter] = useState('all');
   const [showExportModal, setShowExportModal] = useState(false);
   const [selectedProducts, setSelectedProducts] = useState<string[]>([]);
-  const [products, setProducts] = useState<any[]>([]);
+  const [products, setProducts] = useState<InventoryItem[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -39,7 +66,7 @@ export default function InventoryManagementPage() {
       if (error) throw error;
 
       if (data) {
-        const mapped = data.map((p: any) => {
+        const mapped = (data as InventoryProductRow[]).map((p): InventoryItem => {
           const variants = p.variants || [];
           const stock = listStockFromProduct(p);
           const price = listPriceFromProduct(p);
