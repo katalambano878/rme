@@ -13,8 +13,8 @@ create table if not exists public.auth_session_revocations (
 create index if not exists auth_session_revocations_user_idx
   on public.auth_session_revocations (user_id);
 
--- Only the server (service role / app pool) reads or writes it.
-alter table public.auth_session_revocations enable row level security;
+-- Only the server's app pool uses it; like the other tables, no RLS (the app
+-- role does not bypass RLS, so enabling it would lock the app out).
 
 -- Forgot-password links: only a SHA-256 of the emailed token is stored.
 create table if not exists public.auth_password_resets (
@@ -28,4 +28,9 @@ create table if not exists public.auth_password_resets (
 create index if not exists auth_password_resets_user_idx
   on public.auth_password_resets (user_id);
 
-alter table public.auth_password_resets enable row level security;
+-- The app role needs the id sequence for inserts.
+do $$ begin
+  if exists (select 1 from pg_roles where rolname = 'rme_staging') then
+    grant usage, select on sequence public.auth_session_revocations_id_seq to rme_staging;
+  end if;
+end $$;

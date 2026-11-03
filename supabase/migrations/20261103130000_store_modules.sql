@@ -7,4 +7,3 @@ create table if not exists public.store_modules (
   updated_at timestamptz not null default now()
 );
 
-alter table public.store_modules enable row level security;

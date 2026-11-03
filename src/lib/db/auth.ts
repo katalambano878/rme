@@ -111,8 +111,21 @@ function passwordVersion(encryptedPassword: unknown): string {
  */
 let revocationTableReady: Promise<boolean> | null = null;
 
+/**
+ * True when `table` exists, creating it with `ddl` only if missing. The app
+ * role usually doesn't own migration-created tables, and even CREATE INDEX IF
+ * NOT EXISTS needs ownership, so existing tables are never touched.
+ */
+async function ensureTable(table: string, ddl: string): Promise<boolean> {
+  const { rows } = await query<{ present: boolean }>(`SELECT to_regclass($1) IS NOT NULL AS present`, [table]);
+  if (rows[0]?.present) return true;
+  await query(ddl);
+  return true;
+}
+
 function ensureRevocationTable(): Promise<boolean> {
-  revocationTableReady ??= query(
+  revocationTableReady ??= ensureTable(
+    "public.auth_session_revocations",
     `CREATE TABLE IF NOT EXISTS public.auth_session_revocations (
        id bigserial PRIMARY KEY,
        user_id uuid NOT NULL,
@@ -464,7 +477,8 @@ const RESET_TTL_MIN = 30;
 let resetTableReady: Promise<boolean> | null = null;
 
 function ensureResetTable(): Promise<boolean> {
-  resetTableReady ??= query(
+  resetTableReady ??= ensureTable(
+    "public.auth_password_resets",
     `CREATE TABLE IF NOT EXISTS public.auth_password_resets (
        token_hash text PRIMARY KEY,
        user_id uuid NOT NULL,
