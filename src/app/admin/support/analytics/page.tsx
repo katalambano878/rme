@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { adminFetch } from '@/lib/admin-fetch';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line, Legend } from 'recharts';
 
 const COLORS = ['#f472b6', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16'];
@@ -15,10 +16,14 @@ export default function SupportAnalyticsPage() {
 
   async function fetchAnalytics() {
     setLoading(true);
-    const res = await fetch(`/api/support/analytics?days=${days}`);
-    const json = await res.json();
-    setData(json);
-    setLoading(false);
+    try {
+      setData(await adminFetch(`/api/support/analytics?days=${days}`));
+    } catch (e) {
+      console.error('Support analytics failed:', e);
+      setData(null);
+    } finally {
+      setLoading(false);
+    }
   }
 
   if (loading) {
@@ -167,7 +172,7 @@ export default function SupportAnalyticsPage() {
           <h3 className="text-sm font-semibold text-gray-900 mb-4">Daily Trends</h3>
           <div className="h-[300px]">
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={data.dailyData}>
+              <LineChart data={data?.dailyData || []}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
                 <XAxis dataKey="date" tick={{ fontSize: 10 }} />
                 <YAxis tick={{ fontSize: 11 }} />

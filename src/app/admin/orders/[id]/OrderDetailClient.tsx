@@ -20,6 +20,8 @@ interface OrderDetailClientProps {
 
 type RiskLevel = 'low' | 'medium' | 'high';
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 interface FraudAnalysis {
   riskLevel: RiskLevel;
   reasons: string[];
@@ -61,7 +63,7 @@ export default function OrderDetailClient({ orderId }: OrderDetailClientProps) {
   const fetchOrderDetails = async () => {
     try {
       setLoading(true);
-      // Try to fetch by ID or order_number
+      // The route param is either the order uuid or its order_number (e.g. ORD-xxxx)
       const orderSelect = `
         *,
         payments(status, provider, provider_ref),
@@ -80,29 +82,22 @@ export default function OrderDetailClient({ orderId }: OrderDetailClientProps) {
         )
       `;
 
-      let query = supabase
+      const { data, error } = await supabase
         .from('orders')
         .select(orderSelect)
-        .eq('id', orderId);
-
-      let { data, error } = await query.single();
-
-      if (error && error.code === 'PGRST116') {
-        const { data: dataByNum, error: errorByNum } = await supabase
-          .from('orders')
-          .select(orderSelect)
-          .eq('order_number', orderId)
-          .single();
-
-        if (dataByNum) {
-          data = dataByNum;
-          error = null;
-        } else {
-          error = errorByNum;
-        }
-      }
+        .eq(UUID_RE.test(orderId) ? 'id' : 'order_number', orderId)
+        .single();
 
       if (error) throw error;
+
+      // Tracking numbers live on the order's latest shipments row (orders has no metadata column).
+      const { data: shipmentRows } = await supabase
+        .from('shipments')
+        .select('id, tracking_number, carrier, status, created_at')
+        .eq('order_id', data.id)
+        .order('created_at', { ascending: false })
+        .limit(1);
+      const shipment = shipmentRows?.[0] || null;
 
       const paidPayment = data.payments?.find((p: any) => p.status === 'completed' || p.status === 'paid');
       const normalizedOrder = {
@@ -114,7 +109,8 @@ export default function OrderDetailClient({ orderId }: OrderDetailClientProps) {
         payment_method: paidPayment?.provider || data.payments?.[0]?.provider || 'N/A',
         payment_transaction_id: paidPayment?.provider_ref || '',
         shipping_method: 'Standard',
-        metadata: {},
+        shipment,
+        metadata: { tracking_number: shipment?.tracking_number || '' },
         order_items: (data.order_items || []).map((item: any) => {
           const opts = item.options_snapshot as Record<string, string> | null
           const variantParts = [opts?.size, opts?.color].filter(Boolean)
@@ -142,7 +138,7 @@ export default function OrderDetailClient({ orderId }: OrderDetailClientProps) {
       normalizedOrder._recentOrderCount = recentOrderCount;
 
       setOrder(normalizedOrder);
-      setTrackingNumber('');
+      setTrackingNumber(shipment?.tracking_number || '');
       setAdminNotes(data.notes || '');
 
     } catch (err: any) {
@@ -155,8 +151,19 @@ export default function OrderDetailClient({ orderId }: OrderDetailClientProps) {
 
   const handleUpdateStatus = async (newStatus?: string) => {
     try {
-      setStatusUpdating(true);
       const statusToUpdate = newStatus || order.status;
+      const isPaid = order.payment_status === 'paid' || order.status === 'paid';
+
+      // Guard the risky jumps: cancelling/refunding money already taken, or shipping unpaid orders.
+      if (statusToUpdate !== order.status) {
+        if (isPaid && ['cancelled', 'refunded'].includes(statusToUpdate)) {
+          if (!confirm(`This order has been paid. Mark it as ${statusLabel(statusToUpdate)}? Stock and money are not returned automatically.`)) return;
+        } else if (!isPaid && ['shipped', 'out_for_delivery', 'delivered'].includes(statusToUpdate)) {
+          if (!confirm(`This order has not been paid yet. Move it to ${statusLabel(statusToUpdate)} anyway?`)) return;
+        }
+      }
+
+      setStatusUpdating(true);
 
       const { error } = await supabase
         .from('orders')
@@ -168,16 +175,39 @@ export default function OrderDetailClient({ orderId }: OrderDetailClientProps) {
 
       if (error) throw error;
 
+      const savedTracking = order.metadata?.tracking_number || '';
+      const nextTracking = trackingNumber.trim();
+      const trackingChanged = nextTracking !== savedTracking;
+      let shipment = order.shipment;
+
+      if (trackingChanged) {
+        const { data: savedShipment, error: shipmentError } = shipment?.id
+          ? await supabase
+            .from('shipments')
+            .update({ tracking_number: nextTracking || null })
+            .eq('id', shipment.id)
+            .select('id, tracking_number, carrier, status, created_at')
+            .single()
+          : await supabase
+            .from('shipments')
+            .insert({ order_id: order.id, tracking_number: nextTracking, status: 'pending' })
+            .select('id, tracking_number, carrier, status, created_at')
+            .single();
+        if (shipmentError) throw shipmentError;
+        shipment = savedShipment;
+      }
+
       setOrder({
         ...order,
         status: statusToUpdate,
         notes: adminNotes,
+        shipment,
+        metadata: { ...order.metadata, tracking_number: nextTracking },
       });
 
       const statusChanged = statusToUpdate !== order.status;
-      const trackingChanged = false;
 
-      if (statusChanged || (trackingChanged && trackingNumber)) {
+      if (statusChanged || (trackingChanged && nextTracking)) {
         // Get auth token for notification API
         const { data: { session } } = await supabase.auth.getSession();
         const authToken = session?.access_token;
@@ -196,7 +226,7 @@ export default function OrderDetailClient({ orderId }: OrderDetailClientProps) {
               orderId: orderId,
               orderNumber: order.order_number || orderId,
               status: statusToUpdate,
-              trackingNumber: trackingNumber,
+              trackingNumber: nextTracking,
               phone: shippingAddress.phone || order.phone // Ensure phone is passed for SMS
             }
           })

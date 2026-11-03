@@ -144,12 +144,17 @@ export async function POST(req: Request) {
             const txOrder = stripRetrySuffix(String(verified.tx?.externalref || ""));
             const claimedOrder = stripRetrySuffix(String(merchantOrderRef));
             const paidAmount = parseFloat(String(verified.tx?.amount ?? verified.tx?.value ?? ""));
+            // The confirmed transaction must belong to this order: either Moolre
+            // echoes our externalref, or it was found by looking up that ref.
+            const boundToOrder = txOrder
+                ? txOrder === claimedOrder
+                : !!rawExternalRef && verified.matchedRef === String(rawExternalRef).trim();
             if (
                 !verified.ok ||
                 !verified.tx ||
                 !Number.isFinite(paidAmount) ||
                 paidAmount <= 0 ||
-                (txOrder && txOrder !== claimedOrder)
+                !boundToOrder
             ) {
                 console.error('[Callback] Moolre did not confirm payment for', merchantOrderRef);
                 return NextResponse.json({
@@ -185,8 +190,12 @@ export async function POST(req: Request) {
             return NextResponse.json({ success: true, message: result.message });
 
         } else {
-            // Payment failed
+            // Payment failed. Nothing is verified with Moolre here, so only a
+            // callback carrying our secret may touch the order.
             console.log(`[Callback] Payment FAILED for ${merchantOrderRef} | Status: ${apiStatus} | TX: ${txStatus}`);
+            if (!expectedSecret || body.secret !== expectedSecret) {
+                return NextResponse.json({ success: false, message: 'Payment not successful' });
+            }
 
             const paidFulfillmentStatuses = [
                 'paid', 'processing', 'shipped', 'out_for_delivery', 'delivered',
@@ -212,13 +221,10 @@ export async function POST(req: Request) {
             }
 
             if (failedOrder) {
-                await supabaseAdmin
-                    .from('orders')
-                    .update({
-                        status: 'pending',
-                        updated_at: new Date().toISOString(),
-                    })
-                    .eq('order_number', merchantOrderRef);
+                // Leave cancelled/refunded orders alone; the order stays payable.
+                if (failedOrder.status !== 'pending') {
+                    return NextResponse.json({ success: false, message: 'Payment not successful' });
+                }
 
                 await supabaseAdmin
                     .from('payments')

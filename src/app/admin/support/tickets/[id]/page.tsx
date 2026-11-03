@@ -3,10 +3,14 @@
 import { useState, useEffect, useRef, use } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
+import { adminFetch } from '@/lib/admin-fetch';
 import MarkdownMessage from '@/components/MarkdownMessage';
 
 const STATUS_OPTIONS = ['open', 'in_progress', 'waiting_customer', 'resolved', 'closed'];
 const PRIORITY_OPTIONS = ['low', 'medium', 'high', 'urgent'];
+// Resolution summaries are stored as an internal staff message with this prefix
+// (support_tickets has no resolution column).
+const RESOLUTION_PREFIX = 'Resolution: ';
 
 export default function TicketDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -17,15 +21,28 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
   const [isInternal, setIsInternal] = useState(false);
   const [sending, setSending] = useState(false);
   const [conversation, setConversation] = useState<any>(null);
+  const [staffList, setStaffList] = useState<{ id: string; label: string }[]>([]);
+  const [updateError, setUpdateError] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => { fetchTicket(); }, [id]);
+
+  useEffect(() => {
+    // assigned_to is a profile id, so offer the staff list rather than free text.
+    supabase
+      .from('profiles')
+      .select('id, full_name, email')
+      .in('role', ['staff', 'admin', 'superadmin'])
+      .then(({ data }) => {
+        setStaffList((data || []).map((p: any) => ({ id: p.id, label: p.full_name || p.email || p.id })));
+      });
+  }, []);
 
   async function fetchTicket() {
     setLoading(true);
     const [ticketRes, msgsRes] = await Promise.all([
       supabase.from('support_tickets').select('*').eq('id', id).single(),
-      fetch(`/api/support/tickets/${id}/messages`).then(r => r.json()),
+      adminFetch<{ data?: any[] }>(`/api/support/tickets/${id}/messages`).catch(() => ({ data: [] as any[] })),
     ]);
     setTicket(ticketRes.data);
     setMessages(msgsRes.data || []);
@@ -45,31 +62,51 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
     e.preventDefault();
     if (!reply.trim()) return;
     setSending(true);
-    await fetch(`/api/support/tickets/${id}/messages`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ content: reply, sender_type: 'agent', sender_name: 'Admin', is_internal: isInternal }),
-    });
-    setReply('');
-    setIsInternal(false);
-    await fetchTicket();
-    setSending(false);
+    try {
+      await adminFetch(`/api/support/tickets/${id}/messages`, {
+        method: 'POST',
+        body: JSON.stringify({ message: reply, is_internal: isInternal }),
+      });
+      setReply('');
+      setIsInternal(false);
+      await fetchTicket();
+    } catch (err) {
+      alert(`Could not send message: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    } finally {
+      setSending(false);
+    }
   }
 
-  async function updateTicket(updates: any) {
-    await fetch('/api/support/tickets', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id, ...updates }),
-    });
-    setTicket((prev: any) => ({ ...prev, ...updates }));
+  /** Saves ticket fields; the UI only changes once the server accepts them. */
+  async function updateTicket(updates: any): Promise<boolean> {
+    setUpdateError('');
+    try {
+      const res = await adminFetch<{ data?: any }>('/api/support/tickets', {
+        method: 'PATCH',
+        body: JSON.stringify({ id, ...updates }),
+      });
+      setTicket((prev: any) => ({ ...prev, ...(res.data || updates) }));
+      return true;
+    } catch (err) {
+      setUpdateError(err instanceof Error ? err.message : 'Could not update ticket');
+      return false;
+    }
   }
 
   async function addResolution() {
     const resolution = prompt('Enter resolution summary:');
-    if (resolution) {
-      await updateTicket({ resolution, status: 'resolved', resolved_at: new Date().toISOString() });
+    if (!resolution?.trim()) return;
+    try {
+      await adminFetch(`/api/support/tickets/${id}/messages`, {
+        method: 'POST',
+        body: JSON.stringify({ message: RESOLUTION_PREFIX + resolution.trim(), is_internal: true }),
+      });
+    } catch (err) {
+      setUpdateError(`Could not save resolution: ${err instanceof Error ? err.message : 'Unknown error'}`);
+      return;
     }
+    await updateTicket({ status: 'resolved', resolved_at: new Date().toISOString() });
+    await fetchTicket();
   }
 
   if (loading) return <div className="flex items-center justify-center h-64"><i className="ri-loader-4-line animate-spin text-3xl text-gray-400" /></div>;
@@ -77,7 +114,13 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
 
   const priorityColors: Record<string, string> = { urgent: 'bg-red-100 text-red-700', high: 'bg-orange-100 text-orange-700', medium: 'bg-blue-100 text-blue-700', low: 'bg-gray-100 text-gray-600' };
   const statusColors: Record<string, string> = { open: 'bg-blue-100 text-blue-700', in_progress: 'bg-yellow-100 text-yellow-700', waiting_customer: 'bg-purple-100 text-purple-700', resolved: 'bg-rose-100 text-rose-700', closed: 'bg-gray-200 text-gray-600' };
-  const senderColors: Record<string, string> = { customer: 'bg-blue-600', agent: 'bg-rose-600', system: 'bg-gray-500', ai: 'bg-purple-600' };
+  const senderColors: Record<string, string> = { customer: 'bg-blue-600', agent: 'bg-rose-600', system: 'bg-gray-500' };
+  // support_messages only stores user_id: the ticket owner is the customer, anyone else is staff.
+  const senderOf = (msg: any) =>
+    !msg.user_id ? 'system' : ticket.user_id && msg.user_id === ticket.user_id ? 'customer' : 'agent';
+  const senderLabels: Record<string, string> = { customer: 'Customer', agent: 'Staff', system: 'System' };
+  const resolutionMsg = [...messages].reverse().find((m: any) => typeof m.message === 'string' && m.message.startsWith(RESOLUTION_PREFIX));
+  const resolution = resolutionMsg ? resolutionMsg.message.slice(RESOLUTION_PREFIX.length) : '';
 
   return (
     <div className="space-y-6">
@@ -112,11 +155,14 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
                 </button>
               </div>
             </div>
-            {ticket.resolution && (
+            {resolution && (
               <div className="mt-3 p-3 bg-rose-50 border border-rose-100 rounded-lg">
                 <p className="text-xs font-semibold text-rose-700 mb-1">Resolution</p>
-                <p className="text-sm text-rose-800">{ticket.resolution}</p>
+                <p className="text-sm text-rose-800">{resolution}</p>
               </div>
+            )}
+            {updateError && (
+              <div className="mt-3 p-3 bg-red-50 border border-red-100 rounded-lg text-sm text-red-700">{updateError}</div>
             )}
           </div>
 
@@ -153,21 +199,24 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
                   <p className="text-sm">No messages yet. Start the conversation below.</p>
                 </div>
               )}
-              {messages.map((msg: any) => (
+              {messages.map((msg: any) => {
+                const sender = senderOf(msg);
+                return (
                 <div key={msg.id} className={`flex gap-3 ${msg.is_internal ? 'bg-amber-50/50 -mx-4 px-4 py-2 border-l-2 border-amber-300' : ''}`}>
-                  <div className={`w-8 h-8 rounded-full flex-shrink-0 flex items-center justify-center text-white text-xs font-bold ${senderColors[msg.sender_type] || 'bg-gray-400'}`}>
-                    {msg.sender_type === 'customer' ? 'C' : msg.sender_type === 'agent' ? 'A' : msg.sender_type === 'ai' ? 'AI' : 'S'}
+                  <div className={`w-8 h-8 rounded-full flex-shrink-0 flex items-center justify-center text-white text-xs font-bold ${senderColors[sender] || 'bg-gray-400'}`}>
+                    {sender === 'customer' ? 'C' : sender === 'agent' ? 'A' : 'S'}
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
-                      <span className="text-sm font-semibold text-gray-900">{msg.sender_name || msg.sender_type}</span>
+                      <span className="text-sm font-semibold text-gray-900">{senderLabels[sender]}</span>
                       <span className="text-[10px] text-gray-400">{new Date(msg.created_at).toLocaleString()}</span>
                       {msg.is_internal && <span className="text-[9px] font-bold text-amber-600 bg-amber-100 px-1.5 py-0.5 rounded">INTERNAL NOTE</span>}
                     </div>
-                    <div className="mt-1"><MarkdownMessage content={msg.content || ''} /></div>
+                    <div className="mt-1"><MarkdownMessage content={msg.message || ''} /></div>
                   </div>
                 </div>
-              ))}
+                );
+              })}
               <div ref={messagesEndRef} />
             </div>
 
@@ -211,8 +260,11 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-500 mb-1">Assigned To</label>
-              <input value={ticket.assigned_to || ''} onChange={(e) => updateTicket({ assigned_to: e.target.value })} placeholder="Agent name or email"
-                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-rose-500" />
+              <select value={ticket.assigned_to || ''} onChange={(e) => updateTicket({ assigned_to: e.target.value || null })}
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-rose-500">
+                <option value="">Unassigned</option>
+                {staffList.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
+              </select>
             </div>
           </div>
 

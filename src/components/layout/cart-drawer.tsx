@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react"
 import Link from "next/link"
 import { Minus, Plus, ShoppingBag, Trash2, Tag } from "lucide-react"
 import { AnimatePresence, motion } from "framer-motion"
-import { useCartStore } from "@/lib/store/cart-store"
+import { atStockLimit, useCartStore } from "@/lib/store/cart-store"
 import { formatPrice } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -231,7 +231,9 @@ export function CartDrawer() {
                                   item.selectedColor,
                                 )
                               }
-                              className="flex size-6 items-center justify-center rounded-lg border border-rose-border/50 text-navy/60 transition-colors hover:bg-rose-light"
+                              disabled={atStockLimit(item.product, item.quantity)}
+                              title={atStockLimit(item.product, item.quantity) ? "No more in stock" : undefined}
+                              className="flex size-6 items-center justify-center rounded-lg border border-rose-border/50 text-navy/60 transition-colors hover:bg-rose-light disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
                               aria-label="Increase quantity"
                             >
                               <Plus className="size-3" />

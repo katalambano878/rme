@@ -3,9 +3,25 @@ import { createAdminClient } from "@/lib/supabase/admin"
 import { generateOrderNumber } from "@/lib/utils"
 import { effectivePriceForVariant, parseStorePricing, withResolvedSalePrice } from "@/lib/effective-price"
 import { findOption } from "@/lib/variant-options"
+import { checkRateLimit, getClientIdentifier, RATE_LIMITS } from "@/lib/rate-limit"
+import { verifyAccessToken } from "@/lib/db/auth"
+
+const MAX_FIELD = 200
+
+function cleanText(value: unknown, max = MAX_FIELD): string {
+  return typeof value === "string" ? value.trim().slice(0, max) : ""
+}
 
 export async function POST(req: NextRequest) {
   try {
+    const limited = checkRateLimit(`order:${getClientIdentifier(req)}`, RATE_LIMITS.orderCreate)
+    if (!limited.success) {
+      return NextResponse.json(
+        { error: "Too many checkout attempts. Please wait a few minutes." },
+        { status: 429 },
+      )
+    }
+
     const body = await req.json()
     const {
       email,
@@ -20,12 +36,9 @@ export async function POST(req: NextRequest) {
       postalCode,
       shippingMethod,
       items,
-      paymentProvider,
     } = body
 
-    const useMoolre = paymentProvider === "moolre"
-
-    if (!Array.isArray(items) || items.length === 0) {
+    if (!Array.isArray(items) || items.length === 0 || items.length > 50) {
       return NextResponse.json({ error: "Missing items" }, { status: 400 })
     }
 
@@ -40,11 +53,13 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    const trimmedEmail = typeof email === "string" ? email.trim() : ""
-
-    const secretKey = process.env.PAYSTACK_SECRET_KEY
-    if (!useMoolre && !secretKey) {
-      return NextResponse.json({ error: "Paystack not configured" }, { status: 500 })
+    const trimmedEmail = cleanText(email, 254)
+    if (trimmedEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) {
+      return NextResponse.json({ error: "Invalid email address" }, { status: 400 })
+    }
+    const cleanPhone = cleanText(phone, 32)
+    if (!cleanPhone || cleanPhone.replace(/\D/g, "").length < 9) {
+      return NextResponse.json({ error: "A valid phone number is required" }, { status: 400 })
     }
 
     const supabase = createAdminClient()
@@ -79,10 +94,9 @@ export async function POST(req: NextRequest) {
       option_values: { name: string; value: string }[] | null
     }
 
-    // Fetch products + all variants for products that have selected options (for variant resolution)
-    const productsNeedingVariants = Array.from(new Set(
-      items.filter((i: any) => i.selectedSize || i.selectedColor).map((i: any) => i.productId).filter(Boolean)
-    ))
+    // Variants for every product: a line with no option picked is still priced
+    // from a real variant, never from the product's base price column.
+    const productsNeedingVariants = productIds
 
     // We need the global sale toggle so the server applies the SAME pricing
     // rules the storefront UI showed the customer. If we don't honor the
@@ -165,9 +179,18 @@ export async function POST(req: NextRequest) {
           ? [...allVariants].sort((a, b) => (Number(a.price) || 0) - (Number(b.price) || 0))[0]
           : undefined
 
+      // Options that match no variant would otherwise fall back to the
+      // product's base price, which can be cheaper than the real variant.
+      if ((it.selectedSize || it.selectedColor) && allVariants.length > 0 && !matchedVariant) {
+        return NextResponse.json(
+          { error: `That option is no longer available for ${product.name}` },
+          { status: 400 },
+        )
+      }
+
       // Use the SAME effective-price logic the storefront uses to decide what
       // to display in the cart. Without this, the cart shows GH₵ 8 (sale)
-      // but Paystack would charge GH₵ 10 (regular) — which is the deception
+      // but checkout would charge GH₵ 10 (regular) — which is the deception
       // bug we're fixing.
       const pricing = matchedVariant
         ? effectivePriceForVariant(matchedVariant, product, saleEnabled)
@@ -190,11 +213,13 @@ export async function POST(req: NextRequest) {
       const lineTotal = Number((unitPrice * qty).toFixed(2))
       computedSubtotal += lineTotal
 
+      const size = cleanText(it.selectedSize, 80)
+      const color = cleanText(it.selectedColor, 80)
       const optionsSnapshot: Record<string, string> | null =
-        it.selectedSize || it.selectedColor
+        size || color
           ? {
-              ...(it.selectedSize ? { size: it.selectedSize } : {}),
-              ...(it.selectedColor ? { color: it.selectedColor } : {}),
+              ...(size ? { size } : {}),
+              ...(color ? { color } : {}),
             }
           : null
 
@@ -218,30 +243,28 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Invalid order total" }, { status: 400 })
     }
 
-    const phoneDigits = String(phone ?? "").replace(/\D/g, "")
-    const paystackCustomerEmail =
-      trimmedEmail ||
-      (phoneDigits.length > 0
-        ? `${phoneDigits}@guest.checkout`
-        : `guest-${orderNumber.replace(/[^A-Za-z0-9]/g, "")}@guest.checkout`)
-
     const shippingAddress = {
-      firstName,
-      lastName,
-      address1,
-      address2: address2 || "",
-      city,
-      region,
-      country,
-      postalCode: postalCode || "",
+      firstName: cleanText(firstName, 80),
+      lastName: cleanText(lastName, 80),
+      address1: cleanText(address1),
+      address2: cleanText(address2),
+      city: cleanText(city, 100),
+      region: cleanText(region, 100),
+      country: cleanText(country, 80),
+      postalCode: cleanText(postalCode, 20),
     }
+
+    // Signed-in shoppers own their order by account id, so it shows on /account.
+    const bearer = (req.headers.get("authorization") || "").replace(/^Bearer\s+/i, "").trim()
+    const buyer = bearer ? await verifyAccessToken(bearer) : null
 
     const { data: order, error: orderErr } = await supabase
       .from("orders")
       .insert({
         order_number: orderNumber,
+        user_id: buyer?.userId ?? null,
         guest_email: trimmedEmail || null,
-        guest_phone: phone || null,
+        guest_phone: cleanPhone,
         status: "pending",
         subtotal: computedSubtotal,
         shipping_total: shippingCost,
@@ -251,7 +274,7 @@ export async function POST(req: NextRequest) {
         currency: "GHS",
         shipping_address: shippingAddress,
         billing_address: shippingAddress,
-        notes: `Shipping: ${shippingMethod}`,
+        notes: `Shipping: ${cleanText(shippingMethod, 60)}`,
       })
       .select("id")
       .single()
@@ -286,68 +309,20 @@ export async function POST(req: NextRequest) {
 
     const { error: itemsErr } = await supabase.from("order_items").insert(orderItems)
     if (itemsErr) {
+      // An order with no items can't be fulfilled; never send it to payment.
       console.error("Order items insert failed:", itemsErr)
+      await supabase.from("orders").update({ status: "cancelled" }).eq("id", order.id)
+      return NextResponse.json({ error: "Failed to create order" }, { status: 500 })
     }
 
-    if (useMoolre) {
-      return NextResponse.json({
-        order_id: order.id,
-        order_number: orderNumber,
-        payment_provider: "moolre",
-      })
-    }
-
-    const amountInPesewas = Math.round(computedTotal * 100)
-    const appBase = (process.env.APP_BASE_URL || process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000").replace(/\/+$/, "")
-    const callbackUrl = `${appBase}/checkout/callback?reference=${orderNumber}`
-
-    const paystackRes = await fetch("https://api.paystack.co/transaction/initialize", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${secretKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        email: paystackCustomerEmail,
-        amount: amountInPesewas,
-        currency: "GHS",
-        reference: orderNumber,
-        callback_url: callbackUrl,
-        metadata: {
-          order_id: order.id,
-          order_number: orderNumber,
-          custom_fields: [
-            { display_name: "Customer Name", variable_name: "customer_name", value: `${firstName} ${lastName}` },
-            { display_name: "Phone", variable_name: "phone", value: phone || "N/A" },
-          ],
-        },
-      }),
-    })
-
-    const paystackData = await paystackRes.json()
-
-    if (!paystackData.status) {
-      console.error("Paystack initialize failed:", paystackData)
-      return NextResponse.json({ error: paystackData.message || "Payment init failed" }, { status: 502 })
-    }
-
-    await supabase.from("payments").insert({
-      order_id: order.id,
-      provider: "paystack",
-      provider_ref: paystackData.data.reference,
-      amount: computedTotal,
-      currency: "GHS",
-      status: "pending",
-    })
-
+    // Payment is taken by Moolre Mobile Money (/api/payment/moolre) next.
     return NextResponse.json({
-      authorization_url: paystackData.data.authorization_url,
-      reference: paystackData.data.reference,
       order_id: order.id,
       order_number: orderNumber,
+      payment_provider: "moolre",
     })
   } catch (err) {
-    console.error("Paystack initialize error:", err)
+    console.error("Order create error:", err)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }

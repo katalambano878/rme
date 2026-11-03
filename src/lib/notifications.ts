@@ -72,7 +72,7 @@ function emailShippingNotes(notes: string[]): string {
     if (notes.length === 0) return '';
     return `<div style="background-color:#fffbeb;border:1px solid #fcd34d;border-radius:8px;padding:14px 16px;margin:20px 0;">
 <p style="font-weight:600;color:#92400e;margin:0 0 6px;font-size:13px;">&#9200; Shipping Notes</p>
-${notes.map(n => `<p style="color:#78350f;margin:3px 0;font-size:13px;">${n}</p>`).join('')}
+${notes.map(n => `<p style="color:#78350f;margin:3px 0;font-size:13px;">${escapeHtml(n)}</p>`).join('')}
 </div>`;
 }
 
@@ -256,13 +256,13 @@ export async function sendOrderConfirmation(order: any) {
 <div style="text-align:center;margin-bottom:24px;">
   <div style="width:64px;height:64px;background-color:${BRAND.colorLight};border-radius:50%;margin:0 auto 16px;line-height:64px;font-size:28px;">&#10003;</div>
   <h2 style="margin:0 0 4px;color:#111827;font-size:24px;">Order Confirmed!</h2>
-  <p style="margin:0;color:#6b7280;font-size:15px;">Thank you for your purchase, ${name}.</p>
+  <p style="margin:0;color:#6b7280;font-size:15px;">Thank you for your purchase, ${escapeHtml(name)}.</p>
 </div>
 
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#f9fafb;border-radius:12px;overflow:hidden;margin:20px 0;">
   ${emailInfoRow('Order Number', `#${order_number || id}`)}
   ${emailInfoRow('Order Date', new Date(created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }))}
-  ${trackingNumber ? emailInfoRow('Tracking', trackingNumber) : ''}
+  ${trackingNumber ? emailInfoRow('Tracking', escapeHtml(trackingNumber)) : ''}
   ${emailInfoRow('Total', `GH&#8373;${Number(orderTotal).toFixed(2)}`)}
 </table>
 
@@ -286,17 +286,17 @@ ${emailButton('Track Your Order', trackingUrl)}
 
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#f9fafb;border-radius:12px;overflow:hidden;margin:16px 0;">
   ${emailInfoRow('Order', `#${order_number || id}`)}
-  ${emailInfoRow('Customer', name)}
-  ${emailInfoRow('Email', email || 'N/A')}
-  ${emailInfoRow('Phone', phone || 'N/A')}
+  ${emailInfoRow('Customer', escapeHtml(name))}
+  ${emailInfoRow('Email', escapeHtml(email || 'N/A'))}
+  ${emailInfoRow('Phone', escapeHtml(phone || 'N/A'))}
   ${emailInfoRow('Total', `GH&#8373;${Number(orderTotal).toFixed(2)}`)}
-  ${trackingNumber ? emailInfoRow('Tracking', trackingNumber) : ''}
+  ${trackingNumber ? emailInfoRow('Tracking', escapeHtml(trackingNumber)) : ''}
 </table>
 
 ${emailShippingNotes(shippingNotes)}
 
 ${emailButton('View Order in Admin', `${baseUrl}/admin/orders/${id}`)}
-`, `New order #${order_number} from ${name}`)
+`, `New order #${order_number} from ${escapeHtml(name)}`)
     });
 
     // 3. SMS to Customer
@@ -385,19 +385,19 @@ export async function sendOrderStatusUpdate(order: any, newStatus: string) {
 <div style="text-align:center;margin-bottom:24px;">
   <div style="width:64px;height:64px;background-color:${sc.bg};border-radius:50%;margin:0 auto 16px;line-height:64px;font-size:28px;">${sc.icon}</div>
   <h2 style="margin:0 0 4px;color:#111827;font-size:22px;">Order Update</h2>
-  <p style="margin:0;color:#6b7280;font-size:14px;">Hi ${name}, here's an update on your order.</p>
+  <p style="margin:0;color:#6b7280;font-size:14px;">Hi ${escapeHtml(name)}, here's an update on your order.</p>
 </div>
 
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#f9fafb;border-radius:12px;overflow:hidden;margin:20px 0;">
   ${emailInfoRow('Order Number', `#${order_number || id}`)}
-  ${emailInfoRow('New Status', `<span style="display:inline-block;background-color:${sc.bg};color:${sc.color};padding:4px 12px;border-radius:20px;font-size:12px;font-weight:700;text-transform:uppercase;">${statusDisplay}</span>`)}
-  ${trackingNumber ? emailInfoRow('Tracking Number', trackingNumber) : ''}
+  ${emailInfoRow('New Status', `<span style="display:inline-block;background-color:${sc.bg};color:${sc.color};padding:4px 12px;border-radius:20px;font-size:12px;font-weight:700;text-transform:uppercase;">${escapeHtml(statusDisplay)}</span>`)}
+  ${trackingNumber ? emailInfoRow('Tracking Number', escapeHtml(trackingNumber)) : ''}
 </table>
 
 <p style="color:#374151;font-size:14px;line-height:1.6;margin:16px 0;">${message}</p>
 
 ${emailButton('Track Your Order', trackingUrl)}
-`, `Your order #${order_number} is now ${statusDisplay}`)
+`, `Your order #${order_number} is now ${escapeHtml(statusDisplay)}`)
         });
     }
 
@@ -414,14 +414,14 @@ export async function sendWelcomeMessage(user: { email: string; firstName: strin
             html: emailLayout(`
 <div style="text-align:center;margin-bottom:24px;">
   <div style="width:64px;height:64px;background-color:${BRAND.colorLight};border-radius:50%;margin:0 auto 16px;line-height:64px;font-size:28px;">&#128075;</div>
-  <h2 style="margin:0 0 4px;color:#111827;font-size:24px;">Welcome, ${firstName}!</h2>
+  <h2 style="margin:0 0 4px;color:#111827;font-size:24px;">Welcome, ${escapeHtml(firstName)}!</h2>
   <p style="margin:0;color:#6b7280;font-size:15px;">We're so glad you're here.</p>
 </div>
 
 <p style="color:#374151;font-size:14px;line-height:1.7;margin:16px 0;">Thank you for joining ${BRAND.name}. We've got everything you need — We've gotcha!!!</p>
 
 ${emailButton('Start Shopping', `${BRAND.url}/shop`)}
-`, `Welcome to ${BRAND.name}, ${firstName}!`)
+`, `Welcome to ${BRAND.name}, ${escapeHtml(firstName)}!`)
         });
     }
 
@@ -457,7 +457,7 @@ export async function sendPaymentLink(order: any) {
 <div style="text-align:center;margin-bottom:24px;">
   <div style="width:64px;height:64px;background-color:#fef3c7;border-radius:50%;margin:0 auto 16px;line-height:64px;font-size:28px;">&#128179;</div>
   <h2 style="margin:0 0 4px;color:#111827;font-size:22px;">Complete Your Order</h2>
-  <p style="margin:0;color:#6b7280;font-size:14px;">Hi ${name}, your order is waiting for payment.</p>
+  <p style="margin:0;color:#6b7280;font-size:14px;">Hi ${escapeHtml(name)}, your order is waiting for payment.</p>
 </div>
 
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#f9fafb;border-radius:12px;overflow:hidden;margin:20px 0;">
@@ -488,7 +488,9 @@ export async function sendContactMessage(data: { name: string; email: string; su
 
     await sendEmail({
         to: email,
-        subject: `We received your message: ${subject}`,
+        // The address is unverified, so the auto-reply repeats none of the visitor's
+        // text: it can't be used to send arbitrary content in the store's name.
+        subject: `We received your message`,
         html: emailLayout(`
 <div style="text-align:center;margin-bottom:24px;">
   <div style="width:64px;height:64px;background-color:${BRAND.colorLight};border-radius:50%;margin:0 auto 16px;line-height:64px;font-size:28px;">&#128172;</div>
@@ -496,16 +498,11 @@ export async function sendContactMessage(data: { name: string; email: string; su
   <p style="margin:0;color:#6b7280;font-size:14px;">We'll get back to you soon.</p>
 </div>
 
-<p style="color:#374151;font-size:14px;line-height:1.7;margin:16px 0;">Hi ${safeName},</p>
-<p style="color:#374151;font-size:14px;line-height:1.7;margin:0 0 16px;">Thank you for reaching out to ${BRAND.name}. We've received your message regarding <strong>"${safeSubject}"</strong> and our team will respond as soon as possible.</p>
-
-<div style="background-color:#f9fafb;border-left:4px solid ${BRAND.color};border-radius:0 8px 8px 0;padding:16px 20px;margin:20px 0;">
-  <p style="color:#6b7280;font-size:12px;margin:0 0 6px;text-transform:uppercase;letter-spacing:0.5px;">Your message</p>
-  <p style="color:#374151;font-size:14px;margin:0;line-height:1.6;">${safeMessage}</p>
-</div>
+<p style="color:#374151;font-size:14px;line-height:1.7;margin:16px 0;">Hello,</p>
+<p style="color:#374151;font-size:14px;line-height:1.7;margin:0 0 16px;">Thank you for reaching out to ${BRAND.name}. We've received your message and our team will respond as soon as possible.</p>
 
 <p style="color:#6b7280;font-size:13px;margin:16px 0 0;">We typically respond within 24 hours.</p>
-`, `Thanks for contacting us, ${safeName}`)
+`, `Thanks for contacting us`)
     });
 
     await sendEmail({

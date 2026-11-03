@@ -40,7 +40,7 @@ import {
   getProductPrimaryImageUrl,
   optimizedImageUrl,
 } from "@/lib/product-image"
-import { useCartStore } from "@/lib/store/cart-store"
+import { isOutOfStock, useCartStore } from "@/lib/store/cart-store"
 import { useWishlistStore } from "@/lib/store/wishlist-store"
 import { useHydrated } from "@/lib/hooks/use-hydrated"
 import { useListPositionMemory } from "@/lib/hooks/use-list-position-memory"
@@ -100,6 +100,10 @@ export default function ShopPageClient({
   const [quickViewOpen, setQuickViewOpen] = useState(false)
 
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false)
+  // /shop?sale=1 (navbar "Sale") shows only products with an active sale price.
+  const saleOnly = searchParams.get("sale") === "1"
+  // /shop?q=term (search box Enter) narrows the list to matching names.
+  const searchTerm = (searchParams.get("q") ?? "").trim().toLowerCase()
 
   useListPositionMemory(
     `shop-position:${searchParams.toString()}`,
@@ -146,6 +150,18 @@ export default function ShopPageClient({
       result = result.filter((p) => p.stock > 0)
     }
 
+    if (searchTerm) {
+      result = result.filter((p) =>
+        `${p.name} ${p.categoryName}`.toLowerCase().includes(searchTerm),
+      )
+    }
+
+    if (saleOnly) {
+      result = result.filter(
+        (p) => p.salePrice !== undefined && p.salePrice < p.price,
+      )
+    }
+
     switch (sort) {
       case "best-sellers":
         result.sort((a, b) => {
@@ -183,6 +199,8 @@ export default function ShopPageClient({
     priceRange,
     sort,
     inStockOnly,
+    saleOnly,
+    searchTerm,
   ])
 
   const displayedProducts = filteredProducts.slice(0, visibleCount)
@@ -302,7 +320,7 @@ export default function ShopPageClient({
           </nav>
 
           <div className="mb-8">
-            <Heading as="h1" className="text-rose-300">{activeCategoryName ?? "Shop All"}</Heading>
+            <Heading as="h1" className="text-rose-300">{searchTerm ? `Results for “${searchParams.get("q")?.trim()}”` : activeCategoryName ?? "Shop All"}</Heading>
           </div>
 
           <div className="mb-6 flex items-center gap-3 lg:hidden">
@@ -330,6 +348,7 @@ export default function ShopPageClient({
 
             <div className="ml-auto">
               <Select
+                items={sortOptions}
                 value={sort}
                 onValueChange={(val) => {
                   if (val) setSort(val)
@@ -424,6 +443,7 @@ export default function ShopPageClient({
                   </h3>
                   <div className="mt-3">
                     <Select
+                      items={sortOptions}
                       value={sort}
                       onValueChange={(val) => {
                         if (val) setSort(val)
@@ -456,8 +476,16 @@ export default function ShopPageClient({
                   <span className="font-medium text-navy">
                     {filteredProducts.length}
                   </span>{" "}
-                  products
+                  {saleOnly ? "sale products" : "products"}
                 </p>
+                {saleOnly && (
+                  <Link
+                    href="/shop"
+                    className="text-sm font-medium text-rose-primary hover:underline"
+                  >
+                    Show all products
+                  </Link>
+                )}
               </div>
 
               {displayedProducts.length > 0 ? (
@@ -579,18 +607,24 @@ function ShopProductCard({
           </button>
 
           <div className="pointer-events-none absolute inset-x-0 bottom-0 flex justify-center pb-4 opacity-0 transition-opacity duration-300 group-hover:opacity-100">
-            <button
-              type="button"
-              onClick={(e) => {
-                e.preventDefault()
-                if (product.variants.length > 0) onQuickView(product)
-                else addItem(product)
-              }}
-              className="pointer-events-auto inline-flex items-center gap-2 rounded-full bg-white px-7 py-3 text-base font-semibold text-rose-primary shadow-xl"
-            >
-              <ShoppingBag className="size-4" />
-              {product.variants.length > 0 ? "Choose Options" : "Add to Bag"}
-            </button>
+            {isOutOfStock(product) ? (
+              <span className="inline-flex items-center gap-2 rounded-full bg-white/95 px-7 py-3 text-base font-semibold text-muted-foreground shadow-xl">
+                Out of stock
+              </span>
+            ) : (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault()
+                  if (product.variants.length > 0) onQuickView(product)
+                  else addItem(product)
+                }}
+                className="pointer-events-auto inline-flex items-center gap-2 rounded-full bg-white px-7 py-3 text-base font-semibold text-rose-primary shadow-xl"
+              >
+                <ShoppingBag className="size-4" />
+                {product.variants.length > 0 ? "Choose Options" : "Add to Bag"}
+              </button>
+            )}
           </div>
         </div>
       </Link>

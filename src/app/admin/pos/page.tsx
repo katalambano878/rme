@@ -129,9 +129,10 @@ export default function POSPage() {
         setCart(prev => {
             const existing = prev.find(item => item.id === product.id);
             if (existing) {
+                // Never sell more than is on the shelf.
                 return prev.map(item =>
                     item.id === product.id
-                        ? { ...item, cartQuantity: item.cartQuantity + 1 }
+                        ? { ...item, cartQuantity: Math.min(item.cartQuantity + 1, product.quantity) }
                         : item
                 );
             }
@@ -146,7 +147,7 @@ export default function POSPage() {
     const updateQuantity = (productId: string, delta: number) => {
         setCart(prev => prev.map(item => {
             if (item.id === productId) {
-                const newQty = item.cartQuantity + delta;
+                const newQty = Math.min(item.cartQuantity + delta, item.quantity);
                 return newQty > 0 ? { ...item, cartQuantity: newQty } : item;
             }
             return item;
@@ -280,7 +281,7 @@ export default function POSPage() {
                 .from('orders')
                 .insert([{
                     order_number: orderNumber,
-                    user_id: null,
+                    user_id: selectedCustomer?.id ?? null,
                     guest_email: customerEmail,
                     guest_phone: customerPhone,
                     status: isInPersonPayment ? 'processing' : 'pending',
@@ -342,12 +343,12 @@ export default function POSPage() {
                 }
 
                 // Mark paid via RPC (order/payment status) then reduce stock in TS.
-                try {
-                    await supabase.rpc('mark_order_paid', {
-                        order_ref: orderNumber,
-                        moolre_ref: paymentRef,
-                    });
-                } catch (markErr) {
+                // rpc() reports failures in `error`; it does not throw.
+                const { error: markErr } = await supabase.rpc('mark_order_paid', {
+                    order_ref: orderNumber,
+                    moolre_ref: paymentRef,
+                });
+                if (markErr) {
                     console.error('mark_order_paid error (non-fatal):', markErr);
                 }
                 try {
@@ -360,9 +361,10 @@ export default function POSPage() {
                     console.error('Stock reduction error (non-fatal):', stockErr);
                 }
 
-                // Success — show completed
+                // Success — show completed, and reload stock so the next sale can't oversell.
                 setCompletedOrder({ id: order.id, orderNumber, total: grandTotal, items: cart });
                 setCart([]);
+                void fetchData();
 
                 // Send notification
                 if (customerEmail && customerEmail !== 'pos-walkin@store.local') {

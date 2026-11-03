@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
+import { downloadCsv } from '@/lib/admin-csv';
 import {
   readOrdersViewState,
   writeOrdersViewState,
@@ -362,35 +363,29 @@ export default function AdminOrdersPage() {
         alert('Failed to update orders');
       }
     } else if (action === 'Export') {
-      const ordersToExport = orders.filter(o => selectedOrders.includes(o.id));
-      const csvContent = `Order ID,Customer,Email,Date,Items,Total,Status,Payment\n${ordersToExport.map(o =>
-        `${o.order_number || o.id},${getCustomerName(o)},${getCustomerEmail(o)},${formatDate(o.created_at)},${getItemCount(o)},${o.total},${o.status},${o.payment_method || 'N/A'}`
-      ).join('\n')}`;
-      const blob = new Blob([csvContent], { type: 'text/csv' });
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'selected-orders.csv';
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      window.URL.revokeObjectURL(url);
+      exportOrdersCsv(orders.filter(o => selectedOrders.includes(o.id)), 'selected-orders.csv');
     }
   };
 
+  const exportOrdersCsv = (rows: Order[], filename: string) => {
+    downloadCsv(filename, [
+      ['Order ID', 'Customer', 'Email', 'Date', 'Items', 'Total', 'Status', 'Payment'],
+      ...rows.map(o => [
+        o.order_number || o.id,
+        getCustomerName(o),
+        getCustomerEmail(o),
+        formatDate(o.created_at),
+        getItemCount(o),
+        o.total,
+        o.status,
+        o.payment_method || 'N/A',
+      ]),
+    ]);
+  };
+
+  // Exports what the table currently shows (tab, search, status and date filters applied).
   const handleExportAll = () => {
-    const csvContent = `Order ID,Customer,Email,Date,Items,Total,Status,Payment\n${orders.map(o =>
-      `${o.order_number || o.id},${getCustomerName(o)},${getCustomerEmail(o)},${formatDate(o.created_at)},${getItemCount(o)},${o.total},${o.status},${o.payment_method || 'N/A'}`
-    ).join('\n')}`;
-    const blob = new Blob([csvContent], { type: 'text/csv' });
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'all-orders.csv';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    window.URL.revokeObjectURL(url);
+    exportOrdersCsv(filteredOrders, 'orders.csv');
   };
 
   const handlePrintInvoice = (orderId: string) => {
@@ -423,9 +418,14 @@ export default function AdminOrdersPage() {
   const handleResendPaymentLink = async (order: Order) => {
     setSendingPaymentLink(order.id);
     try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const authToken = session?.access_token;
       const response = await fetch('/api/notifications', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(authToken && { 'Authorization': `Bearer ${authToken}` })
+        },
         body: JSON.stringify({
           type: 'payment_link',
           payload: order

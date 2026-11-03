@@ -167,6 +167,8 @@ export function mapProductRowToProduct(row: ProductRow, saleEnabled: StorePricin
     ? { salesActive: saleEnabled, discountPercent: 0, strictDiscount: false }
     : saleEnabled
   const cat = row.categories
+  // Same variant the checkout charges when no option is picked: cheapest by price.
+  const chargedRow = [...variantRows].sort((a, b) => a.price - b.price)[0]
 
   return {
     id: row.id,
@@ -180,6 +182,8 @@ export function mapProductRowToProduct(row: ProductRow, saleEnabled: StorePricin
     price,
     salePrice,
     catalogSalePrice,
+    regularPrice: chargedRow?.price || undefined,
+    variantSalePrice: chargedRow?.sale_price ?? null,
     salePromotionEnabled: pricing.salesActive,
     discountPercent: pricing.discountPercent,
     strictDiscount: pricing.strictDiscount,

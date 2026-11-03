@@ -1,10 +1,10 @@
 "use client"
 
-import { useState } from "react"
 import type React from "react"
 import Image from "next/image"
 import Link from "next/link"
-import { Send, Smartphone } from "lucide-react"
+import { Loader2, Send, Smartphone } from "lucide-react"
+import { NEWSLETTER_SUCCESS_COPY, useNewsletterSignup } from "@/components/shared/use-newsletter-signup"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import {
@@ -125,7 +125,7 @@ export function Footer({
 }: {
   shopLinks: { href: string; label: string }[]
 }) {
-  const [email, setEmail] = useState("")
+  const newsletter = useNewsletterSignup("footer")
 
   return (
     <footer className="bg-navy text-white">
@@ -143,28 +143,41 @@ export function Footer({
               Be the first to know about new arrivals, exclusive offers, and
               beauty tips.
             </p>
-            <form
-              onSubmit={(e) => {
-                e.preventDefault()
-                setEmail("")
-              }}
-              className="flex gap-2"
-            >
-              <Input
-                type="email"
-                placeholder="Your email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                className="h-9 border-white/20 bg-white/10 text-white placeholder:text-white/40 focus-visible:border-rose-300 focus-visible:ring-rose-200/40"
-              />
-              <Button
-                type="submit"
-                className="h-9 w-9 shrink-0 rounded-full bg-rose-100 p-0 text-navy hover:bg-rose-200"
-              >
-                <Send className="size-4" />
-              </Button>
-            </form>
+            {newsletter.status === "success" ? (
+              <p role="status" className="text-sm text-emerald-300">
+                {NEWSLETTER_SUCCESS_COPY}
+              </p>
+            ) : (
+              <form onSubmit={newsletter.submit} className="flex gap-2">
+                <Input
+                  type="email"
+                  placeholder="Your email"
+                  aria-label="Email address"
+                  value={newsletter.email}
+                  onChange={(e) => newsletter.setEmail(e.target.value)}
+                  required
+                  disabled={newsletter.status === "submitting"}
+                  className="h-9 border-white/20 bg-white/10 text-white placeholder:text-white/40 focus-visible:border-rose-300 focus-visible:ring-rose-200/40"
+                />
+                <Button
+                  type="submit"
+                  disabled={newsletter.status === "submitting"}
+                  aria-label="Subscribe"
+                  className="h-9 w-9 shrink-0 rounded-full bg-rose-100 p-0 text-navy hover:bg-rose-200"
+                >
+                  {newsletter.status === "submitting" ? (
+                    <Loader2 className="size-4 animate-spin" />
+                  ) : (
+                    <Send className="size-4" />
+                  )}
+                </Button>
+              </form>
+            )}
+            {newsletter.status === "error" && (
+              <p role="alert" className="mt-2 text-xs text-red-300">
+                {newsletter.error}
+              </p>
+            )}
           </div>
         </div>
 

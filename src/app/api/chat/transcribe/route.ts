@@ -22,6 +22,12 @@ export async function POST(request: Request) {
     );
   }
 
+  // Reject oversized bodies before buffering them in memory.
+  const declared = Number(request.headers.get('content-length') || 0);
+  if (declared > MAX_AUDIO_BYTES + 64 * 1024) {
+    return NextResponse.json({ error: 'Audio file too large (max 4 MB)' }, { status: 413 });
+  }
+
   try {
     const formData = await request.formData();
     const audioFile = formData.get('audio') as File | null;

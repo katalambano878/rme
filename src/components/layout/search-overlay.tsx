@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 import { Search, X, Loader2 } from "lucide-react"
 import { AnimatePresence, motion } from "framer-motion"
 import { useDebouncedValue } from "@/lib/hooks/use-debounced-value"
@@ -10,12 +11,12 @@ import { optimizedImageUrl } from "@/lib/product-image"
 import type { ProductSearchResult } from "@/types/product-search"
 
 const popularSearches = [
-  "Rosé Quilted Tote",
-  "Silk Wrap Dress",
-  "Velvet Rose Perfume",
-  "Kitten Heels",
-  "Pearl Earrings",
-  "Gift Sets",
+  "Serum",
+  "Lipgloss",
+  "Body mist",
+  "Perfume",
+  "Claw clip",
+  "Face cream",
 ]
 
 type SearchOverlayProps = {
@@ -25,6 +26,7 @@ type SearchOverlayProps = {
 
 export function SearchOverlay({ open, onClose }: SearchOverlayProps) {
   const inputRef = useRef<HTMLInputElement>(null)
+  const router = useRouter()
   const [query, setQuery] = useState("")
   const debouncedQuery = useDebouncedValue(query, 280)
   const [results, setResults] = useState<ProductSearchResult[]>([])
@@ -109,6 +111,13 @@ export function SearchOverlay({ open, onClose }: SearchOverlayProps) {
                 placeholder="Search skincare, lipglosses, makeup..."
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
+                onKeyDown={(e) => {
+                  const term = query.trim()
+                  if (e.key !== "Enter" || !term) return
+                  e.preventDefault()
+                  onClose()
+                  router.push(`/shop?q=${encodeURIComponent(term)}`)
+                }}
                 className="h-12 w-full rounded-2xl border border-rose-border bg-rose-light/30 pl-12 pr-12 font-sans text-base text-navy placeholder:text-navy/30 transition-all focus:border-rose-primary focus:outline-none focus:ring-2 focus:ring-rose-primary/20"
                 autoComplete="off"
                 aria-autocomplete="list"

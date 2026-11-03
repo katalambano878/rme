@@ -1,29 +1,28 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useCallback, useEffect, useState } from "react"
+import Link from "next/link"
+import { useRouter } from "next/navigation"
 import { motion } from "framer-motion"
 import {
   User,
   Package,
   Heart,
-  MapPin,
-  Edit,
-  Trash2,
-  Plus,
   ChevronRight,
   ShoppingBag,
+  Loader2,
+  LogOut,
 } from "lucide-react"
 import { Container } from "@/components/shared/container"
 import { Section } from "@/components/shared/section"
 import { Heading } from "@/components/shared/heading"
 import { ProductCard } from "@/components/shared/product-card"
 import { useWishlistStore } from "@/lib/store/wishlist-store"
+import { createClient } from "@/lib/supabase/client"
 import { formatPrice } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Separator } from "@/components/ui/separator"
-import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { Card, CardContent } from "@/components/ui/card"
 
@@ -31,63 +30,46 @@ const tabs = [
   { value: "profile", label: "Profile", icon: User },
   { value: "orders", label: "Orders", icon: Package },
   { value: "wishlist", label: "Wishlist", icon: Heart },
-  { value: "addresses", label: "Addresses", icon: MapPin },
 ] as const
 
-const mockOrders = [
-  {
-    id: "ORD-7K3F-A2XN",
-    date: "March 18, 2026",
-    status: "Delivered" as const,
-    items: 2,
-    total: 730,
-  },
-  {
-    id: "ORD-9M1P-D4YZ",
-    date: "March 12, 2026",
-    status: "Shipped" as const,
-    items: 1,
-    total: 280,
-  },
-  {
-    id: "ORD-5R8W-G7HQ",
-    date: "March 8, 2026",
-    status: "Processing" as const,
-    items: 3,
-    total: 1150,
-  },
-]
-
-const statusColors = {
-  Delivered: "bg-emerald-50 text-emerald-700 border-emerald-200",
-  Shipped: "bg-blue-50 text-blue-700 border-blue-200",
-  Processing: "bg-amber-50 text-amber-700 border-amber-200",
+type AccountProfile = {
+  id: string
+  email: string
+  fullName: string
+  phone: string
 }
 
-const mockAddresses = [
-  {
-    id: "addr-1",
-    label: "Home",
-    name: "Sample Customer",
-    line1: "123 Example Street",
-    line2: "Suite 4",
-    city: "Example City",
-    region: "Example Region",
-    phone: "059 270 7791",
-    isDefault: true,
-  },
-  {
-    id: "addr-2",
-    label: "Office",
-    name: "Sample Customer",
-    line1: "400 Commerce Blvd",
-    line2: "Floor 3",
-    city: "Example City",
-    region: "Example Region",
-    phone: "025 667 8884",
-    isDefault: false,
-  },
-]
+type AccountOrder = {
+  order_number: string
+  status: string
+  grand_total: number
+  created_at: string
+  is_paid: boolean
+  items: { id: string; name: string; quantity: number }[]
+}
+
+const STATUS_LABELS: Record<string, { label: string; className: string }> = {
+  pending: { label: "Awaiting payment", className: "bg-amber-50 text-amber-700 border-amber-200" },
+  paid: { label: "Paid", className: "bg-emerald-50 text-emerald-700 border-emerald-200" },
+  processing: { label: "Processing", className: "bg-amber-50 text-amber-700 border-amber-200" },
+  shipped: { label: "Packaged", className: "bg-blue-50 text-blue-700 border-blue-200" },
+  out_for_delivery: { label: "With rider", className: "bg-blue-50 text-blue-700 border-blue-200" },
+  delivered: { label: "Delivered", className: "bg-emerald-50 text-emerald-700 border-emerald-200" },
+  cancelled: { label: "Cancelled", className: "bg-slate-50 text-slate-600 border-slate-200" },
+  refunded: { label: "Refunded", className: "bg-slate-50 text-slate-600 border-slate-200" },
+  failed: { label: "Payment failed", className: "bg-red-50 text-red-700 border-red-200" },
+}
+
+function statusBadge(order: AccountOrder) {
+  const known = STATUS_LABELS[order.status]
+  if (order.status === "pending" && order.is_paid) return STATUS_LABELS.paid
+  return (
+    known ?? {
+      label: order.status.replace(/_/g, " "),
+      className: "bg-slate-50 text-slate-600 border-slate-200",
+    }
+  )
+}
 
 const fadeUp = {
   hidden: { opacity: 0, y: 16 },
@@ -98,9 +80,51 @@ const fadeUp = {
   }),
 }
 
-function ProfileTab() {
+const inputClass =
+  "h-10 rounded-xl border-rose-border focus-visible:border-rose-primary focus-visible:ring-rose-primary/20"
+
+function ProfileTab({
+  profile,
+  onSaved,
+}: {
+  profile: AccountProfile
+  onSaved: (next: AccountProfile) => void
+}) {
+  const [fullName, setFullName] = useState(profile.fullName)
+  const [phone, setPhone] = useState(profile.phone)
+  const [saving, setSaving] = useState(false)
+  const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null)
+
+  const dirty = fullName.trim() !== profile.fullName || phone.trim() !== profile.phone
+
+  async function handleSave(e: React.FormEvent) {
+    e.preventDefault()
+    const name = fullName.trim()
+    const tel = phone.trim()
+    if (!name) {
+      setMessage({ type: "error", text: "Please enter your name." })
+      return
+    }
+    if (tel && tel.replace(/\D/g, "").length < 9) {
+      setMessage({ type: "error", text: "Please enter a valid phone number." })
+      return
+    }
+    setSaving(true)
+    setMessage(null)
+    const supabase = createClient()
+    const { error } = await supabase.auth.updateUser({ data: { full_name: name, phone: tel } })
+    setSaving(false)
+    if (error) {
+      setMessage({ type: "error", text: error.message || "Could not save your details. Please try again." })
+      return
+    }
+    onSaved({ ...profile, fullName: name, phone: tel })
+    setMessage({ type: "success", text: "Your details have been saved." })
+  }
+
   return (
-    <motion.div
+    <motion.form
+      onSubmit={handleSave}
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.4 }}
@@ -111,34 +135,20 @@ function ProfileTab() {
           Personal Information
         </h3>
         <p className="mt-1 text-sm text-muted-foreground">
-          Update your personal details and preferences.
+          Update the name and phone number we use for your orders.
         </p>
       </div>
 
       <div className="grid gap-6 sm:grid-cols-2">
         <div className="space-y-2">
-          <Label htmlFor="firstName">First Name</Label>
+          <Label htmlFor="fullName">Full Name</Label>
           <Input
-            id="firstName"
-            defaultValue="Sample"
-            className="h-10 rounded-xl border-rose-border focus-visible:border-rose-primary focus-visible:ring-rose-primary/20"
-          />
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="lastName">Last Name</Label>
-          <Input
-            id="lastName"
-            defaultValue="Customer"
-            className="h-10 rounded-xl border-rose-border focus-visible:border-rose-primary focus-visible:ring-rose-primary/20"
-          />
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="email">Email Address</Label>
-          <Input
-            id="email"
-            type="email"
-            defaultValue="hello@ronnyandme.com"
-            className="h-10 rounded-xl border-rose-border focus-visible:border-rose-primary focus-visible:ring-rose-primary/20"
+            id="fullName"
+            value={fullName}
+            onChange={(e) => setFullName(e.target.value)}
+            autoComplete="name"
+            maxLength={120}
+            className={inputClass}
           />
         </div>
         <div className="space-y-2">
@@ -146,20 +156,66 @@ function ProfileTab() {
           <Input
             id="phone"
             type="tel"
-            defaultValue="059 270 7791"
-            className="h-10 rounded-xl border-rose-border focus-visible:border-rose-primary focus-visible:ring-rose-primary/20"
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+            autoComplete="tel"
+            maxLength={20}
+            placeholder="e.g. 024 412 3456"
+            className={inputClass}
           />
+        </div>
+        <div className="space-y-2 sm:col-span-2">
+          <Label htmlFor="email">Email Address</Label>
+          <Input
+            id="email"
+            type="email"
+            value={profile.email}
+            readOnly
+            disabled
+            className={inputClass}
+          />
+          <p className="text-xs text-muted-foreground">
+            Need to change your email? Contact us and we&apos;ll help.
+          </p>
         </div>
       </div>
 
-      <Button className="rounded-xl bg-rose-100 px-8 py-2.5 text-navy hover:bg-rose-200">
-        Save Changes
+      {message && (
+        <p
+          role="status"
+          className={
+            message.type === "success"
+              ? "rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm text-emerald-700"
+              : "rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-600"
+          }
+        >
+          {message.text}
+        </p>
+      )}
+
+      <Button
+        type="submit"
+        disabled={saving || !dirty}
+        className="gap-2 rounded-xl bg-rose-100 px-8 py-2.5 text-navy hover:bg-rose-200"
+      >
+        {saving && <Loader2 className="size-4 animate-spin" />}
+        {saving ? "Saving…" : "Save Changes"}
       </Button>
-    </motion.div>
+    </motion.form>
   )
 }
 
-function OrdersTab() {
+function OrdersTab({
+  orders,
+  loading,
+  error,
+  onRetry,
+}: {
+  orders: AccountOrder[]
+  loading: boolean
+  error: string
+  onRetry: () => void
+}) {
   return (
     <motion.div
       initial={{ opacity: 0, y: 12 }}
@@ -172,56 +228,111 @@ function OrdersTab() {
           Order History
         </h3>
         <p className="mt-1 text-sm text-muted-foreground">
-          Track and manage your recent orders.
+          Orders placed while signed in to this account.
         </p>
       </div>
 
-      <div className="space-y-4">
-        {mockOrders.map((order, i) => (
-          <motion.div
-            key={order.id}
-            custom={i}
-            variants={fadeUp}
-            initial="hidden"
-            animate="visible"
+      {loading ? (
+        <div className="flex items-center gap-2 py-10 text-sm text-muted-foreground">
+          <Loader2 className="size-4 animate-spin" />
+          Loading your orders…
+        </div>
+      ) : error ? (
+        <div className="rounded-2xl border border-red-200 bg-red-50 p-5 text-sm text-red-600">
+          <p>{error}</p>
+          <Button
+            variant="outline"
+            onClick={onRetry}
+            className="mt-3 rounded-xl border-red-200 text-red-600"
           >
-            <Card className="overflow-hidden rounded-2xl border-rose-border/50 ring-0 shadow-none border">
-              <CardContent className="p-0">
-                <div className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-3">
-                      <p className="font-heading font-semibold text-navy">
-                        {order.id}
-                      </p>
-                      <span
-                        className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium ${statusColors[order.status]}`}
-                      >
-                        {order.status}
-                      </span>
+            Try again
+          </Button>
+        </div>
+      ) : orders.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-16 text-center">
+          <div className="flex size-20 items-center justify-center rounded-full bg-[#FFF5F5]">
+            <Package className="size-8 text-rose-300" />
+          </div>
+          <h4 className="mt-6 font-heading text-xl font-semibold text-navy">
+            No orders yet
+          </h4>
+          <p className="mt-2 max-w-sm text-sm text-muted-foreground">
+            When you place an order it will show up here.
+          </p>
+          <Button
+            className="mt-6 gap-2 rounded-xl border border-rose-200 bg-[#FFF5F5] px-6 text-rose-400 hover:bg-rose-100"
+            render={<Link href="/shop" />}
+          >
+            <ShoppingBag className="size-4" />
+            Start Shopping
+          </Button>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {orders.map((order, i) => {
+            const badge = statusBadge(order)
+            const itemCount = order.items.reduce((sum, it) => sum + it.quantity, 0)
+            return (
+              <motion.div
+                key={order.order_number}
+                custom={Math.min(i, 8)}
+                variants={fadeUp}
+                initial="hidden"
+                animate="visible"
+              >
+                <Card className="overflow-hidden rounded-2xl border-rose-border/50 ring-0 shadow-none border">
+                  <CardContent className="p-0">
+                    <div className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
+                      <div className="min-w-0 space-y-1">
+                        <div className="flex flex-wrap items-center gap-3">
+                          <p className="font-heading font-semibold text-navy">
+                            {order.order_number}
+                          </p>
+                          <span
+                            className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium capitalize ${badge.className}`}
+                          >
+                            {badge.label}
+                          </span>
+                        </div>
+                        <p className="text-sm text-muted-foreground">
+                          {new Date(order.created_at).toLocaleDateString("en-GB", {
+                            day: "numeric",
+                            month: "long",
+                            year: "numeric",
+                          })}{" "}
+                          · {itemCount} {itemCount === 1 ? "item" : "items"}
+                        </p>
+                        {order.items.length > 0 && (
+                          <p className="truncate text-xs text-muted-foreground">
+                            {order.items.map((it) => it.name).join(", ")}
+                          </p>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-4">
+                        <p className="font-heading text-lg font-semibold text-navy">
+                          {formatPrice(order.grand_total)}
+                        </p>
+                        <Button
+                          variant="outline"
+                          className="gap-1.5 rounded-xl border-rose-border text-navy hover:border-rose-primary hover:text-rose-primary"
+                          render={
+                            <Link
+                              href={`/track-order?order=${encodeURIComponent(order.order_number)}`}
+                            />
+                          }
+                        >
+                          Track
+                          <ChevronRight className="size-3.5" />
+                        </Button>
+                      </div>
                     </div>
-                    <p className="text-sm text-muted-foreground">
-                      {order.date} · {order.items}{" "}
-                      {order.items === 1 ? "item" : "items"}
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-4">
-                    <p className="font-heading text-lg font-semibold text-navy">
-                      {formatPrice(order.total)}
-                    </p>
-                    <Button
-                      variant="outline"
-                      className="gap-1.5 rounded-xl border-rose-border text-navy hover:border-rose-primary hover:text-rose-primary"
-                    >
-                      View Details
-                      <ChevronRight className="size-3.5" />
-                    </Button>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </motion.div>
-        ))}
-      </div>
+                  </CardContent>
+                </Card>
+              </motion.div>
+            )
+          })}
+        </div>
+      )}
     </motion.div>
   )
 }
@@ -245,11 +356,11 @@ function WishlistTab() {
         </h3>
         <p className="mt-2 max-w-sm text-sm text-muted-foreground">
           Save pieces you love by tapping the heart icon on any product. Your
-          curated collection will appear here.
+          wishlist is kept on this device.
         </p>
         <Button
           className="mt-6 gap-2 rounded-xl border border-rose-200 bg-[#FFF5F5] px-6 text-rose-400 hover:bg-rose-100"
-          render={<a href="/shop" />}
+          render={<Link href="/shop" />}
         >
           <ShoppingBag className="size-4" />
           Start Shopping
@@ -270,8 +381,7 @@ function WishlistTab() {
           My Wishlist
         </h3>
         <p className="mt-1 text-sm text-muted-foreground">
-          {items.length} {items.length === 1 ? "piece" : "pieces"} you&apos;ve
-          saved.
+          {`${items.length} ${items.length === 1 ? "piece" : "pieces"} you've saved on this device.`}
         </p>
       </div>
       <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
@@ -283,163 +393,14 @@ function WishlistTab() {
   )
 }
 
-function AddressesTab() {
-  const [showForm, setShowForm] = useState(false)
-
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 12 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.4 }}
-      className="space-y-6"
-    >
-      <div className="flex items-start justify-between">
-        <div>
-          <h3 className="font-heading text-xl font-semibold text-navy">
-            Saved Addresses
-          </h3>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Manage your delivery addresses.
-          </p>
-        </div>
-        <Button
-          onClick={() => setShowForm(!showForm)}
-          className="gap-1.5 rounded-xl bg-rose-100 text-navy hover:bg-rose-200"
-        >
-          <Plus className="size-4" />
-          Add New
-        </Button>
-      </div>
-
-      {showForm && (
-        <motion.div
-          initial={{ opacity: 0, height: 0 }}
-          animate={{ opacity: 1, height: "auto" }}
-          transition={{ duration: 0.3 }}
-        >
-          <Card className="rounded-2xl border-rose-border/50 ring-0 shadow-none border">
-            <CardContent className="space-y-4 p-5">
-              <h4 className="font-heading font-semibold text-navy">
-                New Address
-              </h4>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-2">
-                  <Label htmlFor="addrLabel">Label</Label>
-                  <Input
-                    id="addrLabel"
-                    placeholder="e.g. Home, Office"
-                    className="h-10 rounded-xl border-rose-border"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="addrName">Full Name</Label>
-                  <Input
-                    id="addrName"
-                    placeholder="Full name"
-                    className="h-10 rounded-xl border-rose-border"
-                  />
-                </div>
-                <div className="space-y-2 sm:col-span-2">
-                  <Label htmlFor="addrLine1">Address Line 1</Label>
-                  <Input
-                    id="addrLine1"
-                    placeholder="Street address"
-                    className="h-10 rounded-xl border-rose-border"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="addrCity">City</Label>
-                  <Input
-                    id="addrCity"
-                    placeholder="City"
-                    className="h-10 rounded-xl border-rose-border"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="addrPhone">Phone</Label>
-                  <Input
-                    id="addrPhone"
-                    placeholder="059 270 7791"
-                    className="h-10 rounded-xl border-rose-border"
-                  />
-                </div>
-              </div>
-              <div className="flex gap-3 pt-2">
-                <Button className="rounded-xl bg-rose-100 text-navy hover:bg-rose-200">
-                  Save Address
-                </Button>
-                <Button
-                  variant="outline"
-                  onClick={() => setShowForm(false)}
-                  className="rounded-xl border-rose-border"
-                >
-                  Cancel
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        </motion.div>
-      )}
-
-      <div className="grid gap-4 sm:grid-cols-2">
-        {mockAddresses.map((addr, i) => (
-          <motion.div
-            key={addr.id}
-            custom={i}
-            variants={fadeUp}
-            initial="hidden"
-            animate="visible"
-          >
-            <Card className="relative rounded-2xl border-rose-border/50 ring-0 shadow-none border">
-              <CardContent className="space-y-2 p-5">
-                <div className="flex items-center gap-2">
-                  <h4 className="font-heading font-semibold text-navy">
-                    {addr.label}
-                  </h4>
-                  {addr.isDefault && (
-                    <Badge className="bg-rose-light text-rose-primary border-rose-border text-[10px]">
-                      Default
-                    </Badge>
-                  )}
-                </div>
-                <div className="space-y-0.5 text-sm text-muted-foreground">
-                  <p>{addr.name}</p>
-                  <p>{addr.line1}</p>
-                  {addr.line2 && <p>{addr.line2}</p>}
-                  <p>
-                    {addr.city}, {addr.region}
-                  </p>
-                  <p>{addr.phone}</p>
-                </div>
-                <div className="flex gap-2 pt-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="gap-1.5 rounded-lg border-rose-border text-navy hover:border-rose-primary hover:text-rose-primary"
-                  >
-                    <Edit className="size-3" />
-                    Edit
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="gap-1.5 rounded-lg border-rose-border text-muted-foreground hover:border-red-300 hover:text-red-600"
-                  >
-                    <Trash2 className="size-3" />
-                    Delete
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          </motion.div>
-        ))}
-      </div>
-    </motion.div>
-  )
-}
-
 export default function AccountPage() {
+  const router = useRouter()
   const [activeTab, setActiveTab] = useState<string>("profile")
+  const [profile, setProfile] = useState<AccountProfile | null>(null)
+  const [orders, setOrders] = useState<AccountOrder[]>([])
+  const [ordersLoading, setOrdersLoading] = useState(true)
+  const [ordersError, setOrdersError] = useState("")
+  const [signingOut, setSigningOut] = useState(false)
 
   useEffect(() => {
     const tabParam = new URLSearchParams(window.location.search).get("tab")
@@ -448,15 +409,108 @@ export default function AccountPage() {
     }
   }, [])
 
+  const loadOrders = useCallback(async (accessToken: string) => {
+    setOrdersLoading(true)
+    setOrdersError("")
+    try {
+      const res = await fetch("/api/account/orders", {
+        headers: { Authorization: `Bearer ${accessToken}` },
+        cache: "no-store",
+      })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(json?.error || "Could not load your orders.")
+      setOrders(Array.isArray(json.orders) ? json.orders : [])
+    } catch (err) {
+      setOrdersError(err instanceof Error ? err.message : "Could not load your orders.")
+    } finally {
+      setOrdersLoading(false)
+    }
+  }, [])
+
+  const loadAccount = useCallback(async () => {
+    const supabase = createClient()
+    const {
+      data: { session },
+    } = await supabase.auth.getSession()
+    if (!session?.user) {
+      router.replace("/auth/login?redirect=/account")
+      return
+    }
+    const user = session.user
+    const meta = (user.user_metadata || {}) as Record<string, unknown>
+
+    const { data: row } = await supabase
+      .from("profiles")
+      .select("full_name, email, phone")
+      .eq("id", user.id)
+      .maybeSingle()
+
+    setProfile({
+      id: user.id,
+      email: String(row?.email || user.email || ""),
+      fullName: String(row?.full_name || meta.full_name || ""),
+      phone: String(row?.phone || meta.phone || user.phone || ""),
+    })
+
+    void loadOrders(session.access_token)
+  }, [router, loadOrders])
+
+  useEffect(() => {
+    void loadAccount()
+  }, [loadAccount])
+
+  async function retryOrders() {
+    const supabase = createClient()
+    const {
+      data: { session },
+    } = await supabase.auth.getSession()
+    if (!session) {
+      router.replace("/auth/login?redirect=/account")
+      return
+    }
+    void loadOrders(session.access_token)
+  }
+
+  async function handleSignOut() {
+    setSigningOut(true)
+    const supabase = createClient()
+    await supabase.auth.signOut()
+    router.push("/")
+    router.refresh()
+  }
+
+  if (!profile) {
+    return (
+      <Section className="min-h-screen bg-gradient-to-b from-rose-light/50 to-white">
+        <Container className="flex justify-center py-24">
+          <Loader2 className="size-8 animate-spin text-rose-primary" aria-label="Loading your account" />
+        </Container>
+      </Section>
+    )
+  }
+
+  const firstName = profile.fullName.split(/\s+/)[0]
+
   return (
     <Section className="min-h-screen bg-gradient-to-b from-rose-light/50 to-white">
       <Container>
-        <Heading
-          as="h1"
-          subtitle="Manage your profile, orders, wishlist, and delivery addresses."
-        >
-          My Account
-        </Heading>
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+          <Heading
+            as="h1"
+            subtitle={`Signed in as ${profile.email}`}
+          >
+            {firstName ? `Hi, ${firstName}` : "My Account"}
+          </Heading>
+          <Button
+            variant="outline"
+            onClick={handleSignOut}
+            disabled={signingOut}
+            className="gap-2 self-start rounded-xl border-rose-border text-navy hover:border-rose-primary hover:text-rose-primary sm:self-auto"
+          >
+            {signingOut ? <Loader2 className="size-4 animate-spin" /> : <LogOut className="size-4" />}
+            Sign out
+          </Button>
+        </div>
 
         <div className="mt-10">
           <Tabs value={activeTab} onValueChange={setActiveTab}>
@@ -476,16 +530,18 @@ export default function AccountPage() {
             </TabsList>
 
             <TabsContent value="profile">
-              <ProfileTab />
+              <ProfileTab profile={profile} onSaved={setProfile} />
             </TabsContent>
             <TabsContent value="orders">
-              <OrdersTab />
+              <OrdersTab
+                orders={orders}
+                loading={ordersLoading}
+                error={ordersError}
+                onRetry={retryOrders}
+              />
             </TabsContent>
             <TabsContent value="wishlist">
               <WishlistTab />
-            </TabsContent>
-            <TabsContent value="addresses">
-              <AddressesTab />
             </TabsContent>
           </Tabs>
         </div>

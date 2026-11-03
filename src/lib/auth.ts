@@ -19,7 +19,11 @@ export interface AuthResult {
  * Checks cookies first (set by admin login), then Authorization header.
  */
 function extractToken(req: NextRequest | Request): string | undefined {
-    let token: string | undefined;
+    // An explicit Authorization header wins: a stale admin cookie must not
+    // override the session the caller is actually sending.
+    const authHeader = req.headers.get('authorization');
+    let token: string | undefined = authHeader?.match(/^Bearer\s+(.+)$/i)?.[1]?.trim() || undefined;
+    if (token) return token;
 
     if ('cookies' in req && typeof (req as NextRequest).cookies?.get === 'function') {
         const nr = req as NextRequest;
@@ -42,11 +46,6 @@ function extractToken(req: NextRequest | Request): string | undefined {
                 }
             }
         }
-    }
-
-    if (!token) {
-        const authHeader = req.headers.get('authorization');
-        token = authHeader?.replace('Bearer ', '') || undefined;
     }
 
     return token;
@@ -165,4 +164,45 @@ export async function verifyAdminToken(token: string): Promise<AuthResult> {
     } catch (err: any) {
         return { authenticated: false, error: err.message || 'Auth failed' };
     }
+}
+
+/**
+ * Like requireAdmin, but a `staff` member must also have the area switched on
+ * in profiles.permissions (the same flags the admin sidebar uses). Admins and
+ * superadmins pass every area. Pass `adminOnly` for areas staff never get.
+ */
+export async function requireStaffArea(
+    req: NextRequest | Request,
+    area: string,
+    options: { adminOnly?: boolean } = {}
+): Promise<AuthResult> {
+    const auth = await requireAdmin(req);
+    if (!auth.authenticated) return auth;
+    if (auth.role === 'admin' || auth.role === 'superadmin') return auth;
+    if (options.adminOnly) {
+        return { authenticated: false, error: 'Admin access required' };
+    }
+
+    const { data: profile } = await supabaseAdmin
+        .from('profiles')
+        .select('permissions')
+        .eq('id', auth.user.id)
+        .maybeSingle();
+    const permissions = (profile?.permissions || {}) as Record<string, unknown>;
+    // Matches staffCanAccessPath: a staff row with no flags saved yet has every area.
+    if (Object.keys(permissions).length === 0 || permissions[area] === true) return auth;
+    return { authenticated: false, error: 'You do not have access to this area' };
+}
+
+/** Server-action variant of requireStaffArea (token passed from the client). */
+export async function verifyStaffAreaToken(
+    token: string,
+    area: string,
+    options: { adminOnly?: boolean } = {}
+): Promise<AuthResult> {
+    return requireStaffArea(
+        new Request('http://internal/', { headers: { authorization: `Bearer ${token}` } }),
+        area,
+        options
+    );
 }

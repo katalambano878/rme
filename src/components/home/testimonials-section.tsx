@@ -6,7 +6,6 @@ import { Star, Quote } from "lucide-react"
 import { Container } from "@/components/shared/container"
 import { Section } from "@/components/shared/section"
 import { Heading } from "@/components/shared/heading"
-import { testimonials as staticTestimonials } from "@/lib/mock-data"
 import { cn } from "@/lib/utils"
 import { createClient } from "@/lib/supabase/client"
 
@@ -29,7 +28,8 @@ const fadeUp = {
 }
 
 export function TestimonialsSection() {
-  const [testimonials, setTestimonials] = useState<Testimonial[]>(staticTestimonials as Testimonial[])
+  // No fallback content: until real testimonials exist the section stays hidden.
+  const [testimonials, setTestimonials] = useState<Testimonial[]>([])
 
   useEffect(() => {
     const supabase = createClient()
@@ -43,6 +43,8 @@ export function TestimonialsSection() {
         if (data && data.length > 0) setTestimonials(data as Testimonial[])
       })
   }, [])
+
+  if (testimonials.length === 0) return null
 
   return (
     <Section className="bg-rose-light/50">

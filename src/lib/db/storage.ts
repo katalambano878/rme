@@ -11,6 +11,23 @@ import {
   extractUploadBody,
   isMultipartWrapper,
 } from "@/lib/extract-upload-body";
+import { authJwtSecret } from "./mode";
+
+/** Buckets whose objects anyone may read through the public object route. */
+export const PUBLIC_BUCKETS = new Set([
+  "product-images",
+  "blog-covers",
+  "blog-images",
+  "site-media",
+  "uploads",
+  process.env.NEXT_PUBLIC_SUPABASE_STORAGE_BUCKET || "product-images",
+]);
+
+const BUCKET_NAME = /^[a-z0-9][a-z0-9_-]{0,62}$/;
+
+export function isValidBucketName(bucket: string): boolean {
+  return BUCKET_NAME.test(bucket);
+}
 
 const STORAGE_ROOT =
   process.env.STORAGE_ROOT || path.join(process.cwd(), ".storage");
@@ -27,11 +44,7 @@ function publicBase(): string {
 }
 
 function signingSecret(): string {
-  return (
-    process.env.STORAGE_SIGNING_SECRET ||
-    process.env.JWT_SECRET ||
-    "storage-dev-secret"
-  );
+  return process.env.STORAGE_SIGNING_SECRET || authJwtSecret();
 }
 
 export function signObjectToken(bucket: string, objectPath: string, expEpoch: number): string {
@@ -56,9 +69,10 @@ export function verifyObjectToken(
 }
 
 function safeJoin(bucket: string, objectPath: string): string {
+  if (!isValidBucketName(bucket)) throw new Error("Invalid bucket");
   const clean = objectPath.replace(/^\/+/, "");
   const full = path.normalize(path.join(STORAGE_ROOT, bucket, clean));
-  const base = path.normalize(path.join(STORAGE_ROOT, bucket));
+  const base = path.normalize(path.join(STORAGE_ROOT, bucket)) + path.sep;
   if (!full.startsWith(base)) throw new Error("Path traversal blocked");
   return full;
 }

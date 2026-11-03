@@ -3,6 +3,7 @@
 import { useState, useEffect, use } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
+import { adminFetch } from '@/lib/admin-fetch';
 import MarkdownMessage from '@/components/MarkdownMessage';
 
 export default function ConversationDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -62,15 +63,22 @@ export default function ConversationDetailPage({ params }: { params: Promise<{ i
   }
 
   async function createTicketFromConversation() {
+    // Tickets need a customer email (the API returns 400 without one), so ask when the chat has none.
+    let customerEmail = (conversation.customer_email || '').trim();
+    if (!customerEmail) {
+      customerEmail = (prompt('This chat has no customer email. Enter one to create the ticket:') || '').trim();
+      if (!customerEmail) return;
+    }
     setCreatingTicket(true);
-    const res = await fetch('/api/support/tickets', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
+    let data: any;
+    try {
+      data = await adminFetch('/api/support/tickets', {
+        method: 'POST',
+        body: JSON.stringify({
         subject: conversation.summary || `Chat conversation from ${conversation.customer_name || conversation.customer_email || 'customer'}`,
         description: `Auto-created from AI conversation. Session: ${conversation.session_id}`,
         customer_id: conversation.user_id,
-        customer_email: conversation.customer_email,
+        customer_email: customerEmail,
         customer_name: conversation.customer_name,
         conversation_id: conversation.id,
         category: conversation.category,
@@ -78,11 +86,15 @@ export default function ConversationDetailPage({ params }: { params: Promise<{ i
         priority: conversation.sentiment === 'negative' ? 'high' : 'medium',
         initial_message: conversation.summary || 'Created from AI chat conversation',
         message_sender_type: 'system',
-      }),
-    });
-    const data = await res.json();
-    setCreatingTicket(false);
-    if (data.data) {
+        }),
+      });
+    } catch (err) {
+      alert(`Could not create ticket: ${err instanceof Error ? err.message : 'Unknown error'}`);
+      return;
+    } finally {
+      setCreatingTicket(false);
+    }
+    if (data?.data) {
       await supabase.from('chat_conversations').update({ is_escalated: true, escalated_at: new Date().toISOString() }).eq('id', id);
       setConversation({ ...conversation, is_escalated: true });
       alert(`Ticket ${data.data.ticket_number} created!`);

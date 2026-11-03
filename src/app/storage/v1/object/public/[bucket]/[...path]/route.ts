@@ -1,4 +1,7 @@
-import { cacheObject, readObject } from "@/lib/db/storage"
+import { PUBLIC_BUCKETS, cacheObject, readObject } from "@/lib/db/storage"
+
+/** Only plain media is served inline; anything else downloads, so an upload can't run script on this origin. */
+const INLINE_TYPES = /^(image\/(png|jpe?g|webp|gif|avif|x-icon|vnd\.microsoft\.icon)|video\/(mp4|webm)|application\/pdf)$/i
 
 export const dynamic = "force-dynamic"
 export const runtime = "nodejs"
@@ -41,6 +44,12 @@ export async function GET(
 ): Promise<Response> {
   const { bucket, path: parts } = await ctx.params
   const objectPath = parts.map(decodeURIComponent).join("/")
+  if (!PUBLIC_BUCKETS.has(bucket) || objectPath.endsWith(".meta.json")) {
+    return new Response(JSON.stringify({ error: "Object not found" }), {
+      status: 404,
+      headers: { "Content-Type": "application/json", "Cache-Control": "no-store" },
+    })
+  }
   let obj = await readObject(bucket, objectPath)
   if (!obj) {
     obj = await fetchLegacy(bucket, objectPath)
@@ -54,10 +63,14 @@ export async function GET(
       },
     })
   }
+  const inline = INLINE_TYPES.test(obj.contentType.split(";")[0].trim())
   return new Response(new Uint8Array(obj.bytes), {
     status: 200,
     headers: {
-      "Content-Type": obj.contentType,
+      "Content-Type": inline ? obj.contentType : "application/octet-stream",
+      "Content-Disposition": inline ? "inline" : "attachment",
+      "Content-Security-Policy": "default-src 'none'; img-src 'self'; media-src 'self'; sandbox",
+      "X-Content-Type-Options": "nosniff",
       "Cache-Control": "public, max-age=86400, immutable",
       "Access-Control-Allow-Origin": "*",
     },

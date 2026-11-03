@@ -130,6 +130,8 @@ function buildCartProductSnapshot(
     ...product,
     price,
     salePrice,
+    regularPrice: row.price,
+    variantSalePrice: row.sale_price,
     sku: row.sku,
     stock: row.stock_quantity,
   }

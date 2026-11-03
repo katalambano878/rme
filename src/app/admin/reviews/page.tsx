@@ -8,6 +8,7 @@ import { adminImageSrc } from '@/lib/product-image';
 
 export default function AdminReviewsPage() {
   const [statusFilter, setStatusFilter] = useState('all');
+  const [sortBy, setSortBy] = useState<'date' | 'rating'>('date');
   const [selectedReviews, setSelectedReviews] = useState<string[]>([]);
   const [reviews, setReviews] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -47,10 +48,12 @@ export default function AdminReviewsPage() {
           },
           rating: r.rating,
           title: r.title,
-          comment: r.content,
+          comment: r.body,
+          createdAt: r.created_at,
           date: new Date(r.created_at).toLocaleDateString(),
-          status: r.status || 'Pending',
-          helpful: r.helpful || 0
+          // reviews only has is_published: unpublished reviews are "Pending"
+          // (new, or rejected back to hidden), published ones are "Approved".
+          status: r.is_published ? 'Approved' : 'Pending'
         }));
         setReviews(formatted);
       }
@@ -72,21 +75,23 @@ export default function AdminReviewsPage() {
       .toUpperCase() || '??';
   };
 
-  const filteredReviews = reviews.filter(r =>
-    statusFilter === 'all' || r.status.toLowerCase() === statusFilter
-  );
+  const filteredReviews = reviews
+    .filter(r => statusFilter === 'all' || r.status.toLowerCase() === statusFilter)
+    .sort((a, b) =>
+      sortBy === 'rating'
+        ? (b.rating || 0) - (a.rating || 0)
+        : new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
 
   const stats = {
     total: reviews.length,
     pending: reviews.filter(r => r.status.toLowerCase() === 'pending').length,
-    approved: reviews.filter(r => r.status.toLowerCase() === 'approved').length,
-    rejected: reviews.filter(r => r.status.toLowerCase() === 'rejected').length
+    approved: reviews.filter(r => r.status.toLowerCase() === 'approved').length
   };
 
   const statusColors: any = {
     'Pending': 'bg-amber-100 text-amber-700',
-    'Approved': 'bg-rose-100 text-rose-800',
-    'Rejected': 'bg-red-100 text-red-700'
+    'Approved': 'bg-rose-100 text-rose-800'
   };
 
   const handleSelectAll = () => {
@@ -108,14 +113,15 @@ export default function AdminReviewsPage() {
   const handleBulkAction = async (action: string) => {
     if (selectedReviews.length === 0) return;
     try {
-      let newStatus = '';
-      if (action === 'Approve') newStatus = 'Approved';
-      if (action === 'Reject') newStatus = 'Rejected';
+      // Approve publishes the review; Reject hides it again.
+      let isPublished: boolean | null = null;
+      if (action === 'Approve') isPublished = true;
+      if (action === 'Reject') isPublished = false;
 
-      if (newStatus) {
+      if (isPublished !== null) {
         const { error } = await supabase
           .from('reviews')
-          .update({ status: newStatus })
+          .update({ is_published: isPublished })
           .in('id', selectedReviews);
 
         if (error) throw error;
@@ -150,7 +156,7 @@ export default function AdminReviewsPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <button
           onClick={() => setStatusFilter('all')}
           className={`p-4 rounded-xl border-2 transition-all text-left ${statusFilter === 'all' ? 'border-rose-500 bg-pink-50' : 'border-gray-200 bg-white'
@@ -175,14 +181,6 @@ export default function AdminReviewsPage() {
           <p className="text-2xl font-bold text-rose-700">{stats.approved}</p>
           <p className="text-sm text-gray-600 mt-1">Approved</p>
         </button>
-        <button
-          onClick={() => setStatusFilter('rejected')}
-          className={`p-4 rounded-xl border-2 transition-all text-left ${statusFilter === 'rejected' ? 'border-red-700 bg-red-50' : 'border-gray-200 bg-white'
-            }`}
-        >
-          <p className="text-2xl font-bold text-red-700">{stats.rejected}</p>
-          <p className="text-sm text-gray-600 mt-1">Rejected</p>
-        </button>
       </div>
 
       <div className="bg-white rounded-xl shadow-sm border border-gray-200">
@@ -191,10 +189,13 @@ export default function AdminReviewsPage() {
             <h2 className="text-lg font-bold text-gray-900 text-transform capitalize">
               {statusFilter === 'all' ? 'All Reviews' : `${statusFilter} Reviews`}
             </h2>
-            <select className="px-4 py-2 pr-8 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-rose-400 focus:border-rose-400 font-medium cursor-pointer">
-              <option>Sort by Date</option>
-              <option>Sort by Rating</option>
-              <option>Sort by Helpful</option>
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value as 'date' | 'rating')}
+              className="px-4 py-2 pr-8 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-rose-400 focus:border-rose-400 font-medium cursor-pointer"
+            >
+              <option value="date">Sort by Date</option>
+              <option value="rating">Sort by Rating</option>
             </select>
           </div>
         </div>
@@ -217,7 +218,7 @@ export default function AdminReviewsPage() {
                 className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm font-medium transition-colors whitespace-nowrap cursor-pointer"
               >
                 <i className="ri-close-line mr-2"></i>
-                Reject
+                Reject (unpublish)
               </button>
             </div>
           </div>

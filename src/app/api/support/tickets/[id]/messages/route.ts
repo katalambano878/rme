@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { requireAdmin } from '@/lib/auth';
+import { requireStaffArea } from '@/lib/auth';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 
 export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const auth = await requireAdmin(req);
+  const auth = await requireStaffArea(req, 'support');
   if (!auth.authenticated) return NextResponse.json({ error: auth.error }, { status: 401 });
 
   const { id } = await params;
@@ -24,7 +24,7 @@ export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const auth = await requireAdmin(req);
+  const auth = await requireStaffArea(req, 'support');
   if (!auth.authenticated) return NextResponse.json({ error: auth.error }, { status: 401 });
 
   const { id } = await params;

@@ -3,13 +3,13 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
+import { downloadCsv } from '@/lib/admin-csv';
 import { buildDisplaySku } from '@/lib/sku-display';
 import { listPriceFromProduct, listSkuRaw, listStockFromProduct } from '@/lib/product-metrics';
 
 export default function InventoryManagementPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [stockFilter, setStockFilter] = useState('all');
-  const [showImportModal, setShowImportModal] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
   const [selectedProducts, setSelectedProducts] = useState<string[]>([]);
   const [products, setProducts] = useState<any[]>([]);
@@ -111,12 +111,6 @@ export default function InventoryManagementPage() {
     }
   };
 
-  const handleBulkRestock = () => {
-    // Placeholder for bulk restock logic
-    alert("Bulk restock feature coming soon (requires backend logic).");
-    setSelectedProducts([]);
-  };
-
   const handleExportCSV = () => {
     const csvData = [
       ['SKU', 'Product Name', 'Category', 'Current Stock', 'Price (GHS)', 'Status'],
@@ -124,19 +118,13 @@ export default function InventoryManagementPage() {
         p.sku,
         p.name,
         p.category,
-        p.currentStock.toString(),
+        p.currentStock,
         p.price.toFixed(2),
         p.status
       ])
     ];
 
-    const csvContent = csvData.map(row => row.join(',')).join('\n');
-    const blob = new Blob([csvContent], { type: 'text/csv' });
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `inventory-export-${new Date().toISOString().split('T')[0]}.csv`;
-    a.click();
+    downloadCsv(`inventory-export-${new Date().toISOString().split('T')[0]}.csv`, csvData);
     setShowExportModal(false);
   };
 
@@ -242,14 +230,6 @@ export default function InventoryManagementPage() {
               </div>
 
               <button
-                onClick={() => setShowImportModal(true)}
-                className="bg-rose-500 hover:bg-rose-600 text-white px-3 py-2 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1.5 whitespace-nowrap cursor-pointer"
-              >
-                <i className="ri-upload-line text-sm"></i>
-                <span>Import</span>
-              </button>
-
-              <button
                 onClick={() => setShowExportModal(true)}
                 className="border border-gray-300 hover:border-gray-400 text-gray-700 px-3 py-2 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1.5 whitespace-nowrap cursor-pointer"
               >
@@ -265,12 +245,6 @@ export default function InventoryManagementPage() {
                 {selectedProducts.length} product{selectedProducts.length > 1 ? 's' : ''} selected
               </p>
               <div className="flex items-center space-x-3">
-                <button
-                  onClick={handleBulkRestock}
-                  className="bg-rose-500 hover:bg-rose-600 text-white px-4 py-2 rounded-lg font-semibold transition-colors whitespace-nowrap cursor-pointer"
-                >
-                  Bulk Restock
-                </button>
                 <button
                   onClick={() => setSelectedProducts([])}
                   className="text-gray-600 hover:text-gray-900 font-medium whitespace-nowrap cursor-pointer"

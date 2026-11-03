@@ -77,7 +77,10 @@ export default function AdminCategoriesPage() {
   const handleDelete = async (categoryId: string) => {
     if (!confirm('Are you sure you want to delete this category? Products in it will have no category.')) return;
     try {
-      await supabase.from('products').update({ category_id: null }).eq('category_id', categoryId);
+      // Unassign products first: the plain-Postgres copy may not carry the ON DELETE SET NULL
+      // foreign key, so don't rely on it. Stop if this fails rather than orphan products.
+      const { error: unassignError } = await supabase.from('products').update({ category_id: null }).eq('category_id', categoryId);
+      if (unassignError) throw unassignError;
       const { error } = await supabase.from('categories').delete().eq('id', categoryId);
       if (error) throw error;
       setCategories(categories.filter((c) => c.id !== categoryId));

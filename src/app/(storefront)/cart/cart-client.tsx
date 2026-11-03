@@ -20,7 +20,7 @@ import type { Product } from "@/types/product"
 import { Container } from "@/components/shared/container"
 import { Section } from "@/components/shared/section"
 import { Heading } from "@/components/shared/heading"
-import { useCartStore } from "@/lib/store/cart-store"
+import { atStockLimit, isOutOfStock, useCartStore } from "@/lib/store/cart-store"
 import { useWishlistStore } from "@/lib/store/wishlist-store"
 import { useHydrated } from "@/lib/hooks/use-hydrated"
 import { useStorePricing } from "@/components/store-pricing-provider"
@@ -266,7 +266,10 @@ export default function CartPageClient({
                                     item.selectedColor,
                                   )
                                 }
-                                className="flex size-8 items-center justify-center rounded-full bg-rose-100 text-rose-primary transition-colors hover:bg-rose-200"
+                                disabled={atStockLimit(item.product, item.quantity)}
+                                aria-label="Increase quantity"
+                                title={atStockLimit(item.product, item.quantity) ? "No more in stock" : undefined}
+                                className="flex size-8 items-center justify-center rounded-full bg-rose-100 text-rose-primary transition-colors hover:bg-rose-200 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-rose-100"
                               >
                                 <Plus className="size-3.5" />
                               </button>
@@ -421,6 +424,8 @@ export default function CartPageClient({
 
 function ShopStyleRecommendationCard({ product }: { product: Product }) {
   const addItem = useCartStore((s) => s.addItem)
+  const needsOptions = product.variants.length > 0
+  const soldOut = isOutOfStock(product)
   const toggleItem = useWishlistStore((s) => s.toggleItem)
   const hydrated = useHydrated()
   const storedInWishlist = useWishlistStore((s) => s.isInWishlist(product.id))
@@ -452,16 +457,24 @@ function ShopStyleRecommendationCard({ product }: { product: Product }) {
           </button>
 
           <div className="pointer-events-none absolute inset-x-0 bottom-0 flex justify-center pb-4 opacity-0 transition-opacity duration-300 group-hover:opacity-100">
-            <button
-              onClick={(e) => {
-                e.preventDefault()
-                addItem(product)
-              }}
-              className="pointer-events-auto inline-flex items-center gap-2 rounded-full bg-white px-7 py-3 text-base font-semibold text-rose-primary shadow-xl"
-            >
-              <ShoppingBag className="size-4" />
-              Add to Bag
-            </button>
+            {soldOut ? (
+              <span className="inline-flex items-center gap-2 rounded-full bg-white/95 px-7 py-3 text-base font-semibold text-muted-foreground shadow-xl">
+                Out of stock
+              </span>
+            ) : (
+              <button
+                type="button"
+                onClick={(e) => {
+                  if (needsOptions) return // follow the card link to choose options
+                  e.preventDefault()
+                  addItem(product)
+                }}
+                className="pointer-events-auto inline-flex items-center gap-2 rounded-full bg-white px-7 py-3 text-base font-semibold text-rose-primary shadow-xl"
+              >
+                <ShoppingBag className="size-4" />
+                {needsOptions ? "Choose Options" : "Add to Bag"}
+              </button>
+            )}
           </div>
         </div>
       </Link>

@@ -29,6 +29,16 @@ export function defaultStaffPermissions(): Record<string, boolean> {
   return o;
 }
 
+/** Starting flags for someone just made staff: dashboard and orders only. */
+export function newStaffPermissions(): Record<string, boolean> {
+  const o: Record<string, boolean> = {};
+  for (const { key } of STAFF_PERMISSION_AREAS) o[key] = key === 'dashboard' || key === 'orders';
+  return o;
+}
+
+/** Admin-only pages: never open to the staff role, whatever its flags say. */
+export const ADMIN_ONLY_PATHS = ['/admin/sms-credit'] as const;
+
 /** Map URL to permission key; null = no specific gate (allow). */
 export function pathToPermissionKey(pathname: string): string | null {
   if (pathname === '/admin' || pathname === '/admin/') return 'dashboard';
@@ -71,6 +81,10 @@ export function staffCanAccessPath(
 
   if (pathname.startsWith('/admin/staff')) {
     return canManageStaffRoles(role);
+  }
+
+  if (ADMIN_ONLY_PATHS.some((p) => pathname === p || pathname.startsWith(`${p}/`))) {
+    return false;
   }
 
   if (role !== 'staff') return true;

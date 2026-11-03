@@ -9,6 +9,9 @@ import { BRAND_LOGO_ALT, BRAND_LOGO_SRC } from '@/lib/brand';
 import { canAccessAdminPanel, canManageStaffRoles } from '@/lib/admin-role-access';
 import { firstAccessibleAdminPath, staffCanAccessPath } from '@/lib/staff-permissions';
 
+// Optional-module menu ids; all shown when store_modules can't be read.
+const ALL_MODULE_IDS = ['customer-insights', 'notifications', 'blog'];
+
 export default function AdminLayout({
   children,
 }: {
@@ -122,19 +125,18 @@ export default function AdminLayout({
       try {
         const { data, error } = await supabase.from('store_modules').select('id, enabled');
         if (error) {
-          // Current project schema does not include store_modules; keep module links visible.
-          if ((error as any)?.code === 'PGRST205') {
-            setEnabledModules(['customer-insights', 'notifications', 'blog']);
-            return;
-          }
-          console.warn('Error fetching modules:', error);
+          // store_modules may not exist (the shim reports every error as code "PGRST"),
+          // so on any error keep all module links visible.
+          console.warn('Error fetching modules, showing all:', error);
+          setEnabledModules(ALL_MODULE_IDS);
           return;
         }
         if (data) {
           setEnabledModules(data.filter((m: any) => m.enabled).map((m: any) => m.id));
         }
       } catch (err) {
-        console.warn('Fetch modules failed:', err);
+        console.warn('Fetch modules failed, showing all:', err);
+        setEnabledModules(ALL_MODULE_IDS);
       }
     }
     fetchModules();
@@ -203,6 +205,7 @@ export default function AdminLayout({
       title: 'Buy SMS',
       icon: 'ri-bank-card-line',
       path: '/admin/sms-credit',
+      requiresAdmin: true,
     },
     {
       title: 'Products',

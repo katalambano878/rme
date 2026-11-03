@@ -1,21 +1,15 @@
 "use client"
 
-import { useState } from "react"
 import { motion } from "framer-motion"
-import { Send, MessageCircle } from "lucide-react"
+import { Send, MessageCircle, Loader2 } from "lucide-react"
 import { Container } from "@/components/shared/container"
 import { Section } from "@/components/shared/section"
+import { NEWSLETTER_SUCCESS_COPY, useNewsletterSignup } from "@/components/shared/use-newsletter-signup"
 import { WHATSAPP_URL } from "@/lib/brand"
 
 export function NewsletterSection() {
-  const [email, setEmail] = useState("")
-  const [submitted, setSubmitted] = useState(false)
-
-  function handleSubmit(e: React.FormEvent) {
-    e.preventDefault()
-    if (!email) return
-    setSubmitted(true)
-  }
+  const { email, setEmail, status, error, submit } = useNewsletterSignup("home page")
+  const submitting = status === "submitting"
 
   return (
     <Section className="bg-rose-light">
@@ -33,34 +27,42 @@ export function NewsletterSection() {
             Be the first to know about new arrivals, exclusive offers, and style tips.
           </p>
 
-          {submitted ? (
+          {status === "success" ? (
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               className="mt-8 rounded-2xl border border-emerald-200 bg-emerald-50 px-6 py-5"
             >
               <p className="text-sm font-semibold text-emerald-700">
-                Welcome to the inner circle! Check your inbox for a surprise.
+                {NEWSLETTER_SUCCESS_COPY}
               </p>
             </motion.div>
           ) : (
-            <form onSubmit={handleSubmit} className="mt-8 flex gap-3">
+            <>
+            <form onSubmit={submit} className="mt-8 flex gap-3">
               <input
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="Enter your email address"
                 required
+                aria-label="Email address"
+                disabled={submitting}
                 className="min-w-0 flex-1 rounded-full border border-rose-border bg-white px-5 py-3.5 text-sm text-navy placeholder:text-muted-foreground/60 transition-all focus:border-rose-300 focus:outline-none focus:ring-2 focus:ring-rose-200/40"
               />
               <button
                 type="submit"
-                className="inline-flex shrink-0 items-center gap-2 rounded-full bg-rose-100 px-6 py-3.5 text-sm font-semibold text-navy transition-all duration-300 hover:bg-rose-200 hover:shadow-md hover:shadow-rose-200/40 active:scale-[0.98]"
+                disabled={submitting}
+                className="inline-flex shrink-0 disabled:opacity-60 items-center gap-2 rounded-full bg-rose-100 px-6 py-3.5 text-sm font-semibold text-navy transition-all duration-300 hover:bg-rose-200 hover:shadow-md hover:shadow-rose-200/40 active:scale-[0.98]"
               >
-                <Send className="size-4" />
+                {submitting ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
                 <span className="hidden sm:inline">Subscribe</span>
               </button>
             </form>
+            {status === "error" && (
+              <p role="alert" className="mt-3 text-sm text-red-600">{error}</p>
+            )}
+            </>
           )}
 
           <div className="mt-6 flex items-center justify-center gap-1.5 text-sm text-muted-foreground">

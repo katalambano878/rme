@@ -30,7 +30,9 @@ export default function NotificationsPage() {
 
             const { data: profiles, error: fetchError } = await supabase
                 .from('profiles')
-                .select('email, phone, full_name');
+                .select('email, phone, full_name')
+                // Campaigns go to customers only, never staff/admin accounts.
+                .eq('role', 'customer');
 
             if (fetchError) throw fetchError;
 
@@ -81,55 +83,76 @@ export default function NotificationsPage() {
             let totalEmail = 0;
             let totalSms = 0;
             let totalErrors = 0;
+            // A failed batch is recorded and skipped, not thrown: earlier batches were
+            // already delivered, so throwing would invite a retry that double-sends.
+            let failedBatches = 0;
+            let failedRecipients = 0;
+            let lastBatchError = '';
 
             for (let i = 0; i < recipients.length; i += BATCH_SIZE) {
                 const batch = recipients.slice(i, i + BATCH_SIZE);
+                const batchNo = Math.floor(i / BATCH_SIZE) + 1;
 
-                const res = await fetch('/api/notifications', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${session.access_token}`
-                    },
-                    body: JSON.stringify({
-                        type: 'campaign',
-                        payload: {
-                            recipients: batch,
-                            subject: form.subject,
-                            message: form.message,
-                            channels: form.channels,
-                        }
-                    })
-                });
+                try {
+                    const res = await fetch('/api/notifications', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${session.access_token}`
+                        },
+                        body: JSON.stringify({
+                            type: 'campaign',
+                            payload: {
+                                recipients: batch,
+                                subject: form.subject,
+                                message: form.message,
+                                channels: form.channels,
+                            }
+                        })
+                    });
 
-                // Handle non-JSON responses (e.g. timeouts, server errors)
-                let data;
-                const contentType = res.headers.get('content-type') || '';
-                if (contentType.includes('application/json')) {
-                    data = await res.json();
-                } else {
-                    const text = await res.text();
-                    throw new Error(`Server error (batch ${Math.floor(i / BATCH_SIZE) + 1}): ${text.slice(0, 100)}`);
+                    // Handle non-JSON responses (e.g. timeouts, server errors)
+                    let data;
+                    const contentType = res.headers.get('content-type') || '';
+                    if (contentType.includes('application/json')) {
+                        data = await res.json();
+                    } else {
+                        const text = await res.text();
+                        throw new Error(`Server error (batch ${batchNo}): ${text.slice(0, 100)}`);
+                    }
+
+                    if (!res.ok) throw new Error(`Batch ${batchNo}: ${data.error || 'Failed to send'}`);
+
+                    // Parse results from response
+                    const msg = data.message || '';
+                    const emailMatch = msg.match(/(\d+) emails/);
+                    const smsMatch = msg.match(/(\d+) SMS/);
+                    const errorMatch = msg.match(/(\d+) failed/);
+                    if (emailMatch) totalEmail += parseInt(emailMatch[1]);
+                    if (smsMatch) totalSms += parseInt(smsMatch[1]);
+                    if (errorMatch) totalErrors += parseInt(errorMatch[1]);
+                } catch (batchErr: any) {
+                    console.error('Campaign batch failed:', batchErr);
+                    failedBatches += 1;
+                    failedRecipients += batch.length;
+                    lastBatchError = batchErr?.message || 'Failed to send';
                 }
-
-                if (!res.ok) throw new Error(data.error || 'Failed to send');
-
-                // Parse results from response
-                const msg = data.message || '';
-                const emailMatch = msg.match(/(\d+) emails/);
-                const smsMatch = msg.match(/(\d+) SMS/);
-                const errorMatch = msg.match(/(\d+) failed/);
-                if (emailMatch) totalEmail += parseInt(emailMatch[1]);
-                if (smsMatch) totalSms += parseInt(smsMatch[1]);
-                if (errorMatch) totalErrors += parseInt(errorMatch[1]);
             }
 
             const resultParts = [];
             if (totalEmail > 0) resultParts.push(`${totalEmail} emails`);
             if (totalSms > 0) resultParts.push(`${totalSms} SMS`);
+            const sentNote = resultParts.length ? resultParts.join(', ') : 'Nothing';
             const errorNote = totalErrors > 0 ? ` (${totalErrors} failed)` : '';
-            setSuccess(`Campaign sent successfully! ${resultParts.join(', ')} sent.${errorNote}`);
-            setForm(prev => ({ ...prev, subject: '', message: '' }));
+            if (failedBatches > 0) {
+                setError(
+                    `${sentNote} sent${errorNote}. ${failedBatches} batch${failedBatches > 1 ? 'es' : ''} (${failedRecipients} recipients) failed: ${lastBatchError}. ` +
+                    'Do not resend the whole campaign, or customers who already received it will get it twice.'
+                );
+            } else {
+                setSuccess(`Campaign sent successfully! ${sentNote} sent.${errorNote}`);
+                setForm(prev => ({ ...prev, subject: '', message: '' }));
+            }
         } catch (err: any) {
             setError(err.message);
         } finally {

@@ -1,6 +1,7 @@
 'use server';
 
-import { verifyAdminToken } from '@/lib/auth';
+import { verifyStaffAreaToken } from '@/lib/auth';
+import { checkRateLimit } from '@/lib/rate-limit';
 import { normalizeSmsRecipient } from '@/lib/sms-debug';
 
 const SMS_ENDPOINT = 'https://api.moolre.com/open/sms/send';
@@ -21,7 +22,7 @@ function getSmsVasKey(): { key: string | null; source: 'MOOLRE_SMS_API_KEY' | 'M
 }
 
 export async function getSmsDebuggerStatus(authToken: string) {
-  const auth = await verifyAdminToken(authToken);
+  const auth = await verifyStaffAreaToken(authToken, 'sms_debug');
   if (!auth.authenticated) {
     return { ok: false as const, error: auth.error || 'Unauthorized' };
   }
@@ -46,7 +47,7 @@ export async function getSmsDebuggerStatus(authToken: string) {
 }
 
 export async function dryRunSmsDebug(phone: string, message: string, authToken: string) {
-  const auth = await verifyAdminToken(authToken);
+  const auth = await verifyStaffAreaToken(authToken, 'sms_debug');
   if (!auth.authenticated) {
     return { success: false as const, error: auth.error || 'Unauthorized' };
   }
@@ -80,12 +81,18 @@ export async function dryRunSmsDebug(phone: string, message: string, authToken: 
 }
 
 export async function testSmsAction(phone: string, message: string, authToken: string) {
-  const auth = await verifyAdminToken(authToken);
+  const auth = await verifyStaffAreaToken(authToken, 'sms_debug');
   if (!auth.authenticated) {
     return {
       success: false,
       error: 'Unauthorized: ' + (auth.error || 'Admin access required'),
     };
+  }
+
+  // Each test sends a real, paid SMS.
+  const limited = checkRateLimit(`test-sms:${auth.user?.id}`, { maxRequests: 10, windowSeconds: 60 * 60 });
+  if (!limited.success) {
+    return { success: false, error: 'Too many test messages. Try again later.' };
   }
 
   try {
@@ -143,7 +150,7 @@ export async function testSmsAction(phone: string, message: string, authToken: s
     const body = parsed as Record<string, unknown> | null;
     const apiSuccess = body && typeof body === 'object' && body.status === 1;
 
-    console.log('[SMS Debugger] Sent to', recipient, '| by', auth.user?.email, '| http', response.status);
+    console.log('[SMS Debugger] Sent to', `…${String(recipient).slice(-4)}`, '| by', auth.user?.id, '| http', response.status);
 
     return {
       success: Boolean(apiSuccess),

@@ -75,3 +75,6 @@ migration-artifacts/dumps/
 migration-artifacts/storage/
 
 .env.staging
+
+# Local MCP config holds personal access tokens
+.mcp.json

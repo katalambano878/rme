@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
+import { adminFetch } from '@/lib/admin-fetch';
 
 const STATUS_TABS = ['all', 'open', 'in_progress', 'waiting_customer', 'resolved', 'closed'];
 const PRIORITY_OPTIONS = ['all', 'urgent', 'high', 'medium', 'low'];
@@ -174,19 +175,29 @@ export default function TicketsPage() {
 function NewTicketModal({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
   const [form, setForm] = useState({ subject: '', description: '', customer_email: '', customer_name: '', priority: 'medium', category: '' });
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!form.subject) return;
+    // The API rejects tickets without a subject and customer email (email is NOT NULL).
+    if (!form.subject.trim() || !form.customer_email.trim()) {
+      setError('Subject and customer email are required.');
+      return;
+    }
     setSaving(true);
-    await fetch('/api/support/tickets', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...form, channel: 'manual' }),
-    });
-    setSaving(false);
-    onCreated();
-    onClose();
+    setError('');
+    try {
+      await adminFetch('/api/support/tickets', {
+        method: 'POST',
+        body: JSON.stringify({ ...form, channel: 'manual' }),
+      });
+      onCreated();
+      onClose();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not create ticket');
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
@@ -214,8 +225,8 @@ function NewTicketModal({ onClose, onCreated }: { onClose: () => void; onCreated
                 className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-rose-500" />
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">Customer Email</label>
-              <input type="email" value={form.customer_email} onChange={e => setForm({ ...form, customer_email: e.target.value })}
+              <label className="block text-xs font-medium text-gray-700 mb-1">Customer Email *</label>
+              <input type="email" required value={form.customer_email} onChange={e => setForm({ ...form, customer_email: e.target.value })}
                 className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-rose-500" />
             </div>
           </div>
@@ -233,6 +244,7 @@ function NewTicketModal({ onClose, onCreated }: { onClose: () => void; onCreated
                 className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-rose-500" />
             </div>
           </div>
+          {error && <p className="text-sm text-red-600">{error}</p>}
           <div className="flex justify-end gap-3 pt-2">
             <button type="button" onClick={onClose} className="px-4 py-2 text-sm text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-50">Cancel</button>
             <button type="submit" disabled={saving} className="px-4 py-2 text-sm bg-rose-600 text-white rounded-lg hover:bg-rose-700 disabled:opacity-50">

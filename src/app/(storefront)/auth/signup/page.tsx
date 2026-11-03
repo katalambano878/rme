@@ -9,6 +9,7 @@ import { createClient } from "@/lib/supabase/client"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { redirectParamFromLocation, safeRedirectPath } from "../safe-redirect"
 
 export default function SignupPage() {
   const router = useRouter()
@@ -32,7 +33,7 @@ export default function SignupPage() {
     }
 
     const supabase = createClient()
-    const { error: authError } = await supabase.auth.signUp({
+    const { data, error: authError } = await supabase.auth.signUp({
       email,
       password,
       options: {
@@ -43,6 +44,14 @@ export default function SignupPage() {
     if (authError) {
       setError(authError.message)
       setLoading(false)
+      return
+    }
+
+    // Sign-up returns a live session, so go straight to the account (or the
+    // page that sent the shopper here) instead of a "check your email" screen.
+    if (data.session) {
+      router.push(safeRedirectPath(redirectParamFromLocation(), "/account"))
+      router.refresh()
       return
     }
 
@@ -62,10 +71,10 @@ export default function SignupPage() {
             <div className="mx-auto mb-4 flex size-16 items-center justify-center rounded-full bg-emerald-50">
               <UserPlus className="size-7 text-emerald-600" />
             </div>
-            <h2 className="font-heading text-2xl text-navy">Check Your Email</h2>
+            <h2 className="font-heading text-2xl text-navy">Account Created</h2>
             <p className="mt-3 text-sm text-muted-foreground">
-              We sent a confirmation link to <strong>{email}</strong>.
-              Click the link to verify your account, then sign in.
+              Your account for <strong>{email}</strong> is ready. Sign in to
+              continue.
             </p>
             <Link href="/auth/login">
               <Button className="mt-6 rounded-full bg-rose-100 px-8 text-navy hover:bg-rose-200">

@@ -1,11 +1,12 @@
 "use client"
 
-import { useState, useEffect, useMemo, Suspense } from "react"
+import { useState, useEffect, useMemo, useCallback, Suspense } from "react"
 import { useSearchParams } from "next/navigation"
 import Link from "next/link"
 import { motion } from "framer-motion"
-import { Check, ShoppingBag, MapPin, ArrowRight, Loader2 } from "lucide-react"
-import { formatPrice, generateOrderNumber } from "@/lib/utils"
+import { Check, ShoppingBag, MapPin, ArrowRight, Loader2, AlertCircle, RefreshCw } from "lucide-react"
+import { formatPrice } from "@/lib/utils"
+import { useCartStore } from "@/lib/store/cart-store"
 import { Container } from "@/components/shared/container"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
@@ -48,16 +49,23 @@ type OrderData = {
 
 const confettiColors = ["#E11D48", "#FB7185", "#F1D6DF", "#0B1B3A", "#FFF5F8"]
 
+/** Deterministic 0..1 noise so render stays pure. */
+function noise(i: number, k: number) {
+  const v = Math.sin(i * 12.9898 + k * 78.233) * 43758.5453
+  return v - Math.floor(v)
+}
+
 function ConfettiDots() {
   const dots = useMemo(
     () =>
       Array.from({ length: 24 }, (_, i) => ({
         id: i,
-        x: Math.random() * 100,
-        delay: Math.random() * 1.5,
-        size: Math.random() * 6 + 3,
-        color: confettiColors[Math.floor(Math.random() * confettiColors.length)],
-        drift: (Math.random() - 0.5) * 60,
+        x: noise(i, 1) * 100,
+        delay: noise(i, 2) * 1.5,
+        size: noise(i, 3) * 6 + 3,
+        color: confettiColors[Math.floor(noise(i, 4) * confettiColors.length)],
+        drift: (noise(i, 5) - 0.5) * 60,
+        duration: 3.5 + noise(i, 6) * 2,
       })),
     [],
   )
@@ -82,7 +90,7 @@ function ConfettiDots() {
             rotate: [0, 360],
           }}
           transition={{
-            duration: 3.5 + Math.random() * 2,
+            duration: dot.duration,
             delay: dot.delay,
             ease: "easeOut",
           }}
@@ -92,62 +100,96 @@ function ConfettiDots() {
   )
 }
 
+type VerifyState = "verifying" | "paid" | "unconfirmed"
+
+function readPendingOrder(orderNumber: string): OrderData | null {
+  try {
+    const raw = sessionStorage.getItem("pendingOrder")
+    if (!raw) return null
+    const parsed = JSON.parse(raw) as OrderData
+    return parsed?.orderNumber === orderNumber ? parsed : null
+  } catch {
+    return null
+  }
+}
+
 function CheckoutSuccessContent() {
   const searchParams = useSearchParams()
-  const urlOrderNumber = searchParams.get("order") || ""
-  const isPaymentSuccess = searchParams.get("payment_success") === "true"
+  const urlOrderNumber = (searchParams.get("order") || "").trim()
 
   const [mounted, setMounted] = useState(false)
   const [orderData, setOrderData] = useState<OrderData | null>(null)
-  const [verifying, setVerifying] = useState(false)
-  const [paymentVerified, setPaymentVerified] = useState(false)
-  const [fallbackOrderNumber] = useState(() => generateOrderNumber())
+  const [verifyState, setVerifyState] = useState<VerifyState>("verifying")
+  const [retrying, setRetrying] = useState(false)
+  const [retryError, setRetryError] = useState("")
 
   useEffect(() => {
     setMounted(true)
+    if (urlOrderNumber) setOrderData(readPendingOrder(urlOrderNumber))
+  }, [urlOrderNumber])
 
+  const verifyPayment = useCallback(async () => {
+    if (!urlOrderNumber || !/^ORD-/i.test(urlOrderNumber)) {
+      setVerifyState("unconfirmed")
+      return
+    }
+    setVerifyState("verifying")
     try {
-      if (urlOrderNumber && isPaymentSuccess) {
-        // Moolre redirect: move pendingOrder → lastOrder so display works
-        const pending = sessionStorage.getItem("pendingOrder")
-        if (pending) {
-          sessionStorage.setItem("lastOrder", pending)
-          sessionStorage.removeItem("pendingOrder")
-        }
-      }
-
-      const data = sessionStorage.getItem("lastOrder")
-      if (data) {
-        setOrderData(JSON.parse(data))
-        sessionStorage.removeItem("lastOrder")
-      }
-    } catch {}
-  }, [urlOrderNumber, isPaymentSuccess])
-
-  // Call verify endpoint when Moolre redirects back — fallback for when S2S callback is slow
-  useEffect(() => {
-    if (!mounted) return
-    if (!urlOrderNumber || !isPaymentSuccess) return
-
-    const orderNum = urlOrderNumber.trim()
-    if (!/^ORD-/i.test(orderNum)) return
-
-    setVerifying(true)
-
-    fetch("/api/payment/moolre/verify", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ orderNumber: orderNum }),
-    })
-      .then((r) => r.json())
-      .then((result) => {
-        if (result.success || result.payment_status === "paid") {
-          setPaymentVerified(true)
-        }
+      const res = await fetch("/api/payment/moolre/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ orderNumber: urlOrderNumber }),
       })
-      .catch(() => {})
-      .finally(() => setVerifying(false))
-  }, [mounted, urlOrderNumber, isPaymentSuccess])
+      const result = await res.json().catch(() => ({}))
+      const paid = res.ok && (result?.success === true || result?.payment_status === "paid")
+
+      if (paid) {
+        // Only now is it safe to empty the bag and drop the pending summary.
+        useCartStore.getState().clearCart()
+        try {
+          sessionStorage.removeItem("pendingOrder")
+        } catch {}
+        setVerifyState("paid")
+      } else {
+        setVerifyState("unconfirmed")
+      }
+    } catch {
+      setVerifyState("unconfirmed")
+    }
+  }, [urlOrderNumber])
+
+  useEffect(() => {
+    if (!mounted || !urlOrderNumber) return
+    void verifyPayment()
+  }, [mounted, urlOrderNumber, verifyPayment])
+
+  async function retryPayment() {
+    setRetrying(true)
+    setRetryError("")
+    try {
+      const res = await fetch("/api/payment/moolre", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          orderId: urlOrderNumber,
+          customerEmail: orderData?.formData.email?.trim() || undefined,
+        }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok || !data?.url) {
+        if (/already paid/i.test(data?.message || "")) {
+          await verifyPayment()
+          return
+        }
+        throw new Error(data?.message || "Couldn't start the payment. Please try again.")
+      }
+      window.location.href = data.url
+    } catch (err) {
+      setRetryError(err instanceof Error ? err.message : "Couldn't start the payment. Please try again.")
+    } finally {
+      setRetrying(false)
+    }
+  }
 
   if (!mounted) {
     return (
@@ -159,7 +201,119 @@ function CheckoutSuccessContent() {
     )
   }
 
-  const orderNumber = urlOrderNumber || orderData?.orderNumber || fallbackOrderNumber
+  // Visiting the page directly: there is no order to show, so don't invent one.
+  if (!urlOrderNumber) {
+    return (
+      <main className="pb-20">
+        <Container>
+          <div className="mx-auto max-w-xl pt-16 text-center sm:pt-24">
+            <div className="mx-auto mb-6 flex size-20 items-center justify-center rounded-full bg-rose-light">
+              <ShoppingBag className="size-9 text-rose-primary" />
+            </div>
+            <h1 className="font-heading text-3xl font-bold text-navy sm:text-4xl">
+              No order to show
+            </h1>
+            <p className="mt-4 text-muted-foreground">
+              This page appears after you complete checkout. Looking for an
+              earlier order? Track it with your order number.
+            </p>
+            <div className="mt-8 flex flex-col items-center justify-center gap-4 sm:flex-row">
+              <Link href="/shop">
+                <Button className="h-auto rounded-full px-10 py-3.5 text-base font-semibold">
+                  <ShoppingBag className="mr-2 size-4" />
+                  Go to Shop
+                </Button>
+              </Link>
+              <Link href="/track-order">
+                <Button variant="outline" className="h-auto rounded-full px-10 py-3.5 text-base font-semibold">
+                  Track an Order
+                  <ArrowRight className="ml-2 size-4" />
+                </Button>
+              </Link>
+            </div>
+          </div>
+        </Container>
+      </main>
+    )
+  }
+
+  const orderNumber = urlOrderNumber
+  const trackHref = `/track-order?order=${encodeURIComponent(orderNumber)}`
+
+  if (verifyState === "verifying") {
+    return (
+      <main className="min-h-[60vh]">
+        <Container className="flex flex-col items-center justify-center gap-4 py-24 text-center">
+          <Loader2 className="size-12 animate-spin text-rose-primary" />
+          <h1 className="font-heading text-2xl font-semibold text-navy">
+            Confirming your payment…
+          </h1>
+          <p className="text-muted-foreground">
+            Order <span className="font-semibold text-navy">{orderNumber}</span>. This
+            usually takes a few seconds.
+          </p>
+        </Container>
+      </main>
+    )
+  }
+
+  if (verifyState === "unconfirmed") {
+    return (
+      <main className="pb-20">
+        <Container>
+          <div className="mx-auto max-w-xl pt-16 text-center sm:pt-24">
+            <div className="mx-auto mb-6 flex size-20 items-center justify-center rounded-full bg-amber-50">
+              <AlertCircle className="size-10 text-amber-500" />
+            </div>
+            <h1 className="font-heading text-3xl font-bold text-navy sm:text-4xl">
+              Payment not confirmed yet
+            </h1>
+            <p className="mt-4 text-muted-foreground">
+              We haven&apos;t received payment for order{" "}
+              <span className="font-semibold text-navy">{orderNumber}</span>. If you
+              cancelled or the payment failed, you can try again — your bag is
+              still saved. If money left your account, give it a minute and
+              check again.
+            </p>
+            {retryError && (
+              <p role="alert" className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-600">
+                {retryError}
+              </p>
+            )}
+            <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
+              <Button
+                onClick={retryPayment}
+                disabled={retrying}
+                className="h-auto rounded-full px-8 py-3.5 text-base font-semibold"
+              >
+                {retrying ? (
+                  <Loader2 className="mr-2 size-4 animate-spin" />
+                ) : (
+                  <RefreshCw className="mr-2 size-4" />
+                )}
+                Retry payment
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => void verifyPayment()}
+                disabled={retrying}
+                className="h-auto rounded-full px-8 py-3.5 text-base font-semibold"
+              >
+                Check again
+              </Button>
+            </div>
+            <Link
+              href={trackHref}
+              className="mt-6 inline-flex items-center gap-1 text-sm font-medium text-rose-primary hover:underline"
+            >
+              Track this order
+              <ArrowRight className="size-3.5" />
+            </Link>
+          </div>
+        </Container>
+      </main>
+    )
+  }
 
   return (
     <main className="relative pb-20">
@@ -199,35 +353,24 @@ function CheckoutSuccessContent() {
               Order{" "}
               <span className="font-semibold text-navy">{orderNumber}</span>
             </p>
-
-            {verifying ? (
-              <p className="mt-2 flex items-center justify-center gap-2 text-muted-foreground">
-                <Loader2 className="size-4 animate-spin" />
-                Confirming your payment…
-              </p>
-            ) : (
-              <p className="mt-2 text-muted-foreground">
-                {orderData?.formData.email?.trim() ? (
-                  <>
-                    We&apos;ve sent a confirmation to{" "}
-                    <span className="font-medium text-navy">
-                      {orderData.formData.email.trim()}
-                    </span>
-                  </>
-                ) : (
-                  <>
-                    Save your order number — we&apos;ll reach you on the phone
-                    number you provided with updates.
-                  </>
-                )}
-              </p>
-            )}
-
-            {paymentVerified && (
-              <p className="mt-2 text-sm font-medium text-emerald-600">
-                Payment confirmed ✓
-              </p>
-            )}
+            <p className="mt-2 text-sm font-medium text-emerald-600">
+              Payment confirmed
+            </p>
+            <p className="mt-2 text-muted-foreground">
+              {orderData?.formData.email?.trim() ? (
+                <>
+                  We&apos;ll send updates to{" "}
+                  <span className="font-medium text-navy">
+                    {orderData.formData.email.trim()}
+                  </span>
+                </>
+              ) : (
+                <>
+                  Save your order number — we&apos;ll reach you on the phone
+                  number you provided with updates.
+                </>
+              )}
+            </p>
           </motion.div>
 
           {orderData && (
@@ -337,7 +480,7 @@ function CheckoutSuccessContent() {
                 Continue Shopping
               </Button>
             </Link>
-            <Link href={`/track-order?order=${orderNumber}`}>
+            <Link href={trackHref}>
               <Button
                 variant="outline"
                 className="h-auto rounded-full px-10 py-3.5 text-base font-semibold"

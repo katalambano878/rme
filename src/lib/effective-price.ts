@@ -3,7 +3,7 @@
  *
  * IMPORTANT: this is the single source of truth for effective pricing on both
  * the client (cart/checkout display) and the server (when re-validating order
- * totals before sending them to Paystack/Moolre). If these two ever disagree,
+ * totals before sending them to Moolre). If these two ever disagree,
  * the customer sees one price and gets charged another — which is exactly the
  * bug this module exists to prevent.
  *
@@ -275,9 +275,20 @@ export function liveLinePrice(
     price?: number | string | null
     salePrice?: number | string | null
     catalogSalePrice?: number | string | null
+    regularPrice?: number | string | null
+    variantSalePrice?: number | string | null
   },
   saleEnabled: PricingInput,
 ): number {
+  // Newer snapshots carry the variant's real price, so this matches the
+  // server exactly (compare-at "was" prices never leak in as the charge).
+  if (product.regularPrice != null && num(product.regularPrice) > 0) {
+    return effectivePriceForVariant(
+      { price: product.regularPrice, sale_price: product.variantSalePrice },
+      { sale_price: product.catalogSalePrice },
+      saleEnabled,
+    ).effective
+  }
   const regular = num(product.price)
   if (!Number.isFinite(regular) || regular <= 0) return 0
   return effectivePriceForVariant(

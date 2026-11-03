@@ -20,6 +20,12 @@ export type Product = {
   salePrice?: number
   /** Raw `products.sale_price` — used with variant rows for consistent sale pricing. */
   catalogSalePrice?: number | null
+  /**
+   * The charged variant's own `price` and `sale_price`. `price` above is a
+   * display "was" price (it can be compare-at), so the cart prices from these.
+   */
+  regularPrice?: number
+  variantSalePrice?: number | null
   /** Whether global sale promotion was enabled when this product was loaded. */
   salePromotionEnabled?: boolean
   discountPercent?: number

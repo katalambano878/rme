@@ -2,7 +2,7 @@
 
 import bcrypt from "bcryptjs";
 import { SignJWT, jwtVerify } from "jose";
-import { randomUUID } from "crypto";
+import { createHash, randomUUID } from "crypto";
 import { query } from "./pool";
 import { authJwtSecret } from "./mode";
 
@@ -81,11 +81,30 @@ async function loadAppRole(userId: string): Promise<string | null> {
   }
 }
 
+/**
+ * Short fingerprint of the stored password hash. Every token carries it, so a
+ * password change (or reset) invalidates every session issued before it.
+ */
+function passwordVersion(encryptedPassword: unknown): string {
+  return createHash("sha256").update(String(encryptedPassword || "")).digest("hex").slice(0, 16);
+}
+
+/** The user still exists, isn't deleted, and hasn't changed password since `pwv` was issued. */
+async function tokenStillValid(userId: string, pwv: unknown): Promise<boolean> {
+  const { rows } = await query<{ encrypted_password: string | null }>(
+    `SELECT encrypted_password FROM auth.users WHERE id = $1 AND deleted_at IS NULL LIMIT 1`,
+    [userId]
+  ).catch(() => ({ rows: [] as { encrypted_password: string | null }[], rowCount: 0 }));
+  if (!rows[0]) return false;
+  return typeof pwv === "string" && pwv === passwordVersion(rows[0].encrypted_password);
+}
+
 async function mintSession(userRow: Record<string, any>): Promise<SessionTokens> {
   const appRole = await loadAppRole(userRow.id);
   const user = rowToUser(userRow, appRole);
   const now = Math.floor(Date.now() / 1000);
   const sessionId = randomUUID();
+  const pwv = passwordVersion(userRow.encrypted_password);
 
   const access_token = await new SignJWT({
     aud: "authenticated",
@@ -95,6 +114,7 @@ async function mintSession(userRow: Record<string, any>): Promise<SessionTokens>
     app_metadata: user.app_metadata,
     user_metadata: user.user_metadata,
     session_id: sessionId,
+    pwv,
   })
     .setProtectedHeader({ alg: "HS256", typ: "JWT" })
     .setSubject(user.id)
@@ -105,6 +125,7 @@ async function mintSession(userRow: Record<string, any>): Promise<SessionTokens>
   const refresh_token = await new SignJWT({
     typ: "refresh",
     session_id: sessionId,
+    pwv,
   })
     .setProtectedHeader({ alg: "HS256", typ: "JWT" })
     .setSubject(user.id)
@@ -130,6 +151,7 @@ export async function verifyAccessToken(
     if (payload.typ === "refresh") return null;
     const userId = typeof payload.sub === "string" ? payload.sub : null;
     if (!userId) return null;
+    if (!(await tokenStillValid(userId, payload.pwv))) return null;
     return { userId, payload: payload as Record<string, any> };
   } catch {
     return null;
@@ -218,11 +240,13 @@ export async function signUpWithPassword(opts: {
 
   // Ensure profile row exists (app expects profiles.id = auth.users.id)
   await query(
-    `INSERT INTO profiles (id, email, full_name, role, created_at, updated_at)
-     VALUES ($1, $2, $3, 'customer', now(), now())
+    `INSERT INTO profiles (id, email, full_name, role, permissions, created_at, updated_at)
+     VALUES ($1, $2, $3, 'customer', '{}'::jsonb, now(), now())
      ON CONFLICT (id) DO NOTHING`,
-    [id, email, (meta.full_name as string) || email.split("@")[0]]
-  ).catch(() => {});
+    [id, email, String(meta.full_name || "").slice(0, 120) || email.split("@")[0]]
+  ).catch((err) => {
+    console.error("[auth] signup profile insert failed:", err instanceof Error ? err.message : err);
+  });
 
   const { rows } = await query(`SELECT * FROM auth.users WHERE id = $1`, [id]);
   const session = await mintSession(rows[0]);
@@ -239,6 +263,9 @@ export async function refreshSession(
     }
     const userId = payload.sub;
     if (!userId || typeof userId !== "string") {
+      return { session: null, error: "Invalid refresh token" };
+    }
+    if (!(await tokenStillValid(userId, payload.pwv))) {
       return { session: null, error: "Invalid refresh token" };
     }
     const { rows } = await query(
@@ -258,10 +285,22 @@ export async function refreshSession(
 
 export async function updateUserPassword(
   userId: string,
-  password: string
+  password: string,
+  currentPassword?: string
 ): Promise<{ user: AuthUser | null; error: string | null }> {
   if (!password || password.length < 6) {
     return { user: null, error: "Password must be at least 6 characters" };
+  }
+  // A stolen session alone must not be enough to lock the owner out.
+  if (currentPassword !== undefined) {
+    const { rows } = await query<{ encrypted_password: string | null }>(
+      `SELECT encrypted_password FROM auth.users WHERE id = $1 AND deleted_at IS NULL LIMIT 1`,
+      [userId]
+    );
+    const hash = rows[0]?.encrypted_password;
+    if (!hash || !bcrypt.compareSync(currentPassword, hash)) {
+      return { user: null, error: "Current password is incorrect" };
+    }
   }
   const hash = bcrypt.hashSync(password, 10);
   await query(

@@ -287,8 +287,8 @@ const LLM_TOOLS = [
           },
           payment_method: {
             type: 'string',
-            enum: ['paystack', 'moolre', 'cod'],
-            description: 'paystack = Paystack link (card/MoMo), moolre = Moolre Mobile Money link, cod = cash on delivery where offered',
+            enum: ['moolre', 'cod'],
+            description: 'moolre = Moolre Mobile Money link, cod = cash on delivery where offered',
           },
         },
         required: ['items', 'shipping', 'delivery_method', 'payment_method'],
@@ -352,7 +352,7 @@ WHEN CREATING SUPPORT TICKETS:
 STORE POLICIES (quick reference):
 - Delivery: see /policies/shipping; estimates shown at checkout
 - Returns: see /policies/returns
-- Payment: Paystack (card & mobile money in GHS); COD only when explicitly offered
+- Payment: Mobile Money via Moolre (GHS); COD only when explicitly offered
 - Contact: ${CONTACT_EMAIL}, ${PHONE_DISPLAY_PRIMARY}
 
 CAPABILITIES (what you CAN do):
@@ -383,12 +383,11 @@ You can help customers place orders directly in this chat. Here is how:
    - **Express** — GH₵40 (same-day/next-day in Accra)
    - **Pickup** — Free (collect from our location)
 4. Ask them to choose a payment method:
-   - **Paystack** — card or mobile money (Ghana)
    - **Moolre** — Mobile Money via Moolre secure link
    - **Cash on Delivery** — only if your policies allow it
 5. Summarize the order (items, subtotal, total). Shipping is confirmed by the store later — do not quote a delivery fee. Ask the customer to confirm.
-6. Once confirmed, call the create_order tool with the cart items (product IDs and quantities from the cart context), shipping info, delivery method, and payment method (paystack, moolre, or cod).
-7. Share the payment link from the tool for Paystack or Moolre. For COD, confirm the order is placed.
+6. Once confirmed, call the create_order tool with the cart items (product IDs and quantities from the cart context), shipping info, delivery method, and payment method (moolre or cod).
+7. Share the Moolre payment link from the tool. For COD, confirm the order is placed.
 IMPORTANT: Do NOT ask the customer to list their cart items — you already have them. Just reference what is in their cart and proceed. If the cart is empty, tell them to add products first.
 
 LIMITATIONS (what you CANNOT do directly):
@@ -478,15 +477,39 @@ async function detectAuth(request: Request): Promise<{ userId: string | null; em
 
 // ─── Main POST Handler ──────────────────────────────────────────────────────
 
+const MAX_CHAT_CHARS = 2000;
+
 export async function POST(request: Request) {
   try {
     const body: RequestBody = await request.json();
-    const { messages = [], newMessage, sessionId, pagePath, cartItems } = body;
+    const { sessionId } = body;
 
-    const userText = (newMessage || '').trim();
+    const userText = (typeof body.newMessage === 'string' ? body.newMessage : '').trim();
     if (!userText) {
       return NextResponse.json({ error: 'Message is required' }, { status: 400 });
     }
+    if (userText.length > MAX_CHAT_CHARS) {
+      return NextResponse.json({ error: 'Message is too long' }, { status: 400 });
+    }
+
+    // History, cart and page come from the browser and go into the prompt, so
+    // only user/assistant turns survive (no injected "system" turns), and every
+    // field is capped to keep token spend bounded.
+    const messages = (Array.isArray(body.messages) ? body.messages : [])
+      .filter((m) => m && (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string')
+      .slice(-18)
+      .map((m) => ({ ...m, content: m.content.slice(0, MAX_CHAT_CHARS) }));
+    const pagePath = typeof body.pagePath === 'string' ? body.pagePath.slice(0, 200) : undefined;
+    const cartItems = (Array.isArray(body.cartItems) ? body.cartItems : [])
+      .slice(0, 30)
+      .filter((i) => i && typeof i.id === 'string')
+      .map((i) => ({
+        ...i,
+        id: i.id.slice(0, 64),
+        name: String(i.name ?? '').replace(/[\r\n]+/g, ' ').slice(0, 120),
+        price: Number.isFinite(Number(i.price)) ? Number(i.price) : 0,
+        quantity: Math.min(100, Math.max(1, Math.trunc(Number(i.quantity)) || 1)),
+      }));
 
     // Two-tier rate limit: per-IP (catches abuse), per-session (catches UI spam).
     const clientIp = getClientIdentifier(request);
@@ -525,11 +548,12 @@ export async function POST(request: Request) {
 
     // Fetch AI memories for context (writer needed because ai_memory has RLS)
     let aiMemories: any[] = [];
-    if (userId || userEmail) {
+    if (userId) {
       try {
         const { data: memData, error: memErr } = await supabaseWriter.rpc('get_ai_memories', {
           p_customer_id: userId || null,
-          p_customer_email: userEmail || null,
+          // Never by email alone: sign-up doesn't verify the address.
+          p_customer_email: null,
         });
         if (memErr) console.warn('[Chat API] get_ai_memories:', memErr.message);
         aiMemories = Array.isArray(memData) ? memData : [];
@@ -657,6 +681,15 @@ async function persistConversation(
 
   // Build conversation summary from last exchange
   const summary = `Customer asked about: ${userText.slice(0, 100)}${userText.length > 100 ? '...' : ''}`;
+
+  // A session id belongs to whoever first signed in on it; anyone else
+  // reusing it must not overwrite that customer's transcript.
+  const { data: owner } = await supabase
+    .from('chat_conversations')
+    .select('user_id')
+    .eq('session_id', sessionId)
+    .maybeSingle();
+  if (owner?.user_id && owner.user_id !== userId) return;
 
   // Upsert with enhanced metadata (pass raw objects, not JSON.stringify - Supabase handles serialization)
   await supabase.rpc('upsert_chat_conversation', {
@@ -1276,6 +1309,13 @@ async function executeToolCall(
     }
 
     case 'create_order': {
+      // The per-email limit inside createChatOrder is trivially dodged by
+      // changing the email, so also cap orders per visitor IP.
+      if (!checkSharedRateLimit(`chat:order:${clientIp}`, SHARED_RATE_LIMITS.orderCreate).success) {
+        return {
+          data: { success: false, message: 'Too many orders placed recently. Please wait a few minutes and try again.' },
+        };
+      }
       const orderResult = await createChatOrder(supabase, {
         items: args.items || [],
         shipping: args.shipping || {},

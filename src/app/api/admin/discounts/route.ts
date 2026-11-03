@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { requireAdmin } from "@/lib/auth"
+import { requireStaffArea } from "@/lib/auth"
 import { supabaseAdmin } from "@/lib/supabase-admin"
 import { parseStorePricing } from "@/lib/effective-price"
 import {
@@ -29,7 +29,7 @@ async function storeSaleRunning(): Promise<boolean> {
 }
 
 export async function GET(request: NextRequest) {
-  const auth = await requireAdmin(request)
+  const auth = await requireStaffArea(request, "sales")
   if (!auth.authenticated) {
     return NextResponse.json({ error: auth.error || "Unauthorized" }, { status: 401 })
   }
@@ -94,7 +94,7 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const auth = await requireAdmin(request)
+  const auth = await requireStaffArea(request, "sales")
   if (!auth.authenticated) {
     return NextResponse.json({ error: auth.error || "Unauthorized" }, { status: 401 })
   }
@@ -203,7 +203,7 @@ export async function POST(request: NextRequest) {
 }
 
 export async function DELETE(request: NextRequest) {
-  const auth = await requireAdmin(request)
+  const auth = await requireStaffArea(request, "sales")
   if (!auth.authenticated) {
     return NextResponse.json({ error: auth.error || "Unauthorized" }, { status: 401 })
   }

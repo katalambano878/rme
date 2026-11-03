@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { requireAdmin } from '@/lib/auth';
+import { requireStaffArea } from '@/lib/auth';
 import { confirmSmsCheckout, getSmsBilling, startSmsCheckout, taysendConfigured } from '@/lib/taysend-billing';
 
 export const dynamic = 'force-dynamic';
@@ -8,7 +8,8 @@ const PACKAGE_ID = /^[a-z0-9-]{1,40}$/;
 const PAYMENT_ID = /^pay_[A-Za-z0-9]+$/;
 
 async function gate(request: NextRequest) {
-  const auth = await requireAdmin(request);
+  // Buying SMS spends store money: admins only.
+  const auth = await requireStaffArea(request, 'sms_credit', { adminOnly: true });
   if (!auth.authenticated) {
     return NextResponse.json({ error: auth.error || 'Unauthorized' }, { status: 401 });
   }

@@ -6,6 +6,19 @@ import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { discountRowToAdminCoupon } from '@/lib/discount-map';
 
+/** 'YYYY-MM-DD' from a date input → ISO timestamp for 23:59:59.999 that day in the admin's timezone. */
+function endOfLocalDay(date: string): string {
+  const [y, m, d] = date.split('-').map(Number);
+  return new Date(y, m - 1, d, 23, 59, 59, 999).toISOString();
+}
+
+/** ISO timestamp → 'YYYY-MM-DD' in local time, for a date input. */
+function toLocalDateInput(iso: string): string {
+  const dt = new Date(iso);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${dt.getFullYear()}-${pad(dt.getMonth() + 1)}-${pad(dt.getDate())}`;
+}
+
 export default function AdminCouponsPage() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
@@ -14,6 +27,8 @@ export default function AdminCouponsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [sortBy, setSortBy] = useState<'date' | 'usage' | 'value'>('date');
 
   const emptyForm = {
     code: '',
@@ -77,7 +92,7 @@ export default function AdminCouponsPage() {
       min_spend: coupon.minPurchase > 0 ? String(coupon.minPurchase) : '',
       max_uses: coupon.usageLimit != null ? String(coupon.usageLimit) : '',
       starts_at: coupon._raw?.starts_at ? coupon._raw.starts_at.slice(0, 10) : '',
-      ends_at: coupon._raw?.ends_at ? coupon._raw.ends_at.slice(0, 10) : '',
+      ends_at: coupon._raw?.ends_at ? toLocalDateInput(coupon._raw.ends_at) : '',
       is_active: coupon.status !== 'Disabled',
     });
     setEditingCoupon(coupon);
@@ -86,15 +101,26 @@ export default function AdminCouponsPage() {
 
   const saveCoupon = async () => {
     if (!form.code.trim()) { alert('Coupon code is required.'); return; }
+    const value = form.value ? parseFloat(form.value) : NaN;
+    if (form.discount_type === 'percent' && !(value >= 1 && value <= 100)) {
+      alert('Percentage discount must be between 1 and 100.'); return;
+    }
+    if (form.discount_type === 'fixed' && !(value > 0)) {
+      alert('Fixed discount amount must be greater than 0.'); return;
+    }
+    if (form.starts_at && form.ends_at && form.ends_at < form.starts_at) {
+      alert('End date cannot be before the start date.'); return;
+    }
     setSaving(true);
     const payload: any = {
       code: form.code.trim().toUpperCase(),
       discount_type: form.discount_type,
-      value: form.value ? parseFloat(form.value) : null,
+      value: form.discount_type === 'free_shipping' ? null : value,
       min_spend: form.min_spend ? parseFloat(form.min_spend) : null,
       max_uses: form.max_uses ? parseInt(form.max_uses) : null,
       starts_at: form.starts_at || null,
-      ends_at: form.ends_at || null,
+      // A coupon ending on a date stays valid for that whole (local) day.
+      ends_at: form.ends_at ? endOfLocalDay(form.ends_at) : null,
       is_active: form.is_active,
     };
     let error: any = null;
@@ -124,6 +150,14 @@ export default function AdminCouponsPage() {
     setShowEditModal(false);
     setEditingCoupon(null);
   };
+
+  const visibleCoupons = coupons
+    .filter(c => statusFilter === 'all' || c.status === statusFilter)
+    .sort((a, b) => {
+      if (sortBy === 'usage') return b.usedCount - a.usedCount;
+      if (sortBy === 'value') return b.value - a.value;
+      return new Date(b._raw?.created_at || 0).getTime() - new Date(a._raw?.created_at || 0).getTime();
+    });
 
   const activeCoupons = coupons.filter(c => c.status === 'Active');
   const totalUses = coupons.reduce((sum, c) => sum + c.usedCount, 0);
@@ -168,16 +202,25 @@ export default function AdminCouponsPage() {
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-bold text-gray-900">All Coupons</h2>
             <div className="flex items-center space-x-3">
-              <select className="px-4 py-2 pr-8 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-rose-400 focus:border-rose-400 font-medium cursor-pointer">
-                <option>All Status</option>
-                <option>Active</option>
-                <option>Scheduled</option>
-                <option>Expired</option>
+              <select
+                value={statusFilter}
+                onChange={e => setStatusFilter(e.target.value)}
+                className="px-4 py-2 pr-8 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-rose-400 focus:border-rose-400 font-medium cursor-pointer"
+              >
+                <option value="all">All Status</option>
+                <option value="Active">Active</option>
+                <option value="Scheduled">Scheduled</option>
+                <option value="Expired">Expired</option>
+                <option value="Disabled">Disabled</option>
               </select>
-              <select className="px-4 py-2 pr-8 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-rose-400 focus:border-rose-400 font-medium cursor-pointer">
-                <option>Sort by Date</option>
-                <option>Sort by Usage</option>
-                <option>Sort by Value</option>
+              <select
+                value={sortBy}
+                onChange={e => setSortBy(e.target.value as 'date' | 'usage' | 'value')}
+                className="px-4 py-2 pr-8 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-rose-400 focus:border-rose-400 font-medium cursor-pointer"
+              >
+                <option value="date">Sort by Date</option>
+                <option value="usage">Sort by Usage</option>
+                <option value="value">Sort by Value</option>
               </select>
             </div>
           </div>
@@ -200,10 +243,10 @@ export default function AdminCouponsPage() {
             <tbody>
               {loading ? (
                 <tr><td colSpan={8} className="p-8 text-center text-gray-500">Loading coupons...</td></tr>
-              ) : coupons.length === 0 ? (
+              ) : visibleCoupons.length === 0 ? (
                 <tr><td colSpan={8} className="p-8 text-center text-gray-500">No coupons found.</td></tr>
               ) : (
-                coupons.map((coupon) => (
+                visibleCoupons.map((coupon) => (
                   <tr key={coupon.id} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
                     <td className="py-4 px-6">
                       <div className="flex items-center space-x-2">
@@ -309,11 +352,14 @@ export default function AdminCouponsPage() {
               {form.discount_type !== 'free_shipping' && (
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-1">
-                    {form.discount_type === 'percent' ? 'Discount (%)' : 'Discount Amount (GH₵)'}
+                    {form.discount_type === 'percent' ? 'Discount (%) *' : 'Discount Amount (GH₵) *'}
                   </label>
                   <input
                     type="number"
-                    min="0"
+                    min={form.discount_type === 'percent' ? '1' : '0.01'}
+                    max={form.discount_type === 'percent' ? '100' : undefined}
+                    step="any"
+                    required
                     value={form.value}
                     onChange={e => setForm(f => ({ ...f, value: e.target.value }))}
                     placeholder="0"

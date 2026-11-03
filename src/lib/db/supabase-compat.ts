@@ -353,12 +353,15 @@ class QueryBuilder implements PromiseLike<{ data: any; error: any; count: number
     return this;
   }
   limit(n: number) {
-    this.limitN = n;
+    // Interpolated into SQL, so only ever a non-negative integer.
+    this.limitN = Math.max(0, Math.trunc(Number(n)) || 0);
     return this;
   }
   range(from: number, to: number) {
-    this.rangeFrom = from;
-    this.rangeTo = to;
+    const a = Math.max(0, Math.trunc(Number(from)) || 0);
+    const b = Math.max(a - 1, Math.trunc(Number(to)) || 0);
+    this.rangeFrom = a;
+    this.rangeTo = b;
     return this;
   }
   single() {
@@ -418,7 +421,9 @@ class QueryBuilder implements PromiseLike<{ data: any; error: any; count: number
     if (value === null || value === "null") return `${ident(col)} IS NULL`;
     if (value === true || value === "true") return `${ident(col)} IS TRUE`;
     if (value === false || value === "false") return `${ident(col)} IS FALSE`;
-    return `${ident(col)} IS NOT DISTINCT FROM ${value}`;
+    if (value === "unknown") return `${ident(col)} IS UNKNOWN`;
+    // Never interpolate the value: `is.` only accepts the literals above.
+    throw new Error(`Unsupported is value: ${String(value).slice(0, 40)}`);
   }
 
   private cmpClause(col: string, op: string, value: any, params: any[]): string {
@@ -1015,6 +1020,29 @@ export function createClient(_url?: string, _key?: string): SupabaseCompatClient
     auth: createAuthApi(),
     rpc: callRpc,
   };
+}
+
+/**
+ * Every table a select string can read, including nested embeds, resolved the
+ * same way resolveEmbeds() does. The /rest/v1 shim uses it so an anonymous
+ * read of a public table cannot embed a private one (orders, profiles, ...).
+ */
+export function selectReferencedTables(select: string, rootTable: string): string[] {
+  const out = new Set<string>([rootTable]);
+  const walk = (parsed: ParsedSelect, parentTable: string) => {
+    for (const embed of parsed.embeds) {
+      let embedTable = embed.table;
+      if (embed.fkColumn) {
+        const own = (FK_MAP[parentTable] || []).find((e) => e.column === embed.fkColumn);
+        if (own) embedTable = own.foreignTable;
+      }
+      out.add(embed.table);
+      out.add(embedTable);
+      walk(embed.select, embedTable);
+    }
+  };
+  walk(parseSelect(select), rootTable);
+  return Array.from(out);
 }
 
 /** Apply PostgREST query-string filters onto a QueryBuilder (for /rest/v1 shim). */

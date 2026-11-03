@@ -43,17 +43,13 @@ const envs = {
   MOOLRE_API_PUBKEY: process.env.MOOLRE_API_PUBKEY,
   MOOLRE_ACCOUNT_NUMBER: process.env.MOOLRE_ACCOUNT_NUMBER,
   MOOLRE_CALLBACK_SECRET: process.env.MOOLRE_CALLBACK_SECRET,
-  // Paystack
-  PAYSTACK_SECRET_KEY: process.env.PAYSTACK_SECRET_KEY,
-  NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY: process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY,
-  PAYSTACK_WEBHOOK_SECRET: process.env.PAYSTACK_WEBHOOK_SECRET,
   // Notifications
   RESEND_API_KEY: process.env.RESEND_API_KEY,
   MOOLRE_SMS_API_KEY: process.env.MOOLRE_SMS_API_KEY,
 }
 for (const [k, v] of Object.entries(envs)) {
   const set = !!v && String(v).length > 0
-  const warn = !set && (k === "PAYSTACK_SECRET_KEY" || k === "NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY" || k === "APP_BASE_URL")
+  const warn = !set && (k === "MOOLRE_API_USER" || k === "MOOLRE_ACCOUNT_NUMBER" || k === "APP_BASE_URL")
   console.log(`  ${tag(set, warn)}  ${k.padEnd(35)} ${set ? "set" : "(empty)"}`)
 }
 
@@ -61,7 +57,6 @@ const appBase =
   (process.env.APP_BASE_URL || process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000").replace(/\/+$/, "")
 console.log(`\n  Resolved app base URL: ${appBase}`)
 console.log(`  Moolre callback URL  : ${appBase}/api/payment/moolre/callback`)
-console.log(`  Paystack callback URL: ${appBase}/checkout/callback?reference=ORD-…`)
 
 console.log("\n==================== DB OBJECTS ====================")
 

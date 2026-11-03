@@ -1,11 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/db/supabase-compat";
 import { isPlainPostgres } from "@/lib/db/mode";
+import { resolveRequestAuth, isStaffAuth } from "@/lib/db/request-auth";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 const PG_IDENT = /^[a-z_][a-z0-9_]*$/i;
+
+/**
+ * Functions the browser may call, and only with a staff session. Everything
+ * else (mark_order_paid from a customer, built-ins, ai memory) stays server-side.
+ */
+const BROWSER_RPCS = new Set(["mark_order_paid", "get_support_dashboard_stats"]);
 
 export async function OPTIONS() {
   return new NextResponse(null, {
@@ -26,8 +33,16 @@ export async function POST(
     return NextResponse.json({ message: "DATABASE_URL not set" }, { status: 503 });
   }
   const { fn } = await ctx.params;
-  if (!PG_IDENT.test(fn)) {
-    return NextResponse.json({ message: "Invalid function name" }, { status: 400 });
+  if (!PG_IDENT.test(fn) || !BROWSER_RPCS.has(fn)) {
+    return NextResponse.json({ message: "Unknown function" }, { status: 404 });
+  }
+
+  const auth = await resolveRequestAuth(req);
+  if (!isStaffAuth(auth)) {
+    return NextResponse.json(
+      { message: "Staff role required" },
+      { status: auth.kind === "user" ? 403 : 401 },
+    );
   }
 
   const args = (await req.json().catch(() => ({}))) as Record<string, any>;

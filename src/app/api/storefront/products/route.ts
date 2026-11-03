@@ -4,7 +4,7 @@ import { supabaseAdmin as supabase } from "@/lib/supabase-admin"
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)
   const featured = searchParams.get("featured") === "true"
-  const limit = parseInt(searchParams.get("limit") || "50", 10)
+  const limit = Math.min(100, Math.max(1, parseInt(searchParams.get("limit") || "50", 10) || 50))
 
   try {
     let query = supabase
@@ -28,8 +28,7 @@ export async function GET(request: Request) {
       headers: { "Cache-Control": "public, s-maxage=900, stale-while-revalidate=1800" },
     })
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : "Unknown error"
     console.error("[Storefront API] Error:", err)
-    return NextResponse.json({ error: message }, { status: 500 })
+    return NextResponse.json({ error: "Failed to fetch products" }, { status: 500 })
   }
 }

@@ -11,8 +11,23 @@ import { checkRateLimit, getClientIdentifier } from "@/lib/rate-limit"
  * customers ALWAYS got zero rows back and saw "Order not found" — even with
  * a perfectly valid order number. This server route uses the service-role
  * client to look the order up, but only returns it when the caller proves
- * ownership by supplying the email the order was placed with.
+ * ownership by supplying the email OR phone number the order was placed with
+ * (checkout lets email be optional, so phone-only guests must be able to track).
  */
+
+const NOT_FOUND_MESSAGE =
+  "We couldn't find an order matching those details. Check your order number and the email or phone you used at checkout."
+
+/** Last 9 digits, so 0244123456, 244123456 and +233244123456 all match. */
+function phoneKey(value: unknown): string {
+  const digits = typeof value === "string" || typeof value === "number" ? String(value).replace(/\D/g, "") : ""
+  return digits.length >= 9 ? digits.slice(-9) : ""
+}
+
+function notFound() {
+  // Same response for unknown order and wrong contact: no order-number oracle.
+  return NextResponse.json({ error: NOT_FOUND_MESSAGE }, { status: 404 })
+}
 
 export async function POST(req: NextRequest) {
   const ip = getClientIdentifier(req)
@@ -26,7 +41,7 @@ export async function POST(req: NextRequest) {
     )
   }
 
-  let body: { orderNumber?: unknown; email?: unknown }
+  let body: { orderNumber?: unknown; email?: unknown; phone?: unknown; contact?: unknown }
   try {
     body = await req.json()
   } catch {
@@ -34,13 +49,33 @@ export async function POST(req: NextRequest) {
   }
 
   const orderNumber = typeof body.orderNumber === "string" ? body.orderNumber.trim() : ""
-  const email = typeof body.email === "string" ? body.email.trim().toLowerCase() : ""
+  // Accept a single "contact" field (email or phone) or the explicit fields.
+  const contactRaw =
+    typeof body.contact === "string"
+      ? body.contact.trim()
+      : typeof body.email === "string" && body.email.trim()
+        ? body.email.trim()
+        : typeof body.phone === "string"
+          ? body.phone.trim()
+          : ""
+  const isEmail = contactRaw.includes("@")
+  const email = isEmail ? contactRaw.toLowerCase() : ""
+  const phone = isEmail ? "" : phoneKey(contactRaw)
 
   if (!orderNumber || orderNumber.length > 64) {
     return NextResponse.json({ error: "Please enter your order number." }, { status: 400 })
   }
-  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 254) {
+  if (contactRaw.length > 254) {
+    return NextResponse.json({ error: "Please enter a valid email address or phone number." }, { status: 400 })
+  }
+  if (isEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
     return NextResponse.json({ error: "Please enter a valid email address." }, { status: 400 })
+  }
+  if (!isEmail && !phone) {
+    return NextResponse.json(
+      { error: "Please enter the email address or phone number you used at checkout." },
+      { status: 400 },
+    )
   }
 
   const supabase = createAdminClient()
@@ -54,6 +89,7 @@ export async function POST(req: NextRequest) {
       status,
       grand_total,
       guest_email,
+      guest_phone,
       user_id,
       created_at,
       shipping_address,
@@ -65,37 +101,44 @@ export async function POST(req: NextRequest) {
     .maybeSingle()
 
   if (error || !order) {
-    return NextResponse.json(
-      { error: "Order not found. Please check your order number and try again." },
-      { status: 404 },
-    )
+    return notFound()
   }
 
-  // Verify ownership: the supplied email must match how the order was placed.
-  // Guest checkouts store it in guest_email; the storefront also snapshots it
-  // inside shipping_address; account orders resolve via the profile email.
-  const guestEmail = (order.guest_email || "").toLowerCase()
-  const shippingEmail = (
-    (order.shipping_address as Record<string, unknown> | null)?.email as string | undefined || ""
-  ).toLowerCase()
+  // Verify ownership: the supplied email/phone must match how the order was
+  // placed. Guest checkouts store guest_email/guest_phone; the storefront also
+  // snapshots both inside shipping_address; account orders resolve via the
+  // profile.
+  const shipping = (order.shipping_address as Record<string, unknown> | null) || {}
+  let contactMatches = false
 
-  let emailMatches = (!!guestEmail && guestEmail === email) || (!!shippingEmail && shippingEmail === email)
+  if (isEmail) {
+    const guestEmail = (order.guest_email || "").toLowerCase()
+    const shippingEmail = (typeof shipping.email === "string" ? shipping.email : "").toLowerCase()
+    contactMatches = (!!guestEmail && guestEmail === email) || (!!shippingEmail && shippingEmail === email)
+  } else {
+    contactMatches = [order.guest_phone, shipping.phone].some((p) => {
+      const key = phoneKey(p)
+      return !!key && key === phone
+    })
+  }
 
-  if (!emailMatches && order.user_id) {
+  if (!contactMatches && order.user_id) {
     const { data: ownerProfile } = await supabase
       .from("profiles")
-      .select("email")
+      .select("email, phone")
       .eq("id", order.user_id)
       .maybeSingle()
-    const ownerEmail = (ownerProfile?.email || "").toLowerCase()
-    emailMatches = !!ownerEmail && ownerEmail === email
+    if (isEmail) {
+      const ownerEmail = (ownerProfile?.email || "").toLowerCase()
+      contactMatches = !!ownerEmail && ownerEmail === email
+    } else {
+      const ownerPhone = phoneKey(ownerProfile?.phone)
+      contactMatches = !!ownerPhone && ownerPhone === phone
+    }
   }
 
-  if (!emailMatches) {
-    return NextResponse.json(
-      { error: "The email address does not match this order. Please use the email you placed the order with." },
-      { status: 403 },
-    )
+  if (!contactMatches) {
+    return notFound()
   }
 
   const isPaid = ((order.payments as { status: string }[] | null) || []).some(
@@ -111,7 +154,11 @@ export async function POST(req: NextRequest) {
       grand_total: order.grand_total,
       created_at: order.created_at,
       is_paid: isPaid,
-      items: ((order.order_items as any[]) || []).map((i) => ({
+      items: (
+        (order.order_items as
+          | { id: string; name_snapshot: string; sku_snapshot: string | null; quantity: number; unit_price: number }[]
+          | null) || []
+      ).map((i) => ({
         id: i.id,
         name: i.name_snapshot,
         sku: i.sku_snapshot,

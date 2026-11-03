@@ -9,6 +9,7 @@ import { createClient } from "@/lib/supabase/client"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { redirectParamFromLocation, safeRedirectPath } from "../safe-redirect"
 
 export default function LoginPage() {
   const router = useRouter()
@@ -43,10 +44,11 @@ export default function LoginPage() {
         .eq("id", user.id)
         .single()
 
+      const requested = redirectParamFromLocation()
       if (profile?.role === "superadmin" || profile?.role === "admin" || profile?.role === "staff") {
-        router.push("/admin")
+        router.push(requested ? safeRedirectPath(requested, "/admin") : "/admin")
       } else {
-        router.push("/account")
+        router.push(safeRedirectPath(requested, "/account"))
       }
     } else {
       router.push("/")

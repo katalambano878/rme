@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useMemo, Fragment } from "react"
 import Link from "next/link"
-import { useRouter } from "next/navigation"
 import { motion, AnimatePresence } from "framer-motion"
 import {
   Check,
@@ -20,10 +19,10 @@ import {
 import {
   cn,
   formatPrice,
-  generateOrderNumber,
 } from "@/lib/utils"
 import { Container } from "@/components/shared/container"
 import { useCartStore } from "@/lib/store/cart-store"
+import { createClient } from "@/lib/supabase/client"
 import { useStorePricing } from "@/components/store-pricing-provider"
 import { liveLinePrice } from "@/lib/effective-price"
 import {
@@ -91,13 +90,6 @@ const steps = [
 ]
 
 const paymentMethods = [
-  // Paystack disabled until keys are configured in production
-  // {
-  //   id: "paystack",
-  //   name: "Card Payment",
-  //   description: "Debit & credit cards, bank transfer & more (via Paystack)",
-  //   recommended: true,
-  // },
   {
     id: "moolre",
     name: "Mobile Money",
@@ -125,6 +117,19 @@ const ghanaRegions = [
   "Oti",
   "Western North",
 ]
+
+
+/** JSON headers, plus the shopper's session when signed in so the order is linked to their account. */
+async function checkoutHeaders(): Promise<Record<string, string>> {
+  const headers: Record<string, string> = { "Content-Type": "application/json" }
+  try {
+    const { data } = await createClient().auth.getSession()
+    if (data.session?.access_token) headers.Authorization = `Bearer ${data.session.access_token}`
+  } catch {
+    /* guest checkout */
+  }
+  return headers
+}
 
 function StepIndicator({ currentStep }: { currentStep: number }) {
   return (
@@ -198,7 +203,6 @@ function FormField({
 }
 
 export default function CheckoutPage() {
-  const router = useRouter()
   const [mounted, setMounted] = useState(false)
   const [step, setStep] = useState(1)
   const [formData, setFormData] = useState<FormData>(initialFormData)
@@ -206,7 +210,6 @@ export default function CheckoutPage() {
   const [couponMessage, setCouponMessage] = useState("")
 
   const items = useCartStore((s) => s.items)
-  const clearCart = useCartStore((s) => s.clearCart)
   const storePricing = useStorePricing()
   useEffect(() => setMounted(true), [])
 
@@ -291,52 +294,11 @@ export default function CheckoutPage() {
         })),
       }
 
-      if (formData.paymentMethod === "paystack") {
-        const res = await fetch("/api/paystack/initialize", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        })
-        const data = await res.json()
-
-        if (!res.ok || !data.authorization_url) {
-          setOrderError(data.error || "Failed to initialize payment")
-          setPlacingOrder(false)
-          return
-        }
-
-        sessionStorage.setItem(
-          "pendingOrder",
-          JSON.stringify({
-            orderNumber: data.order_number,
-            items,
-            subtotal,
-            shipping: shippingCost,
-            total,
-            formData: {
-              email: formData.email,
-              firstName: formData.firstName,
-              lastName: formData.lastName,
-              address1: formData.address1,
-              city: formData.city,
-              region: formData.region,
-              country: formData.country,
-              shippingMethod: formData.shippingMethod,
-              paymentMethod: formData.paymentMethod,
-            },
-          }),
-        )
-
-        clearCart()
-        window.location.href = data.authorization_url
-        return
-      }
-
       if (formData.paymentMethod === "moolre") {
-        const initRes = await fetch("/api/paystack/initialize", {
+        const initRes = await fetch("/api/orders/create", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ ...payload, paymentProvider: "moolre" }),
+          headers: await checkoutHeaders(),
+          body: JSON.stringify(payload),
         })
         const initData = await initRes.json()
 
@@ -384,34 +346,15 @@ export default function CheckoutPage() {
           }),
         )
 
-        clearCart()
+        // Keep the bag until the success page confirms payment (it clears
+        // the cart once Moolre verifies the order as paid).
         window.location.href = moolreData.url
         return
       }
 
-      sessionStorage.setItem(
-        "lastOrder",
-        JSON.stringify({
-          orderNumber: generateOrderNumber(),
-          items,
-          subtotal,
-          shipping: shippingCost,
-          total,
-          formData: {
-            email: formData.email,
-            firstName: formData.firstName,
-            lastName: formData.lastName,
-            address1: formData.address1,
-            city: formData.city,
-            region: formData.region,
-            country: formData.country,
-            shippingMethod: formData.shippingMethod,
-            paymentMethod: formData.paymentMethod,
-          },
-        }),
-      )
-      clearCart()
-      router.push("/checkout/success")
+      // Every supported method redirects to a payment provider above; never
+      // fall through to a success page with an invented order number.
+      setOrderError("Please choose a payment method.")
     } catch (err) {
       console.error("Place order error:", err)
       setOrderError("Something went wrong. Please try again.")
@@ -1013,14 +956,16 @@ export default function CheckoutPage() {
                       <Label className="cursor-pointer text-sm leading-relaxed text-muted-foreground">
                         I agree to the{" "}
                         <Link
-                          href="#"
+                          href="/policies/terms"
+                          target="_blank"
                           className="font-medium text-navy underline underline-offset-2"
                         >
                           Terms & Conditions
                         </Link>{" "}
                         and{" "}
                         <Link
-                          href="#"
+                          href="/policies/privacy"
+                          target="_blank"
                           className="font-medium text-navy underline underline-offset-2"
                         >
                           Privacy Policy

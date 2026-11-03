@@ -459,7 +459,7 @@ export async function getRecommendations(supabase: any, context?: string): Promi
 const STORE_INFO: Record<string, string> = {
   shipping: `We deliver across Ghana. Fees and timing are shown at checkout. See ${CONTACT_EMAIL} or our Shipping policy page for details.`,
   returns: `We accept returns in line with our Returns policy. Visit /policies/returns on the site or ask us to open a support ticket.`,
-  payment: `We accept secure checkout via Paystack (cards & MoMo) and Mobile Money via Moolre where enabled (GHS).`,
+  payment: `We accept Mobile Money (MTN, Telecel, AirtelTigo) through Moolre, in GHS.`,
   contact: `Reach ${BRAND_NAME}:\n- Email: ${CONTACT_EMAIL}\n- Phone: ${PHONE_DISPLAY_PRIMARY} (${PHONE_INTERNATIONAL_PRIMARY})\n- WhatsApp: ${WHATSAPP_URL}`,
   about: `${BRAND_NAME} — ${BRAND_TAGLINE}. We offer beauty, skincare, body care, makeup, hair, and baby essentials.`,
   delivery_times: `Delivery estimates depend on your location and are confirmed at checkout.`,
@@ -617,7 +617,7 @@ export async function createChatOrder(
   if (!["standard", "express", "pickup"].includes(deliveryMethod)) {
     return { success: false, message: "Invalid delivery method." }
   }
-  if (!["paystack", "moolre", "cod"].includes(paymentMethod)) {
+  if (!["moolre", "cod"].includes(paymentMethod)) {
     return { success: false, message: "Invalid payment method." }
   }
 
@@ -712,7 +712,7 @@ export async function createChatOrder(
         user_id: userId || null,
         guest_email: sanitizedShipping.email,
         guest_phone: sanitizedShipping.phone,
-        status: paymentMethod === "paystack" ? "pending" : "pending",
+        status: "pending",
         subtotal,
         shipping_total: shippingCost,
         discount_total: 0,
@@ -845,63 +845,12 @@ export async function createChatOrder(
       }
     }
 
-    const secretKey = process.env.PAYSTACK_SECRET_KEY
-
-    if (!secretKey) {
-      return {
-        success: true,
-        orderNumber,
-        total,
-        message: `Order ${orderNumber} created (GH₵${total.toFixed(2)}), but Paystack is not configured. Complete payment from your account or contact ${CONTACT_EMAIL}.`,
-      }
-    }
-
-    const amountInPesewas = Math.round(total * 100)
-    const paystackRes = await fetch("https://api.paystack.co/transaction/initialize", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${secretKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        email: sanitizedShipping.email,
-        amount: amountInPesewas,
-        currency: "GHS",
-        reference: orderNumber,
-        callback_url: `${baseUrl}/checkout/callback?reference=${encodeURIComponent(orderNumber)}`,
-        metadata: {
-          order_id: order.id,
-          order_number: orderNumber,
-        },
-      }),
-    })
-
-    const paystackData = await paystackRes.json()
-    if (!paystackData.status || !paystackData.data?.authorization_url) {
-      console.error("[ChatTools] Paystack init failed:", paystackData)
-      return {
-        success: true,
-        orderNumber,
-        total,
-        message: `Order ${orderNumber} created (GH₵${total.toFixed(2)}). Open Checkout from the site to pay securely.`,
-      }
-    }
-
-    await admin.from("payments").insert({
-      order_id: order.id,
-      provider: "paystack",
-      provider_ref: paystackData.data.reference,
-      amount: total,
-      currency: "GHS",
-      status: "pending",
-    })
-
+    // Only cash on delivery and Moolre Mobile Money are accepted (checked above).
     return {
       success: true,
       orderNumber,
       total,
-      paymentUrl: paystackData.data.authorization_url,
-      message: `Order ${orderNumber} is ready. Total GH₵${total.toFixed(2)} (shipping confirmed by our team). Use the secure Paystack link below to pay.`,
+      message: `Order ${orderNumber} created (GH₵${total.toFixed(2)}). Open Checkout from the site to pay with Mobile Money.`,
     }
   } catch (err: any) {
     console.error("[ChatTools] createChatOrder:", err)

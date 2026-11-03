@@ -63,8 +63,8 @@ export const SITE_KNOWLEDGE: SiteKnowledgeEntry[] = [
     title: "Payment",
     path: "/checkout",
     category: "payment",
-    content: `Checkout uses Paystack (cards and mobile money) in GHS. Guest checkout is supported.`,
-    keywords: ["pay", "payment", "card", "momo", "mobile money", "paystack"],
+    content: `Checkout takes Mobile Money (MTN, Telecel, AirtelTigo) through Moolre, in GHS. Guest checkout is supported.`,
+    keywords: ["pay", "payment", "momo", "mobile money", "moolre"],
   },
   {
     id: "shop",
@@ -148,7 +148,7 @@ export function getSiteMapSummary(): string {
 - /shop — All products
 - /products/[slug] — Product detail
 - /cart — Shopping cart
-- /checkout — Paystack checkout
+- /checkout — Mobile Money checkout
 - /track-order — Order tracking
 - /account — Account & orders (signed in)
 - /auth/login, /auth/signup — Authentication

@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
+import { adminFetch } from '@/lib/admin-fetch';
 
 export default function KnowledgeBasePage() {
   const searchParams = useSearchParams();
@@ -12,6 +13,7 @@ export default function KnowledgeBasePage() {
   const [categoryFilter, setCategoryFilter] = useState('');
   const [showModal, setShowModal] = useState(searchParams.get('new') === '1');
   const [editingArticle, setEditingArticle] = useState<any>(null);
+  const [error, setError] = useState('');
 
   useEffect(() => { fetchArticles(); }, [search, categoryFilter]);
 
@@ -20,24 +22,36 @@ export default function KnowledgeBasePage() {
     const params = new URLSearchParams();
     if (search) params.set('search', search);
     if (categoryFilter) params.set('category', categoryFilter);
-    const res = await fetch(`/api/support/knowledge-base?${params}`);
-    const data = await res.json();
-    setArticles(data.data || []);
-    setLoading(false);
+    try {
+      const data = await adminFetch<{ data?: any[] }>(`/api/support/knowledge-base?${params}`);
+      setArticles(data.data || []);
+      setError('');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not load articles');
+    } finally {
+      setLoading(false);
+    }
   }
 
   async function deleteArticle(id: string) {
     if (!confirm('Delete this article?')) return;
-    await fetch(`/api/support/knowledge-base?id=${id}`, { method: 'DELETE' });
+    try {
+      await adminFetch(`/api/support/knowledge-base?id=${encodeURIComponent(id)}`, { method: 'DELETE' });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not delete article');
+    }
     fetchArticles();
   }
 
   async function togglePublish(article: any) {
-    await fetch('/api/support/knowledge-base', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: article.id, is_published: !article.is_published }),
-    });
+    try {
+      await adminFetch('/api/support/knowledge-base', {
+        method: 'PATCH',
+        body: JSON.stringify({ id: article.id, is_published: !article.is_published }),
+      });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not update article');
+    }
     fetchArticles();
   }
 
@@ -61,6 +75,10 @@ export default function KnowledgeBasePage() {
           <i className="ri-add-line" /> New Article
         </button>
       </div>
+
+      {error && (
+        <div className="p-3 rounded-lg bg-red-50 border border-red-200 text-sm text-red-700">{error}</div>
+      )}
 
       {/* Filters */}
       <div className="flex flex-wrap items-center gap-3">
@@ -148,11 +166,16 @@ function ArticleModal({ article, onClose, onSaved }: { article: any; onClose: ()
       tags: form.tags.split(',').map((t: string) => t.trim()).filter(Boolean),
       ...(article ? { id: article.id } : {}),
     };
-    await fetch('/api/support/knowledge-base', {
-      method: article ? 'PATCH' : 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    });
+    try {
+      await adminFetch('/api/support/knowledge-base', {
+        method: article ? 'PATCH' : 'POST',
+        body: JSON.stringify(payload),
+      });
+    } catch (e) {
+      setSaving(false);
+      alert(e instanceof Error ? e.message : 'Could not save article');
+      return;
+    }
     setSaving(false);
     onSaved();
     onClose();

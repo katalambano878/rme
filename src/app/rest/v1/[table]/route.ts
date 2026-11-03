@@ -2,9 +2,16 @@ import { NextRequest, NextResponse } from "next/server";
 import {
   createClient,
   applyPostgrestParams,
+  selectReferencedTables,
 } from "@/lib/db/supabase-compat";
 import { isPlainPostgres } from "@/lib/db/mode";
-import { verifyAccessToken } from "@/lib/db/auth";
+import {
+  resolveRequestAuth,
+  isStaffAuth,
+  staffMayReadTable,
+  staffMayWriteTable,
+  type RequestAuth,
+} from "@/lib/db/request-auth";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -29,55 +36,148 @@ const PUBLIC_READ_TABLES = new Set([
   "attribute_values",
 ]);
 
+/** Columns an anonymous/customer read may touch, for public tables that also hold private settings. */
+const PUBLIC_COLUMN_LIMITS: Record<string, Set<string>> = {
+  site_settings: new Set(["id", "feature_flags"]),
+};
+
+/** Only admins edit profiles; only a superadmin may grant or touch admin/superadmin rows. */
+const ADMIN_ONLY_TABLES = new Set(["profiles", "store_admins", "superadmins"]);
+/** Sign-up promotes these emails to admin/superadmin, so only a superadmin edits them. */
+const SUPERADMIN_ONLY_TABLES = new Set(["store_admins", "superadmins"]);
+
+/** Query keys that are not column filters. */
+const NON_FILTER_PARAMS = new Set(["select", "limit", "offset", "columns", "on_conflict"]);
+
+/**
+ * Rows anonymous visitors and customers may see in public tables; drafts,
+ * hidden reviews and inactive items stay staff-only.
+ */
+const PUBLIC_ROW_FILTERS: Record<string, [string, string | boolean]> = {
+  products: ["status", "active"],
+  blog_posts: ["published", true],
+  reviews: ["is_published", true],
+  testimonials: ["is_active", true],
+};
+const ELEVATED_ROLES = new Set(["admin", "superadmin"]);
+
 type RestAuth =
-  | { ok: true; role: string | null; service: boolean }
+  | { ok: true; auth: RequestAuth }
   | { ok: false; status: number; message: string };
+
+function selectedColumns(select: string): string[] {
+  return select
+    .split(",")
+    .map((c) => c.trim().split(":").pop()!.split("::")[0].trim())
+    .filter(Boolean);
+}
+
+function publicReadAllowed(req: NextRequest, table: string, auth: RequestAuth): boolean {
+  const select = req.nextUrl.searchParams.get("select") || "*";
+
+  // A signed-in customer may read their own profile row (login redirect, account page).
+  if (table === "profiles" && auth.kind === "user") {
+    const idFilter = req.nextUrl.searchParams.get("id");
+    return idFilter === `eq.${auth.userId}` && !select.includes("(");
+  }
+
+  let tables: string[];
+  try {
+    tables = selectReferencedTables(select, table);
+  } catch {
+    return false;
+  }
+  // Embedded tables must all be public catalog/content tables.
+  if (!tables.every((t) => t === table || PUBLIC_READ_TABLES.has(t))) return false;
+  if (PUBLIC_READ_TABLES.has(table)) return true;
+
+  const limit = PUBLIC_COLUMN_LIMITS[table];
+  if (!limit || select.includes("(") || !selectedColumns(select).every((c) => limit.has(c))) return false;
+  // Filters and ordering on hidden columns would leak them one comparison at a time.
+  for (const [key, value] of req.nextUrl.searchParams) {
+    if (NON_FILTER_PARAMS.has(key)) continue;
+    if (key === "or" || key === "and" || key === "not") return false;
+    if (key === "order") {
+      const cols = value.split(",").map((c) => c.trim().split(".")[0]);
+      if (!cols.every((c) => limit.has(c))) return false;
+      continue;
+    }
+    if (!limit.has(key)) return false;
+  }
+  return true;
+}
 
 async function authorizeRest(
   req: NextRequest,
   opts: { write: boolean; table: string },
 ): Promise<RestAuth> {
-  const authHeader = req.headers.get("authorization") || "";
-  const bearer = authHeader.match(/^Bearer\s+(.+)$/i)?.[1]?.trim() || "";
-  const apikey = req.headers.get("apikey")?.trim() || "";
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
-
-  if (serviceKey && (bearer === serviceKey || apikey === serviceKey)) {
-    return { ok: true, role: "service", service: true };
+  const auth = await resolveRequestAuth(req);
+  if (auth.kind === "invalid") {
+    return { ok: false, status: 401, message: "Invalid or expired JWT" };
   }
-
-  if (bearer) {
-    const verified = await verifyAccessToken(bearer);
-    if (!verified) {
-      return { ok: false, status: 401, message: "Invalid or expired JWT" };
+  if (isStaffAuth(auth)) {
+    if (opts.write && ADMIN_ONLY_TABLES.has(opts.table) && auth.kind === "user" && !ELEVATED_ROLES.has(auth.role)) {
+      return { ok: false, status: 403, message: "Admin role required for this table" };
     }
-    const role =
-      (verified.payload.app_metadata as { role?: string } | undefined)?.role ||
-      null;
-    const staff = role === "admin" || role === "staff" || role === "superadmin";
-    if (opts.write && !staff) {
-      return { ok: false, status: 403, message: "Staff role required for writes" };
+    if (opts.write && SUPERADMIN_ONLY_TABLES.has(opts.table) && auth.kind === "user" && auth.role !== "superadmin") {
+      return { ok: false, status: 403, message: "Superadmin role required for this table" };
     }
-    if (!opts.write && !PUBLIC_READ_TABLES.has(opts.table) && !staff) {
-      // Authenticated customers may read non-public tables only if staff for now
-      // (customer order history uses dedicated API routes, not open REST).
-      return { ok: false, status: 403, message: "Not allowed for this table" };
+    if (!opts.write && !staffMayReadTable(auth, opts.table)) {
+      // Everyone may still load their own profile (admin layout, account menu).
+      const ownProfile =
+        opts.table === "profiles" &&
+        auth.kind === "user" &&
+        req.nextUrl.searchParams.get("id") === `eq.${auth.userId}`;
+      if (!ownProfile) return { ok: false, status: 403, message: "You do not have access to this area" };
     }
-    return { ok: true, role, service: false };
+    if (opts.write && !staffMayWriteTable(auth, opts.table)) {
+      return { ok: false, status: 403, message: "You do not have access to this area" };
+    }
+    return { ok: true, auth };
   }
-
-  // Anonymous storefront reads for catalog/content tables only
-  if (!opts.write && PUBLIC_READ_TABLES.has(opts.table)) {
-    return { ok: true, role: null, service: false };
+  if (opts.write) {
+    return {
+      ok: false,
+      status: auth.kind === "anon" ? 401 : 403,
+      message: auth.kind === "anon" ? "Authorization required for writes" : "Staff role required for writes",
+    };
   }
-
+  if (publicReadAllowed(req, opts.table, auth)) return { ok: true, auth };
   return {
     ok: false,
-    status: 401,
-    message: opts.write
-      ? "Authorization required for writes"
-      : "Authorization required for this table",
+    status: auth.kind === "anon" ? 401 : 403,
+    message: auth.kind === "anon" ? "Authorization required for this table" : "Not allowed for this table",
   };
+}
+
+/**
+ * An admin (not superadmin) may only manage customer/staff profiles: they can't
+ * promote anyone to admin/superadmin or edit/delete an existing admin.
+ */
+async function guardProfileWrite(
+  req: NextRequest,
+  table: string,
+  auth: RequestAuth,
+  body: unknown,
+  method: "POST" | "PATCH" | "DELETE",
+): Promise<string | null> {
+  if (table !== "profiles" || auth.kind !== "user" || auth.role === "superadmin") return null;
+  const rows = Array.isArray(body) ? body : body && typeof body === "object" ? [body] : [];
+  for (const row of rows as Record<string, unknown>[]) {
+    if (typeof row.role === "string" && ELEVATED_ROLES.has(row.role)) {
+      return "Only a superadmin can grant admin roles";
+    }
+  }
+  if (method === "POST") return null;
+  const probe = createClient().from(table).select("id, role");
+  applyPostgrestParams(probe as any, req.nextUrl.searchParams);
+  const { data, error } = await probe;
+  if (error) return error.message || "Could not check target rows";
+  const targets = (Array.isArray(data) ? data : data ? [data] : []) as { id: string; role: string }[];
+  if (targets.some((t) => ELEVATED_ROLES.has(t.role) && t.id !== auth.userId)) {
+    return "Only a superadmin can change admin accounts";
+  }
+  return null;
 }
 
 function corsHeaders(): HeadersInit {
@@ -142,6 +242,12 @@ export async function GET(
   // Apply filters/order/limit without re-applying select
   const params = new URLSearchParams(req.nextUrl.searchParams);
   params.delete("select");
+  // Non-staff only ever see published rows, whatever filter they send.
+  const rowFilter = isStaffAuth(authz.auth) ? undefined : PUBLIC_ROW_FILTERS[table];
+  if (rowFilter) {
+    params.delete(rowFilter[0]);
+    params.append(rowFilter[0], `eq.${rowFilter[1]}`);
+  }
   applyPostgrestParams(qb as any, params, {
     preferSingle: preferSingle(req),
   });
@@ -178,6 +284,8 @@ export async function POST(
 
   const body = await req.json().catch(() => null);
   if (body == null) return jsonError("Invalid JSON body");
+  const denied = await guardProfileWrite(req, table, authz.auth, body, "POST");
+  if (denied) return jsonError(denied, 403);
 
   const client = createClient();
   let qb = client.from(table).insert(body);
@@ -210,6 +318,8 @@ export async function PATCH(
 
   const body = await req.json().catch(() => null);
   if (body == null || typeof body !== "object") return jsonError("Invalid JSON body");
+  const denied = await guardProfileWrite(req, table, authz.auth, body, "PATCH");
+  if (denied) return jsonError(denied, 403);
 
   const client = createClient();
   let qb = client.from(table).update(body);
@@ -237,6 +347,8 @@ export async function DELETE(
 
   const authz = await authorizeRest(req, { write: true, table });
   if (!authz.ok) return jsonError(authz.message, authz.status);
+  const denied = await guardProfileWrite(req, table, authz.auth, null, "DELETE");
+  if (denied) return jsonError(denied, 403);
 
   const client = createClient();
   let qb = client.from(table).delete();

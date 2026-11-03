@@ -61,28 +61,38 @@ export async function applyBulkDiscountPercent(
       type VarRow = { id: string; price: number | string | null; compare_at_price: number | string | null }
       const variants = (row as { variants?: VarRow[] }).variants ?? []
 
-      // Determine the regular (non-sale) price: lowest variant price, or product price
-      const variantPrices = variants
-        .map((v) => Number(v.price) || 0)
-        .filter((p) => p > 0)
-      const regularPrice =
-        variantPrices.length > 0
-          ? Math.min(...variantPrices)
-          : listPriceFromPrices(
-              Number((row as { price?: number | string | null }).price) || 0,
-              (row as { compare_at_price?: number | string | null }).compare_at_price,
-            )
-
-      if (regularPrice <= 0) continue
-      const newSale = round2(regularPrice * factor)
-      const onSale = newSale < regularPrice - 0.001
-
-      // Write sale_price column — do NOT touch variant prices (they stay as regular prices)
-      const { error: pe } = await supabase
-        .from('products')
-        .update({ sale_price: onSale ? newSale : null })
-        .eq('id', productId)
-      if (pe) throw pe
+      // Each variant gets its own sale price. A single product-level sale
+      // price would also apply to every dearer variant (effectivePriceForVariant
+      // falls back to it), turning 20% off into far more on those variants.
+      const pricedVariants = variants.filter((v) => (Number(v.price) || 0) > 0)
+      if (pricedVariants.length > 0) {
+        for (const v of pricedVariants) {
+          const regular = Number(v.price) || 0
+          const sale = round2(regular * factor)
+          const { error: ve } = await supabase
+            .from('variants')
+            .update({ sale_price: sale < regular - 0.001 ? sale : null })
+            .eq('id', v.id)
+          if (ve) throw ve
+        }
+        const { error: pe } = await supabase
+          .from('products')
+          .update({ sale_price: null })
+          .eq('id', productId)
+        if (pe) throw pe
+      } else {
+        const regularPrice = listPriceFromPrices(
+          Number((row as { price?: number | string | null }).price) || 0,
+          (row as { compare_at_price?: number | string | null }).compare_at_price,
+        )
+        if (regularPrice <= 0) continue
+        const newSale = round2(regularPrice * factor)
+        const { error: pe } = await supabase
+          .from('products')
+          .update({ sale_price: newSale < regularPrice - 0.001 ? newSale : null })
+          .eq('id', productId)
+        if (pe) throw pe
+      }
 
       updated++
     } catch (e: unknown) {

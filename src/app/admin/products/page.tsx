@@ -173,19 +173,25 @@ export default function ProductsPage() {
 
   const handleBulkDelete = async () => {
     if (!confirm(`Are you sure you want to delete ${selectedProducts.length} product(s)?`)) return;
+    const deletedIds = new Set<string>();
+    const failedIds: string[] = [];
     const failed: string[] = [];
     for (const productId of selectedProducts) {
       try {
         const { error } = await deleteProductAndDependencies(supabase, productId);
         if (error) throw error;
-      } catch {
-        failed.push(products.find((p) => p.id === productId)?.name || productId.slice(0, 8));
+        deletedIds.add(productId);
+      } catch (err) {
+        failedIds.push(productId);
+        const reason = err && typeof err === 'object' && 'message' in err ? `: ${String((err as { message: unknown }).message)}` : '';
+        failed.push(`${products.find((p) => p.id === productId)?.name || productId.slice(0, 8)}${reason}`);
       }
     }
-    setProducts(products.filter((p) => !selectedProducts.includes(p.id)));
-    setSelectedProducts([]);
+    // Only drop rows that really deleted; failed ones stay listed and selected for a retry.
+    setProducts((prev) => prev.filter((p) => !deletedIds.has(p.id)));
+    setSelectedProducts(failedIds);
     if (failed.length) {
-      alert(`Deleted ${selectedProducts.length - failed.length}. Failed: ${failed.join(', ')}`);
+      alert(`Deleted ${deletedIds.size} of ${deletedIds.size + failed.length}.\n\nFailed:\n${failed.join('\n')}`);
     } else {
       alert('Products deleted successfully');
     }

@@ -1,11 +1,25 @@
 import { NextRequest, NextResponse } from "next/server"
-import { createStorageClient } from "@/lib/db/storage"
+import { createStorageClient, isValidBucketName } from "@/lib/db/storage"
 import { isPlainPostgres } from "@/lib/db/mode"
+import { resolveRequestAuth, isStaffAuth } from "@/lib/db/request-auth"
 import { normalizeUploadImage } from "@/lib/normalize-upload-image"
 import { extractUploadBody } from "@/lib/extract-upload-body"
 
 export const dynamic = "force-dynamic"
 export const runtime = "nodejs"
+
+const MAX_UPLOAD_BYTES = 15 * 1024 * 1024
+
+/** Uploads and deletes are admin-only (product, category and blog images). */
+async function requireStaff(req: NextRequest): Promise<NextResponse | null> {
+  const auth = await resolveRequestAuth(req)
+  if (isStaffAuth(auth)) return null
+  const message = "Staff session required"
+  return NextResponse.json(
+    { error: message, message, statusCode: auth.kind === "user" ? "403" : "401" },
+    { status: auth.kind === "user" ? 403 : 401 },
+  )
+}
 
 function guessImageType(objectPath: string): string {
   const ext = objectPath.toLowerCase().split(".").pop() || ""
@@ -28,16 +42,27 @@ export async function POST(
     return NextResponse.json({ error: "DATABASE_URL not set" }, { status: 503 })
   }
 
+  const denied = await requireStaff(req)
+  if (denied) return denied
+
   const { bucket, path } = await ctx.params
+  if (!isValidBucketName(bucket)) {
+    return NextResponse.json({ error: "Invalid bucket" }, { status: 400 })
+  }
+  const declared = Number(req.headers.get("content-length") || 0)
+  if (declared > MAX_UPLOAD_BYTES) {
+    return NextResponse.json({ error: "File too large" }, { status: 413 })
+  }
   const objectPath = path.map(decodeURIComponent).join("/")
   const upsert = (req.headers.get("x-upsert") || "").toLowerCase() === "true"
   const contentType =
     req.headers.get("content-type") || "application/octet-stream"
 
-  const raw = extractUploadBody(
-    Buffer.from(await req.arrayBuffer()),
-    contentType,
-  )
+  const body = Buffer.from(await req.arrayBuffer())
+  if (body.length > MAX_UPLOAD_BYTES) {
+    return NextResponse.json({ error: "File too large" }, { status: 413 })
+  }
+  const raw = extractUploadBody(body, contentType)
   let bytes = raw
   let finalPath = objectPath
   // Never let the multipart wrapper's content type reach stored metadata,
@@ -92,7 +117,13 @@ export async function DELETE(
   if (!isPlainPostgres()) {
     return NextResponse.json({ error: "DATABASE_URL not set" }, { status: 503 })
   }
+  const denied = await requireStaff(req)
+  if (denied) return denied
+
   const { bucket, path } = await ctx.params
+  if (!isValidBucketName(bucket)) {
+    return NextResponse.json({ error: "Invalid bucket" }, { status: 400 })
+  }
   const objectPath = path.map(decodeURIComponent).join("/")
   const storage = createStorageClient()
   const { error } = await storage.from(bucket).remove([objectPath])

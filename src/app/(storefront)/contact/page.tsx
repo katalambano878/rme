@@ -1,5 +1,6 @@
 "use client"
 
+import { useState } from "react"
 import { motion } from "framer-motion"
 import {
   Mail,
@@ -9,6 +10,8 @@ import {
   Send,
   MessageCircle,
   ExternalLink,
+  Loader2,
+  CheckCircle2,
 } from "lucide-react"
 import { Container } from "@/components/shared/container"
 import { Section } from "@/components/shared/section"
@@ -94,6 +97,178 @@ const hours = [
   { day: "Sunday", time: "Closed" },
 ]
 
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+
+const inputClass =
+  "h-10 rounded-xl border-rose-border focus-visible:border-rose-primary focus-visible:ring-rose-primary/20"
+
+type FieldErrors = Partial<Record<"name" | "email" | "message", string>>
+
+function ContactForm() {
+  const [name, setName] = useState("")
+  const [email, setEmail] = useState("")
+  const [subject, setSubject] = useState("General")
+  const [message, setMessage] = useState("")
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({})
+  const [status, setStatus] = useState<"idle" | "submitting" | "success" | "error">("idle")
+  const [formError, setFormError] = useState("")
+
+  function validate(): FieldErrors {
+    const errors: FieldErrors = {}
+    if (!name.trim()) errors.name = "Please enter your name."
+    else if (name.trim().length > 100) errors.name = "Name is too long."
+    if (!EMAIL_RE.test(email.trim())) errors.email = "Please enter a valid email address."
+    if (message.trim().length < 5) errors.message = "Please write a short message."
+    else if (message.trim().length > 5000) errors.message = "Message is too long (5000 characters max)."
+    return errors
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    const errors = validate()
+    setFieldErrors(errors)
+    if (Object.keys(errors).length > 0) return
+
+    setStatus("submitting")
+    setFormError("")
+    try {
+      const res = await fetch("/api/notifications", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          type: "contact",
+          payload: {
+            name: name.trim(),
+            email: email.trim(),
+            subject,
+            message: message.trim(),
+          },
+        }),
+      })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        throw new Error(json?.error || "We couldn't send your message. Please try again.")
+      }
+      setStatus("success")
+    } catch (err) {
+      setStatus("error")
+      setFormError(
+        err instanceof Error ? err.message : "We couldn't send your message. Please try again.",
+      )
+    }
+  }
+
+  if (status === "success") {
+    return (
+      <div role="status" className="mt-6 rounded-2xl border border-emerald-200 bg-emerald-50 p-6 text-center">
+        <CheckCircle2 className="mx-auto size-8 text-emerald-600" />
+        <p className="mt-3 font-heading font-semibold text-navy">Message sent</p>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Thanks, {name.trim().split(/\s+/)[0]}. We&apos;ll reply to {email.trim()} as soon as we can.
+        </p>
+        <Button
+          variant="outline"
+          onClick={() => {
+            setMessage("")
+            setStatus("idle")
+          }}
+          className="mt-4 rounded-xl border-rose-border"
+        >
+          Send another message
+        </Button>
+      </div>
+    )
+  }
+
+  const submitting = status === "submitting"
+
+  return (
+    <form onSubmit={handleSubmit} noValidate className="mt-6 space-y-5">
+      <div className="grid gap-5 sm:grid-cols-2">
+        <div className="space-y-2">
+          <Label htmlFor="contactName">Your Name</Label>
+          <Input
+            id="contactName"
+            placeholder="Full name"
+            autoComplete="name"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            aria-invalid={!!fieldErrors.name}
+            className={inputClass}
+          />
+          {fieldErrors.name && <p className="text-xs text-red-600">{fieldErrors.name}</p>}
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="contactEmail">Email Address</Label>
+          <Input
+            id="contactEmail"
+            type="email"
+            placeholder="you@example.com"
+            autoComplete="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            aria-invalid={!!fieldErrors.email}
+            className={inputClass}
+          />
+          {fieldErrors.email && <p className="text-xs text-red-600">{fieldErrors.email}</p>}
+        </div>
+      </div>
+
+      <div className="space-y-2">
+        <Label>Subject</Label>
+        <Select value={subject} onValueChange={(v) => setSubject(String(v ?? "General"))}>
+          <SelectTrigger className="h-10 w-full rounded-xl border-rose-border">
+            <SelectValue placeholder="Select a subject" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="General">
+              General Inquiry
+            </SelectItem>
+            <SelectItem value="Order Issue">
+              Order Issue
+            </SelectItem>
+            <SelectItem value="Returns">
+              Returns & Exchanges
+            </SelectItem>
+            <SelectItem value="Partnership">
+              Partnership Opportunity
+            </SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="contactMessage">Message</Label>
+        <Textarea
+          id="contactMessage"
+          placeholder="Tell us how we can help…"
+          value={message}
+          onChange={(e) => setMessage(e.target.value)}
+          maxLength={5000}
+          aria-invalid={!!fieldErrors.message}
+          className="min-h-32 rounded-xl border-rose-border focus-visible:border-rose-primary focus-visible:ring-rose-primary/20"
+        />
+        {fieldErrors.message && <p className="text-xs text-red-600">{fieldErrors.message}</p>}
+      </div>
+
+      {status === "error" && formError && (
+        <p role="alert" className="rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-600">
+          {formError}
+        </p>
+      )}
+
+      <Button
+        type="submit"
+        disabled={submitting}
+        className="w-full gap-2 rounded-xl bg-rose-100 py-3 text-navy hover:bg-rose-200 sm:w-auto sm:px-8"
+      >
+        {submitting ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
+        {submitting ? "Sending…" : "Send Message"}
+      </Button>
+    </form>
+  )
+}
+
 export default function ContactPage() {
   return (
     <>
@@ -124,64 +299,7 @@ export default function ContactPage() {
                   24 hours.
                 </p>
 
-                <div className="mt-6 space-y-5">
-                  <div className="grid gap-5 sm:grid-cols-2">
-                    <div className="space-y-2">
-                      <Label htmlFor="contactName">Your Name</Label>
-                      <Input
-                        id="contactName"
-                        placeholder="Full name"
-                        className="h-10 rounded-xl border-rose-border focus-visible:border-rose-primary focus-visible:ring-rose-primary/20"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="contactEmail">Email Address</Label>
-                      <Input
-                        id="contactEmail"
-                        type="email"
-                        placeholder="you@example.com"
-                        className="h-10 rounded-xl border-rose-border focus-visible:border-rose-primary focus-visible:ring-rose-primary/20"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label>Subject</Label>
-                    <Select defaultValue="General">
-                      <SelectTrigger className="h-10 w-full rounded-xl border-rose-border">
-                        <SelectValue placeholder="Select a subject" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="General">
-                          General Inquiry
-                        </SelectItem>
-                        <SelectItem value="Order Issue">
-                          Order Issue
-                        </SelectItem>
-                        <SelectItem value="Returns">
-                          Returns & Exchanges
-                        </SelectItem>
-                        <SelectItem value="Partnership">
-                          Partnership Opportunity
-                        </SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="contactMessage">Message</Label>
-                    <Textarea
-                      id="contactMessage"
-                      placeholder="Tell us how we can help…"
-                      className="min-h-32 rounded-xl border-rose-border focus-visible:border-rose-primary focus-visible:ring-rose-primary/20"
-                    />
-                  </div>
-
-                  <Button className="w-full gap-2 rounded-xl bg-rose-100 py-3 text-navy hover:bg-rose-200 sm:w-auto sm:px-8">
-                    <Send className="size-4" />
-                    Send Message
-                  </Button>
-                </div>
+                <ContactForm />
               </div>
             </motion.div>
 

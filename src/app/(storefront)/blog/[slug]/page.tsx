@@ -9,7 +9,6 @@ import {
   Clock,
   BookOpen,
   Share2,
-  Globe,
   Link2,
   User,
 } from "lucide-react"
@@ -40,6 +39,35 @@ export default function BlogPostPage({
   const { slug } = use(params)
   const [post, setPost] = useState<BlogPost | null | undefined>(undefined)
   const [relatedPosts, setRelatedPosts] = useState<BlogPost[]>([])
+  const [shareNote, setShareNote] = useState("")
+
+  function flashShareNote(text: string) {
+    setShareNote(text)
+    window.setTimeout(() => setShareNote(""), 2500)
+  }
+
+  async function handleCopyLink() {
+    try {
+      await navigator.clipboard.writeText(window.location.href)
+      flashShareNote("Link copied")
+    } catch {
+      flashShareNote("Couldn't copy the link")
+    }
+  }
+
+  async function handleShare() {
+    const url = window.location.href
+    if (typeof navigator.share === "function") {
+      try {
+        await navigator.share({ title: post?.title, text: post?.excerpt || undefined, url })
+      } catch (err) {
+        // AbortError just means the shopper closed the share sheet.
+        if ((err as DOMException)?.name !== "AbortError") await handleCopyLink()
+      }
+      return
+    }
+    await handleCopyLink()
+  }
 
   useEffect(() => {
     const supabase = createClient()
@@ -201,20 +229,28 @@ export default function BlogPostPage({
                 <Share2 className="size-4" />
                 Share this article
               </div>
-              <div className="flex gap-2">
-                {[
-                  { icon: Globe, label: "Share" },
-                  { icon: Share2, label: "Repost" },
-                  { icon: Link2, label: "Copy Link" },
-                ].map((s) => (
-                  <button
-                    key={s.label}
-                    aria-label={`Share on ${s.label}`}
-                    className="flex size-10 items-center justify-center rounded-xl border border-rose-border/50 text-muted-foreground transition-all hover:border-rose-primary hover:bg-rose-light hover:text-rose-primary"
-                  >
-                    <s.icon className="size-4" />
-                  </button>
-                ))}
+              <div className="flex items-center gap-2">
+                {shareNote && (
+                  <span role="status" className="text-xs text-muted-foreground">
+                    {shareNote}
+                  </span>
+                )}
+                <button
+                  type="button"
+                  onClick={handleShare}
+                  aria-label="Share this article"
+                  className="flex size-10 items-center justify-center rounded-xl border border-rose-border/50 text-muted-foreground transition-all hover:border-rose-primary hover:bg-rose-light hover:text-rose-primary"
+                >
+                  <Share2 className="size-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={handleCopyLink}
+                  aria-label="Copy link"
+                  className="flex size-10 items-center justify-center rounded-xl border border-rose-border/50 text-muted-foreground transition-all hover:border-rose-primary hover:bg-rose-light hover:text-rose-primary"
+                >
+                  <Link2 className="size-4" />
+                </button>
               </div>
             </div>
 

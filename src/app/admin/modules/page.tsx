@@ -28,6 +28,8 @@ const colorMap: Record<string, string> = {
 
 export default function ModulesPage() {
   const [loading, setLoading] = useState(true);
+  const [loadNotice, setLoadNotice] = useState('');
+  const [saveError, setSaveError] = useState('');
 
   // Base definitions of modules
   const [modules, setModules] = useState<Module[]>([
@@ -116,11 +118,11 @@ export default function ModulesPage() {
     try {
       const { data, error } = await supabase.from('store_modules').select('*');
       if (error) {
-        if (error.code === 'PGRST205' || error.message?.includes('store_modules')) {
-          // Table doesn't exist — use local defaults (all disabled)
-        } else {
-          throw error;
-        }
+        // Matches the admin layout: if module settings can't be read, every module stays on.
+        console.warn('Error fetching modules:', error);
+        setModules(prev => prev.map(m => ({ ...m, enabled: true })));
+        setLoadNotice(`Module settings could not be loaded (${error.message || 'unknown error'}), so all modules are shown as on. Changes may not save.`);
+        return;
       }
 
       if (data) {
@@ -131,6 +133,8 @@ export default function ModulesPage() {
       }
     } catch (err) {
       console.error('Error fetching modules:', err);
+      setModules(prev => prev.map(m => ({ ...m, enabled: true })));
+      setLoadNotice('Module settings could not be loaded, so all modules are shown as on.');
     } finally {
       setLoading(false);
     }
@@ -139,6 +143,7 @@ export default function ModulesPage() {
   const toggleModule = async (id: string, currentState: boolean) => {
     const newState = !currentState
 
+    setSaveError('')
     setModules((prev) =>
       prev.map((m) => (m.id === id ? { ...m, enabled: newState } : m)),
     )
@@ -150,18 +155,14 @@ export default function ModulesPage() {
         updated_at: new Date().toISOString(),
       })
 
-      if (error) {
-        if (error.code === 'PGRST205' || error.message?.includes('store_modules')) {
-          return
-        }
-        throw error
-      }
+      if (error) throw error
     } catch (err) {
       console.error('Error updating module:', err)
       setModules((prev) =>
         prev.map((m) => (m.id === id ? { ...m, enabled: currentState } : m)),
       )
-      alert('Failed to update settings. Module table may not be set up yet.')
+      const message = err && typeof err === 'object' && 'message' in err ? String((err as { message: unknown }).message) : 'Unknown error'
+      setSaveError(`Could not save "${id}": ${message}. The store_modules table may not be set up yet.`)
     }
   }
 
@@ -243,6 +244,13 @@ export default function ModulesPage() {
       <div className="max-w-7xl mx-auto">
         <h1 className="text-3xl font-bold text-gray-900 mb-2">Modules & Features</h1>
         <p className="text-gray-600 mb-8">Enable or disable features to customize your admin dashboard.</p>
+
+        {loadNotice && (
+          <div className="mb-4 p-4 rounded-lg border border-amber-200 bg-amber-50 text-sm text-amber-800">{loadNotice}</div>
+        )}
+        {saveError && (
+          <div role="alert" className="mb-4 p-4 rounded-lg border border-red-200 bg-red-50 text-sm text-red-700">{saveError}</div>
+        )}
 
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-8">
           <div className="flex gap-4">

@@ -5,7 +5,7 @@ import Link from "next/link"
 import { motion } from "framer-motion"
 import { Heart, ShoppingBag, Eye } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { useCartStore } from "@/lib/store/cart-store"
+import { isOutOfStock, useCartStore } from "@/lib/store/cart-store"
 import { useWishlistStore } from "@/lib/store/wishlist-store"
 import { useHydrated } from "@/lib/hooks/use-hydrated"
 import type { Product } from "@/types/product"
@@ -30,6 +30,7 @@ export function ProductCard({ product, className, onQuickView }: ProductCardProp
   const storedInWishlist = useWishlistStore((s) => s.isInWishlist(product.id))
   const isInWishlist = hydrated && storedInWishlist
   const needsOptions = product.variants.length > 0
+  const soldOut = isOutOfStock(product)
   const addButtonClass =
     "flex w-full items-center justify-center gap-2 rounded-xl border border-rose-border bg-white py-2.5 text-sm font-medium text-navy transition-all hover:border-rose-primary hover:bg-rose-light hover:text-rose-primary"
 
@@ -64,24 +65,27 @@ export function ProductCard({ product, className, onQuickView }: ProductCardProp
             </div>
           )}
 
-          <motion.div
-            className="absolute inset-0 flex items-center justify-center bg-navy/30 backdrop-blur-[2px]"
-            initial={false}
-            animate={{ opacity: isHovered ? 1 : 0 }}
-            transition={{ duration: 0.25 }}
-            style={{ pointerEvents: isHovered ? "auto" : "none" }}
-          >
-            <button
-              onClick={(e) => {
-                e.preventDefault()
-                onQuickView?.(product)
-              }}
-              className="flex items-center gap-2 rounded-full bg-white/95 px-5 py-2.5 text-sm font-medium text-navy shadow-lg backdrop-blur-sm transition-transform hover:scale-105"
+          {onQuickView && (
+            <motion.div
+              className="absolute inset-0 flex items-center justify-center bg-navy/30 backdrop-blur-[2px]"
+              initial={false}
+              animate={{ opacity: isHovered ? 1 : 0 }}
+              transition={{ duration: 0.25 }}
+              style={{ pointerEvents: isHovered ? "auto" : "none" }}
             >
-              <Eye className="size-4" />
-              Quick View
-            </button>
-          </motion.div>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault()
+                  onQuickView(product)
+                }}
+                className="flex items-center gap-2 rounded-full bg-white/95 px-5 py-2.5 text-sm font-medium text-navy shadow-lg backdrop-blur-sm transition-transform hover:scale-105"
+              >
+                <Eye className="size-4" />
+                Quick View
+              </button>
+            </motion.div>
+          )}
         </div>
       </Link>
 
@@ -111,7 +115,15 @@ export function ProductCard({ product, className, onQuickView }: ProductCardProp
 
         <Price amount={product.price} salePrice={product.salePrice} size="sm" />
 
-        {needsOptions && !onQuickView ? (
+        {soldOut ? (
+          <button
+            type="button"
+            disabled
+            className="flex w-full cursor-not-allowed items-center justify-center gap-2 rounded-xl border border-rose-border/60 bg-white py-2.5 text-sm font-medium text-muted-foreground opacity-70"
+          >
+            Out of stock
+          </button>
+        ) : needsOptions && !onQuickView ? (
           <Link
             href={`/products/${product.slug}`}
             className={addButtonClass}

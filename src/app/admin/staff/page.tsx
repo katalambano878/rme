@@ -8,6 +8,7 @@ import { canManageStaffRoles } from '@/lib/admin-role-access';
 import {
   STAFF_PERMISSION_AREAS,
   defaultStaffPermissions,
+  newStaffPermissions,
   sanitizeStaffPermissions,
 } from '@/lib/staff-permissions';
 
@@ -27,6 +28,13 @@ const ROLE_OPTIONS = [
   { value: 'admin', label: 'Admin' },
   { value: 'superadmin', label: 'Superadmin' },
 ];
+
+const PRIVILEGED_ROLES = ['admin', 'superadmin'];
+
+/** Roles I may assign: only a superadmin can grant admin/superadmin. */
+function roleOptionsFor(myRole: string | null) {
+  return myRole === 'superadmin' ? ROLE_OPTIONS : ROLE_OPTIONS.filter((o) => !PRIVILEGED_ROLES.includes(o.value));
+}
 
 function permissionsForEdit(row: ProfileRow): Record<string, boolean> {
   if (row.role !== 'staff') return defaultStaffPermissions();
@@ -50,7 +58,7 @@ export default function AdminStaffPage() {
   const [addPassword, setAddPassword] = useState('');
   const [addName, setAddName] = useState('');
   const [addRole, setAddRole] = useState<'staff' | 'admin'>('staff');
-  const [addPerms, setAddPerms] = useState<Record<string, boolean>>(() => defaultStaffPermissions());
+  const [addPerms, setAddPerms] = useState<Record<string, boolean>>(() => newStaffPermissions());
   const [addSubmitting, setAddSubmitting] = useState(false);
 
   const [permUser, setPermUser] = useState<ProfileRow | null>(null);
@@ -58,6 +66,10 @@ export default function AdminStaffPage() {
   const [permSaving, setPermSaving] = useState(false);
 
   const canEditRoles = canManageStaffRoles(myRole);
+  // The server refuses admin edits to admin/superadmin rows, so don't offer them.
+  const canEditRow = (row: ProfileRow) =>
+    canEditRoles && (myRole === 'superadmin' || !PRIVILEGED_ROLES.includes(row.role));
+  const assignableRoles = roleOptionsFor(myRole);
 
   useEffect(() => {
     (async () => {
@@ -121,15 +133,20 @@ export default function AdminStaffPage() {
   };
 
   const updateRole = async (id: string, newRole: string) => {
-    if (!canEditRoles) return;
+    const row = rows.find((r) => r.id === id);
+    if (!row || !canEditRow(row)) return;
+    if (!assignableRoles.some((o) => o.value === newRole)) return;
     if (id === myId && newRole === 'customer') {
       if (!confirm('You are removing your own admin access. Continue?')) return;
     }
     try {
       setSavingId(id);
-      const { error } = await supabase.from('profiles').update({ role: newRole }).eq('id', id);
+      // New staff start with dashboard + orders only, not every area.
+      const update: { role: string; permissions?: Record<string, boolean> } = { role: newRole };
+      if (newRole === 'staff' && row.role !== 'staff') update.permissions = newStaffPermissions();
+      const { error } = await supabase.from('profiles').update(update).eq('id', id);
       if (error) throw error;
-      setRows((prev) => prev.map((r) => (r.id === id ? { ...r, role: newRole } : r)));
+      setRows((prev) => prev.map((r) => (r.id === id ? { ...r, ...update } : r)));
     } catch (e: unknown) {
       alert(e instanceof Error ? e.message : 'Could not update role');
     } finally {
@@ -226,7 +243,7 @@ export default function AdminStaffPage() {
       setAddPassword('');
       setAddName('');
       setAddRole('staff');
-      setAddPerms(defaultStaffPermissions());
+      setAddPerms(newStaffPermissions());
       await fetchStaff();
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Could not create staff');
@@ -296,7 +313,7 @@ export default function AdminStaffPage() {
           <button
             type="button"
             onClick={() => {
-              setAddPerms(defaultStaffPermissions());
+              setAddPerms(newStaffPermissions());
               setShowAdd(true);
             }}
             className="inline-flex items-center justify-center gap-2 rounded-lg bg-rose-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-rose-700 cursor-pointer"
@@ -378,7 +395,7 @@ export default function AdminStaffPage() {
                     </td>
                     <td className="py-3 px-4">
                       <div className="flex flex-wrap items-center gap-2">
-                        {canEditRoles && r.role === 'staff' && (
+                        {canEditRow(r) && r.role === 'staff' && (
                           <button
                             type="button"
                             onClick={() => openPermModal(r)}
@@ -387,14 +404,14 @@ export default function AdminStaffPage() {
                             Permissions
                           </button>
                         )}
-                        {canEditRoles ? (
+                        {canEditRow(r) ? (
                           <select
                             value={r.role}
                             disabled={savingId === r.id}
                             onChange={(e) => updateRole(r.id, e.target.value)}
                             className="px-3 py-2 border-2 border-gray-300 rounded-lg text-sm font-medium focus:ring-2 focus:ring-rose-400 focus:border-rose-400 cursor-pointer disabled:opacity-50"
                           >
-                            {ROLE_OPTIONS.map((o) => (
+                            {assignableRoles.map((o) => (
                               <option key={o.value} value={o.value}>
                                 {o.label}
                               </option>
@@ -403,7 +420,7 @@ export default function AdminStaffPage() {
                         ) : (
                           <span className="text-sm text-gray-400">—</span>
                         )}
-                        {canEditRoles && r.id !== myId && r.role !== 'superadmin' && (
+                        {canEditRow(r) && r.id !== myId && r.role !== 'superadmin' && (
                           <button
                             type="button"
                             onClick={() => deleteUser(r)}

@@ -23,7 +23,7 @@ import { cn } from "@/lib/utils"
 const leftNavLinks = [
   { href: "/shop", label: "Shop" },
   { href: "/collections", label: "Categories" },
-  { href: "/shop", label: "Sale" },
+  { href: "/shop?sale=1", label: "Sale" },
 ]
 
 /** Mobile drawer — full primary destinations */

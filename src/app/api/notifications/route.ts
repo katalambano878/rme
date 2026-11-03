@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase-admin';
-import { verifyAuth } from '@/lib/auth';
+import { requireStaffArea, verifyAuth } from '@/lib/auth';
 import { escapeHtml } from '@/lib/sanitize';
 import { sendOrderConfirmation, sendOrderStatusUpdate, sendWelcomeMessage, sendContactMessage, sendPaymentLink, sendEmail, sendSMS, emailLayout } from '@/lib/notifications';
 import { checkRateLimit, getClientIdentifier, RATE_LIMITS } from '@/lib/rate-limit';
@@ -31,13 +31,16 @@ export async function POST(request: Request) {
         }
 
         // SECURITY: order_created emails are triggered by webhooks server-side
-        // (Paystack/Moolre) and never directly by an unauthenticated client.
+        // (Moolre) and never directly by an unauthenticated client.
         // Allow only admin callers to manually trigger it (e.g. a resend button).
         const adminOnlyTypes = ['campaign', 'order_updated', 'order_status', 'payment_link', 'welcome', 'order_created'];
         const requiresAdminAuth = adminOnlyTypes.includes(type);
 
         if (requiresAdminAuth) {
-            const auth = await verifyAuth(request, { requireAdmin: true });
+            // Campaigns message every customer, so staff also need the Notifications area.
+            const auth = type === 'campaign'
+                ? await requireStaffArea(request, 'notifications')
+                : await verifyAuth(request, { requireAdmin: true });
             if (!auth.authenticated) {
                 return NextResponse.json({ error: auth.error || 'Unauthorized' }, { status: 401 });
             }

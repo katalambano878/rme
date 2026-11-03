@@ -9,6 +9,7 @@ import {
   updateUserMetadata,
 } from "@/lib/db/auth";
 import { isPlainPostgres } from "@/lib/db/mode";
+import { checkRateLimit, getClientIdentifier, RATE_LIMITS } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -27,6 +28,16 @@ function gotrueError(message: string, status = 400, code = "invalid_request") {
     { error: code, error_description: message, msg: message, message },
     { status, headers: cors() }
   );
+}
+
+function tooManyAttempts(resetIn: number) {
+  const res = gotrueError(
+    "Too many attempts. Please wait a few minutes and try again.",
+    429,
+    "over_request_rate_limit",
+  );
+  res.headers.set("Retry-After", String(resetIn));
+  return res;
 }
 
 function sessionResponse(session: {
@@ -110,6 +121,15 @@ export async function POST(
     if (grant === "password") {
       const email = String(body.email || "");
       const password = String(body.password || "");
+      const ip = getClientIdentifier(req);
+      const byIp = checkRateLimit(`login:${ip}`, RATE_LIMITS.login);
+      const byEmail = checkRateLimit(
+        `login-email:${email.trim().toLowerCase()}`,
+        RATE_LIMITS.loginEmail,
+      );
+      if (!byIp.success || !byEmail.success) {
+        return tooManyAttempts(Math.max(byIp.resetIn, byEmail.resetIn));
+      }
       const { session, error } = await signInWithPassword(email, password);
       if (error || !session) {
         return gotrueError(error || "Invalid login credentials", 400, "invalid_grant");
@@ -130,10 +150,12 @@ export async function POST(
   }
 
   if (slug === "signup") {
+    const limited = checkRateLimit(`signup:${getClientIdentifier(req)}`, RATE_LIMITS.signup);
+    if (!limited.success) return tooManyAttempts(limited.resetIn);
     const { session, error } = await signUpWithPassword({
       email: String(body.email || ""),
       password: String(body.password || ""),
-      data: body.data || body.user_metadata || {},
+      data: userMetadataFrom(body),
     });
     if (error || !session) {
       return gotrueError(error || "Signup failed", 400);
@@ -151,6 +173,19 @@ export async function POST(
   }
 
   return gotrueError(`Unknown auth path: ${slug}`, 404);
+}
+
+/** Only the profile fields the app uses; anything else a client sends is dropped. */
+const USER_METADATA_KEYS = ["full_name", "phone", "avatar_url"] as const;
+
+function userMetadataFrom(body: Record<string, any>): Record<string, string> {
+  const raw = body.data || body.user_metadata;
+  const out: Record<string, string> = {};
+  if (!raw || typeof raw !== "object") return out;
+  for (const key of USER_METADATA_KEYS) {
+    if (typeof raw[key] === "string") out[key] = raw[key].trim().slice(0, 200);
+  }
+  return out;
 }
 
 export async function PUT(
@@ -175,16 +210,18 @@ export async function PUT(
   const body = (await req.json().catch(() => ({}))) as Record<string, any>;
 
   if (body.password) {
-    const { user, error } = await updateUserPassword(verified.userId, String(body.password));
+    // Changing the password signs out every other session (see passwordVersion).
+    const { user, error } = await updateUserPassword(
+      verified.userId,
+      String(body.password),
+      String(body.current_password ?? "")
+    );
     if (error || !user) return gotrueError(error || "Update failed");
     return NextResponse.json(user, { headers: cors() });
   }
 
   if (body.data || body.user_metadata) {
-    const { user, error } = await updateUserMetadata(
-      verified.userId,
-      body.data || body.user_metadata
-    );
+    const { user, error } = await updateUserMetadata(verified.userId, userMetadataFrom(body));
     if (error || !user) return gotrueError(error || "Update failed");
     return NextResponse.json(user, { headers: cors() });
   }

@@ -139,6 +139,20 @@ describe("display + cart line helpers", () => {
     assert.equal(liveLinePrice(product, OFF), 40)
     assert.equal(liveLinePrice(product, BULK_50), 20)
   })
+
+  it("charges the variant price, not a compare-at display price", () => {
+    // Snapshot of a variant priced 60 with compare-at 65.45 and a catalog sale of 55.
+    const product = {
+      price: 65.45,
+      salePrice: 60,
+      catalogSalePrice: 55,
+      regularPrice: 60,
+      variantSalePrice: null,
+    }
+    assert.equal(liveLinePrice(product, OFF), 60)
+    assert.equal(liveLinePrice(product, SALE), 55)
+    assert.equal(liveLinePrice({ ...product, variantSalePrice: 50 }, SALE), 50)
+  })
 })
 
 describe("resolveCatalogSalePrice", () => {

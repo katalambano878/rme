@@ -8,10 +8,15 @@ export function isPlainPostgres(): boolean {
 }
 
 export function authJwtSecret(): string {
-  return (
+  const secret =
     process.env.AUTH_JWT_SECRET ||
     process.env.JWT_SECRET ||
-    process.env.SUPABASE_JWT_SECRET ||
-    "dev-auth-secret-change-me"
-  );
+    process.env.SUPABASE_JWT_SECRET;
+  if (secret) return secret;
+  // A known fallback would let anyone sign an admin token, so production
+  // refuses to run auth without a real secret.
+  if (process.env.NODE_ENV === "production") {
+    throw new Error("AUTH_JWT_SECRET is not set; refusing to sign or verify sessions.");
+  }
+  return "dev-auth-secret-change-me";
 }

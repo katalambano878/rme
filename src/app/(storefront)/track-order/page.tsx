@@ -12,6 +12,9 @@ import {
   ClipboardCheck,
   Box,
   Loader2,
+  XCircle,
+  RotateCcw,
+  AlertTriangle,
 } from "lucide-react"
 import { Container } from "@/components/shared/container"
 import { Section } from "@/components/shared/section"
@@ -40,13 +43,47 @@ const ORDER_STATUS_INDEX: Record<string, number> = {
   delivered: 4,
 }
 
+/** Statuses that end the normal journey — shown instead of the timeline. */
+const TERMINAL_STATES: Record<
+  string,
+  { label: string; description: string; icon: typeof XCircle; tone: string }
+> = {
+  cancelled: {
+    label: "Order Cancelled",
+    description: "This order was cancelled. If you were charged, contact us and we'll sort it out.",
+    icon: XCircle,
+    tone: "border-slate-200 bg-slate-50 text-slate-700",
+  },
+  refunded: {
+    label: "Order Refunded",
+    description: "This order has been refunded. Refunds can take a few days to reach your account.",
+    icon: RotateCcw,
+    tone: "border-blue-200 bg-blue-50 text-blue-700",
+  },
+  failed: {
+    label: "Payment Failed",
+    description: "We didn't receive payment for this order. You can place it again or contact us for help.",
+    icon: AlertTriangle,
+    tone: "border-red-200 bg-red-50 text-red-700",
+  },
+}
+
+type TrackedOrder = {
+  order_number: string
+  status: string
+  grand_total: number
+  created_at: string
+  is_paid: boolean
+  items: { id: string; name: string; sku: string | null; quantity: number; unit_price: number }[]
+}
+
 function TrackOrderContent() {
   const searchParams = useSearchParams()
   const urlOrder = searchParams.get("order") || ""
 
   const [orderNumber, setOrderNumber] = useState(urlOrder)
-  const [email, setEmail]             = useState("")
-  const [order, setOrder]             = useState<any>(null)
+  const [contact, setContact]         = useState("")
+  const [order, setOrder]             = useState<TrackedOrder | null>(null)
   const [loading, setLoading]         = useState(false)
   const [error, setError]             = useState("")
   const [searched, setSearched]       = useState(false)
@@ -55,10 +92,10 @@ function TrackOrderContent() {
   // directly from the browser never worked for guests: RLS only lets the
   // logged-in owner or staff read orders, so anonymous visitors always got
   // "Order not found". The server route verifies the email and returns a
-  // safe subset of the order.
-  const fetchOrder = useCallback(async (orderNum: string, emailVal: string) => {
-    if (!emailVal.trim()) {
-      setError("Please enter your email address to verify your identity.")
+  // safe subset of the order. Either the order email or phone is accepted.
+  const fetchOrder = useCallback(async (orderNum: string, contactVal: string) => {
+    if (!contactVal.trim()) {
+      setError("Please enter the email or phone number you used at checkout.")
       return
     }
     setLoading(true)
@@ -69,7 +106,7 @@ function TrackOrderContent() {
       const res = await fetch("/api/orders/track", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ orderNumber: orderNum.trim(), email: emailVal.trim() }),
+        body: JSON.stringify({ orderNumber: orderNum.trim(), contact: contactVal.trim() }),
       })
       const data = await res.json().catch(() => null)
 
@@ -90,17 +127,17 @@ function TrackOrderContent() {
   }, [])
 
   const handleTrack = () => {
-    if (orderNumber.trim() && email.trim()) {
-      fetchOrder(orderNumber.trim(), email.trim())
+    if (orderNumber.trim() && contact.trim()) {
+      fetchOrder(orderNumber.trim(), contact.trim())
     }
   }
 
-  // Auto-search if both order and email are in URL
+  // Auto-search if both order and email/phone are in URL
   useEffect(() => {
-    const urlEmail = searchParams.get("email") || ""
-    if (urlOrder && urlEmail) {
-      setEmail(urlEmail)
-      fetchOrder(urlOrder, urlEmail)
+    const urlContact = searchParams.get("email") || searchParams.get("phone") || ""
+    if (urlOrder && urlContact) {
+      setContact(urlContact)
+      fetchOrder(urlOrder, urlContact)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -110,6 +147,7 @@ function TrackOrderContent() {
     : -1
 
   const isPaid = Boolean(order?.is_paid)
+  const terminalState = order ? TERMINAL_STATES[order.status] : undefined
 
   const trackingNumber = ""
 
@@ -119,7 +157,7 @@ function TrackOrderContent() {
         <Heading
           as="h1"
           align="center"
-          subtitle="Enter your order number and email to see real-time updates on your delivery."
+          subtitle="Enter your order number and the email or phone number you used at checkout."
         >
           Track Your Order
         </Heading>
@@ -145,13 +183,15 @@ function TrackOrderContent() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="trackEmail">Email Address</Label>
+                <Label htmlFor="trackContact">Email or Phone Number</Label>
                 <Input
-                  id="trackEmail"
-                  type="email"
-                  placeholder="you@example.com"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  id="trackContact"
+                  type="text"
+                  inputMode="email"
+                  autoComplete="email"
+                  placeholder="you@example.com or 024 412 3456"
+                  value={contact}
+                  onChange={(e) => setContact(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && handleTrack()}
                   className="h-11 rounded-xl border-rose-border text-base focus-visible:border-rose-primary focus-visible:ring-rose-primary/20"
                 />
@@ -163,7 +203,7 @@ function TrackOrderContent() {
               )}
               <Button
                 onClick={handleTrack}
-                disabled={loading || !orderNumber.trim() || !email.trim()}
+                disabled={loading || !orderNumber.trim() || !contact.trim()}
                 className="w-full gap-2 rounded-xl py-3"
               >
                 {loading ? (
@@ -197,8 +237,14 @@ function TrackOrderContent() {
                 </h2>
                 <p className="mt-1 text-sm text-muted-foreground">
                   Payment:{" "}
-                  <span className={cn("font-medium", isPaid ? "text-emerald-600" : "text-amber-600")}>
-                    {isPaid ? "Confirmed" : "Pending"}
+                  <span className={cn("font-medium", isPaid ? "text-emerald-600" : terminalState ? "text-muted-foreground" : "text-amber-600")}>
+                    {order.status === "refunded"
+                      ? "Refunded"
+                      : isPaid
+                        ? "Confirmed"
+                        : terminalState
+                          ? "Not received"
+                          : "Pending"}
                   </span>
                   {trackingNumber && (
                     <> &nbsp;·&nbsp; Tracking: <span className="font-medium text-navy">{trackingNumber}</span></>
@@ -206,7 +252,19 @@ function TrackOrderContent() {
                 </p>
               </div>
 
-              {/* Timeline */}
+              {/* Timeline — replaced by a status card for cancelled/refunded/failed */}
+              {terminalState ? (
+                <div className={cn("flex items-start gap-4 rounded-3xl border p-6 sm:p-8", terminalState.tone)}>
+                  <terminalState.icon className="mt-0.5 size-6 shrink-0" />
+                  <div>
+                    <h3 className="font-heading font-semibold">{terminalState.label}</h3>
+                    <p className="mt-1 text-sm opacity-90">{terminalState.description}</p>
+                    <Link href="/contact" className="mt-3 inline-block text-sm font-medium underline underline-offset-2">
+                      Contact us
+                    </Link>
+                  </div>
+                </div>
+              ) : (
               <Card className="rounded-3xl border-rose-border/50 ring-0 shadow-sm border">
                 <CardContent className="p-6 sm:p-8">
                   <div className="relative">
@@ -266,6 +324,7 @@ function TrackOrderContent() {
                   </div>
                 </CardContent>
               </Card>
+              )}
 
               {/* Order Items */}
               {order.items?.length > 0 && (
@@ -281,7 +340,7 @@ function TrackOrderContent() {
                         <h3 className="font-heading font-semibold text-navy">Items in Your Order</h3>
                       </div>
                       <div className="space-y-3">
-                        {order.items.map((item: any) => (
+                        {order.items.map((item) => (
                           <div key={item.id} className="flex items-center justify-between">
                             <div className="flex items-center gap-3">
                               <div className="flex size-10 items-center justify-center rounded-xl bg-gradient-to-br from-rose-100 to-pink-50">

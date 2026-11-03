@@ -3,11 +3,12 @@ import { promises as fs } from "fs"
 import path from "path"
 import { NextRequest, NextResponse } from "next/server"
 import sharp from "sharp"
-import { cacheObject, readObject } from "@/lib/db/storage"
+import { PUBLIC_BUCKETS, cacheObject, readObject } from "@/lib/db/storage"
 
 const STORAGE_ROOT =
   process.env.STORAGE_ROOT || path.join(process.cwd(), ".storage")
 const FETCH_TIMEOUT_MS = 10_000
+const MAX_SOURCE_BYTES = 20 * 1024 * 1024
 
 const PUBLIC_PATH_PREFIXES = [
   "/brand",
@@ -19,31 +20,39 @@ const PUBLIC_PATH_PREFIXES = [
 const STORAGE_PUBLIC_RE =
   /^\/storage\/v1\/object\/public\/([^/]+)\/(.+)$/
 
+// Fixed steps so a loop over w/q can't fill the disk cache with variants.
+const WIDTHS = [64, 128, 200, 256, 320, 384, 480, 640, 750, 828, 960, 1080, 1200, 1600]
+
 function parseWidth(value: string | null): number {
   const n = value ? Number.parseInt(value, 10) : 800
-  if (!Number.isFinite(n) || n < 1) return 800
-  return Math.min(n, 1600)
+  if (!Number.isFinite(n) || n < 1) return 828
+  return WIDTHS.find((w) => w >= n) ?? 1600
 }
 
 function parseQuality(value: string | null): number {
   const n = value ? Number.parseInt(value, 10) : 70
   if (!Number.isFinite(n)) return 70
-  return Math.min(90, Math.max(40, n))
+  return Math.round(Math.min(90, Math.max(40, n)) / 10) * 10
 }
 
 function hostOnly(host: string): string {
   return host.split(":")[0]?.toLowerCase() ?? ""
 }
 
-function isAllowedHost(host: string, requestHost: string): boolean {
-  const h = hostOnly(host)
-  const req = hostOnly(requestHost)
-  if (h === req) return true
-  if (h === "localhost" || h === "127.0.0.1") return true
-  if (h.endsWith(".supabase.co")) return true
+/**
+ * Remote images may only come from the store's own domain or Supabase public
+ * storage. No localhost, wildcard DNS (sslip.io) or Host-header matching: those
+ * let anyone make the server fetch internal addresses.
+ */
+function isAllowedRemote(url: URL): boolean {
+  if (url.protocol !== "https:") return false
+  if (url.username || url.password || (url.port && url.port !== "443")) return false
+  const h = hostOnly(url.host)
   if (h === "ronnyandme.com" || h === "www.ronnyandme.com") return true
-  if (h.endsWith(".sslip.io")) return true
-  return false
+  return (
+    h.endsWith(".supabase.co") &&
+    url.pathname.startsWith("/storage/v1/object/public/")
+  )
 }
 
 function isPublicRelativePath(src: string): boolean {
@@ -52,17 +61,29 @@ function isPublicRelativePath(src: string): boolean {
   )
 }
 
-function isAllowedSrc(src: string, requestHost: string): boolean {
+function isAllowedSrc(src: string): boolean {
+  if (src.startsWith("//")) return false
   if (src.startsWith("/")) {
-    if (src.startsWith("/storage/")) return true
+    const storage = src.match(STORAGE_PUBLIC_RE)
+    if (storage) return PUBLIC_BUCKETS.has(storage[1])
     return isPublicRelativePath(src)
   }
 
   try {
-    const url = new URL(src)
-    return isAllowedHost(url.host, requestHost)
+    return isAllowedRemote(new URL(src))
   } catch {
     return false
+  }
+}
+
+/** Drop query/hash so `?n=1`, `?n=2`, ... map to one cache entry. */
+function canonicalSrc(src: string): string {
+  if (src.startsWith("/")) return src.split(/[?#]/)[0]
+  try {
+    const u = new URL(src)
+    return `${u.origin}${u.pathname}`
+  } catch {
+    return src
   }
 }
 
@@ -70,7 +91,8 @@ async function fetchWithTimeout(url: string): Promise<Response> {
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS)
   try {
-    return await fetch(url, { signal: controller.signal })
+    // redirect: "error" — an allowed host must not bounce us somewhere internal.
+    return await fetch(url, { signal: controller.signal, redirect: "error" })
   } finally {
     clearTimeout(timeout)
   }
@@ -79,7 +101,7 @@ async function fetchWithTimeout(url: string): Promise<Response> {
 async function readPublicFile(relativePath: string): Promise<Buffer | null> {
   const clean = relativePath.replace(/^\/+/, "")
   const full = path.normalize(path.join(process.cwd(), "public", clean))
-  const base = path.normalize(path.join(process.cwd(), "public"))
+  const base = path.normalize(path.join(process.cwd(), "public")) + path.sep
   if (!full.startsWith(base)) return null
   try {
     return await fs.readFile(full)
@@ -100,7 +122,7 @@ function supabasePublicToLocal(src: string): { bucket: string; objectPath: strin
     const m = u.pathname.match(
       /^\/storage\/v1\/object\/public\/([^/]+)\/(.+)$/,
     )
-    if (!m) return null
+    if (!m || !PUBLIC_BUCKETS.has(m[1])) return null
     return { bucket: m[1], objectPath: decodeURIComponent(m[2]) }
   } catch {
     return null
@@ -117,10 +139,7 @@ function legacyStorageOrigin(): string | null {
   return trimmed || null
 }
 
-async function loadSourceBytes(
-  src: string,
-  request: NextRequest,
-): Promise<LoadResult> {
+async function loadSourceBytes(src: string): Promise<LoadResult> {
   const storageMatch = src.match(STORAGE_PUBLIC_RE)
   if (storageMatch) {
     const bucket = storageMatch[1]
@@ -163,30 +182,23 @@ async function loadSourceBytes(
     // fall through to remote fetch + cache
   }
 
-  if (src.startsWith("/")) {
-    if (isPublicRelativePath(src)) {
-      const bytes = await readPublicFile(src)
-      if (!bytes) return { ok: false, reason: "not_found" }
-      return { ok: true, bytes }
-    }
-
-    if (src.startsWith("/storage/")) {
-      const origin = request.nextUrl.origin
-      try {
-        const res = await fetchWithTimeout(`${origin}${src}`)
-        if (!res.ok) return { ok: false, reason: "not_found" }
-        return { ok: true, bytes: Buffer.from(await res.arrayBuffer()) }
-      } catch {
-        return { ok: false, reason: "fetch_failed" }
-      }
-    }
+  if (src.startsWith("/") && isPublicRelativePath(src)) {
+    const bytes = await readPublicFile(src)
+    if (!bytes) return { ok: false, reason: "not_found" }
+    return { ok: true, bytes }
   }
 
-  if (src.startsWith("http://") || src.startsWith("https://")) {
+  if (src.startsWith("https://")) {
     try {
       const res = await fetchWithTimeout(src)
       if (!res.ok) return { ok: false, reason: "not_found" }
-      return { ok: true, bytes: Buffer.from(await res.arrayBuffer()) }
+      const type = res.headers.get("content-type") || ""
+      if (!type.startsWith("image/")) return { ok: false, reason: "not_found" }
+      const declared = Number(res.headers.get("content-length") || 0)
+      if (declared > MAX_SOURCE_BYTES) return { ok: false, reason: "fetch_failed" }
+      const bytes = Buffer.from(await res.arrayBuffer())
+      if (bytes.length > MAX_SOURCE_BYTES) return { ok: false, reason: "fetch_failed" }
+      return { ok: true, bytes }
     } catch {
       return { ok: false, reason: "fetch_failed" }
     }
@@ -228,13 +240,13 @@ async function optimizeImage(
 }
 
 export async function GET(request: NextRequest) {
-  const src = request.nextUrl.searchParams.get("src")?.trim()
-  if (!src) {
+  const rawSrc = request.nextUrl.searchParams.get("src")?.trim()
+  if (!rawSrc) {
     return NextResponse.json({ error: "Missing src parameter" }, { status: 400 })
   }
 
-  const requestHost = request.headers.get("host") ?? "localhost"
-  if (!isAllowedSrc(src, requestHost)) {
+  const src = canonicalSrc(rawSrc)
+  if (!isAllowedSrc(src)) {
     return NextResponse.json({ error: "Invalid src" }, { status: 400 })
   }
 
@@ -253,7 +265,7 @@ export async function GET(request: NextRequest) {
     })
   }
 
-  const loaded = await loadSourceBytes(src, request)
+  const loaded = await loadSourceBytes(src)
   if (!loaded.ok) {
     const headers = { "Cache-Control": "no-store" }
     if (loaded.reason === "fetch_failed") {
@@ -279,27 +291,7 @@ export async function GET(request: NextRequest) {
       },
     })
   } catch {
-    // Fall back to original bytes when sharp cannot transcode (rare formats).
-    const lower = src.toLowerCase()
-    const contentType =
-      lower.endsWith(".png")
-        ? "image/png"
-        : lower.endsWith(".webp")
-          ? "image/webp"
-          : lower.endsWith(".gif")
-            ? "image/gif"
-            : lower.endsWith(".jpg") || lower.endsWith(".jpeg")
-              ? "image/jpeg"
-              : "application/octet-stream"
-    if (contentType !== "application/octet-stream") {
-      return new NextResponse(new Uint8Array(loaded.bytes), {
-        status: 200,
-        headers: {
-          "Content-Type": contentType,
-          "Cache-Control": "public, max-age=86400",
-        },
-      })
-    }
+    // Never echo unprocessed bytes back: that turned the proxy into a file reader.
     return NextResponse.json(
       { error: "Image processing failed" },
       { status: 502, headers: { "Cache-Control": "no-store" } },

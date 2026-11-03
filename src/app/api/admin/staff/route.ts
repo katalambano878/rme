@@ -148,6 +148,13 @@ export async function DELETE(request: NextRequest) {
     if (target?.role === 'superadmin') {
       return NextResponse.json({ error: 'Superadmin accounts cannot be deleted here.' }, { status: 403 });
     }
+    // This page manages staff; only a superadmin may remove another admin.
+    if (target?.role === 'admin' && gate.role !== 'superadmin') {
+      return NextResponse.json({ error: 'Only a superadmin can delete admin accounts.' }, { status: 403 });
+    }
+    if (target?.role === 'customer' || !target) {
+      return NextResponse.json({ error: 'Only staff accounts can be deleted here.' }, { status: 403 });
+    }
 
     const { error: deleteErr } = await admin.auth.admin.deleteUser(userId);
     if (deleteErr) {
@@ -188,7 +195,13 @@ export async function PATCH(request: NextRequest) {
 
     const admin = supabaseAdmin;
     const { data: target } = await admin.from('profiles').select('role').eq('id', userId).maybeSingle();
-    if (target?.role === 'staff' && !Object.values(permissions).some(Boolean)) {
+    if (!target) {
+      return NextResponse.json({ error: 'User not found' }, { status: 404 });
+    }
+    if ((target.role === 'admin' || target.role === 'superadmin') && gate.role !== 'superadmin') {
+      return NextResponse.json({ error: 'Only a superadmin can change admin accounts.' }, { status: 403 });
+    }
+    if (target.role === 'staff' && !Object.values(permissions).some(Boolean)) {
       return NextResponse.json({ error: 'Select at least one area.' }, { status: 400 });
     }
 

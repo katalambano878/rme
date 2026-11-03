@@ -4,7 +4,7 @@
  * The orders table stores shipping_address as a free-form JSONB. Different
  * writers historically used different key names:
  *
- *   - Storefront checkout (/api/paystack/initialize, chat-tools.ts) writes:
+ *   - Storefront checkout (/api/orders/create, chat-tools.ts) writes:
  *       { firstName, lastName, address1, address2, city, region, country, postalCode }
  *
  *   - Admin POS (admin/pos/page.tsx) writes:

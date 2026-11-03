@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { requireAdmin } from '@/lib/auth';
+import { requireStaffArea } from '@/lib/auth';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { checkRateLimit, getClientIdentifier, RATE_LIMITS } from '@/lib/rate-limit';
 
@@ -82,12 +82,15 @@ export async function POST(req: NextRequest) {
     .select()
     .single();
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error) {
+    console.error('[Support feedback] insert failed:', error.message);
+    return NextResponse.json({ error: 'Could not save feedback' }, { status: 500 });
+  }
   return NextResponse.json({ data }, { status: 201 });
 }
 
 export async function GET(req: NextRequest) {
-  const auth = await requireAdmin(req);
+  const auth = await requireStaffArea(req, 'support');
   if (!auth.authenticated) return NextResponse.json({ error: auth.error }, { status: 401 });
   const { data, error } = await supabaseAdmin
     .from('support_feedback')
