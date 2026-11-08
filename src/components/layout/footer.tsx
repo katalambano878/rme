@@ -185,7 +185,10 @@ export function Footer() {
             </div>
             <div className="text-center sm:text-left">
               <p className="text-xs text-white/40">
-                &copy; 2026 {BRAND_NAME}. All rights reserved.
+                &copy; 2026 {BRAND_NAME}. All rights reserved. Powered by{" "}
+                <a href="https://doctorbarns.com" target="_blank" rel="noopener" className="text-white/40 hover:underline">
+                  Doctor Barns Tech
+                </a>
               </p>
               <p className="mt-0.5 text-[10px] uppercase tracking-wider text-white/35">
                 {BRAND_TAGLINE}
