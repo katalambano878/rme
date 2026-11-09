@@ -52,6 +52,13 @@ interface Order {
   is_confirmed: boolean;
 }
 
+/** Checkout writes "Shipping: pickup" or "Shipping: delivery" (older orders: standard/express) into notes. */
+function shippingMethodOf(order: { notes?: string | null }): 'pickup' | 'delivery' | null {
+  const method = (order.notes || '').match(/shipping:\s*([a-z_-]+)/i)?.[1]?.toLowerCase();
+  if (!method) return null;
+  return method === 'pickup' ? 'pickup' : 'delivery';
+}
+
 interface OrderStats {
   label: string;
   count: number;
@@ -75,6 +82,11 @@ export default function AdminOrdersPage() {
   const [verifyingPayment, setVerifyingPayment] = useState<string | null>(null);
   const [showProductStats, setShowProductStats] = useState(false);
   const [showReconcile, setShowReconcile] = useState(false);
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+  const [paymentFilter, setPaymentFilter] = useState<'all' | 'paid' | 'unpaid'>('all');
+  const [shippingFilter, setShippingFilter] = useState<'all' | 'pickup' | 'delivery'>('all');
+  const activeFilterCount = [dateFrom, dateTo, paymentFilter !== 'all', shippingFilter !== 'all'].filter(Boolean).length;
   const [productFilter, setProductFilter] = useState(savedView.productFilter);
   const [highlightedOrderId, setHighlightedOrderId] = useState<string | null>(savedView.lastOpenedOrderId);
   const positionRestored = useRef(false);
@@ -446,7 +458,14 @@ export default function AdminOrdersPage() {
     const matchesStatus = statusFilter === 'all' || order.status === statusFilter;
     const matchesProduct = productFilter === 'all' || 
       order.order_items?.some((item) => item.product_name === productFilter);
-    return matchesViewTab && matchesSearch && matchesStatus && matchesProduct;
+    // Dates are the admin's local calendar days, inclusive at both ends.
+    const placedAt = new Date(order.created_at).getTime();
+    const matchesDate =
+      (!dateFrom || placedAt >= new Date(`${dateFrom}T00:00:00`).getTime()) &&
+      (!dateTo || placedAt <= new Date(`${dateTo}T23:59:59.999`).getTime());
+    const matchesPayment = paymentFilter === 'all' || (paymentFilter === 'paid') === (order.payment_status === 'paid');
+    const matchesShipping = shippingFilter === 'all' || shippingMethodOf(order) === shippingFilter;
+    return matchesViewTab && matchesSearch && matchesStatus && matchesProduct && matchesDate && matchesPayment && matchesShipping;
   }).sort((a, b) => {
     if (sortBy === 'total') return b.total - a.total;
     if (sortBy === 'customer') return getCustomerName(a).localeCompare(getCustomerName(b));
@@ -565,8 +584,8 @@ export default function AdminOrdersPage() {
 
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
         <div className="p-6 border-b border-gray-200">
-          <div className="flex flex-col md:flex-row md:items-center md:justify-between space-y-4 md:space-y-0">
-            <div className="flex-1 max-w-md">
+          <div className="flex flex-col lg:flex-row lg:items-center gap-3">
+            <div className="flex-1 min-w-0 lg:max-w-md">
               <div className="relative">
                 <i className="ri-search-line absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 text-lg w-5 h-5 flex items-center justify-center"></i>
                 <input
@@ -574,23 +593,29 @@ export default function AdminOrdersPage() {
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder="Search by order ID, customer name, or email..."
-                  className="w-full pl-12 pr-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-rose-400 focus:border-rose-400 text-sm"
+                  aria-label="Search orders"
+                  className="w-full min-w-0 pl-12 pr-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-rose-400 focus:border-rose-400 text-sm"
                 />
               </div>
             </div>
 
-            <div className="flex items-center space-x-3">
+            <div className="grid grid-cols-2 sm:flex sm:items-center gap-3 lg:ml-auto">
               <button
                 onClick={() => setShowFilters(!showFilters)}
-                className="px-4 py-3 border-2 border-gray-300 text-gray-700 rounded-lg hover:border-gray-400 transition-colors font-medium whitespace-nowrap cursor-pointer"
+                aria-expanded={showFilters}
+                className={`px-4 py-3 border-2 rounded-lg transition-colors font-medium whitespace-nowrap cursor-pointer ${
+                  activeFilterCount > 0 ? 'border-rose-400 bg-pink-50 text-rose-700' : 'border-gray-300 text-gray-700 hover:border-gray-400'
+                }`}
               >
                 <i className="ri-filter-line mr-2"></i>
-                Filters
+                Filters{activeFilterCount > 0 ? ` (${activeFilterCount})` : ''}
               </button>
+              {/* Long product names would otherwise stretch this select across the whole toolbar. */}
               <select
                 value={productFilter}
                 onChange={(e) => setProductFilter(e.target.value)}
-                className="px-4 py-3 pr-8 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-rose-400 focus:border-rose-400 font-medium cursor-pointer"
+                aria-label="Filter by product"
+                className="w-full sm:w-56 min-w-0 truncate px-4 py-3 pr-8 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-rose-400 focus:border-rose-400 font-medium cursor-pointer"
               >
                 <option value="all">All Products</option>
                 {availableProducts.map((name) => (
@@ -600,7 +625,8 @@ export default function AdminOrdersPage() {
               <select
                 value={sortBy}
                 onChange={(e) => setSortBy(e.target.value)}
-                className="px-4 py-3 pr-8 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-rose-400 focus:border-rose-400 font-medium cursor-pointer"
+                aria-label="Sort orders"
+                className="col-span-2 sm:col-span-1 w-full sm:w-auto min-w-0 px-4 py-3 pr-8 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-rose-400 focus:border-rose-400 font-medium cursor-pointer"
               >
                 <option value="date">Sort by Date</option>
                 <option value="total">Sort by Total</option>
@@ -611,29 +637,41 @@ export default function AdminOrdersPage() {
           </div>
 
           {showFilters && (
-            <div className="mt-4 p-4 bg-gray-50 rounded-lg grid md:grid-cols-3 gap-4">
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">Date Range</label>
-                <input type="date" className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg text-sm" />
+            <div className="mt-4 p-4 bg-gray-50 rounded-lg">
+              <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div>
+                  <label htmlFor="orders-date-from" className="block text-sm font-semibold text-gray-700 mb-2">From</label>
+                  <input id="orders-date-from" type="date" value={dateFrom} max={dateTo || undefined} onChange={(e) => setDateFrom(e.target.value)} className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg text-sm" />
+                </div>
+                <div>
+                  <label htmlFor="orders-date-to" className="block text-sm font-semibold text-gray-700 mb-2">To</label>
+                  <input id="orders-date-to" type="date" value={dateTo} min={dateFrom || undefined} onChange={(e) => setDateTo(e.target.value)} className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg text-sm" />
+                </div>
+                <div>
+                  <label htmlFor="orders-payment" className="block text-sm font-semibold text-gray-700 mb-2">Payment</label>
+                  <select id="orders-payment" value={paymentFilter} onChange={(e) => setPaymentFilter(e.target.value as typeof paymentFilter)} className="w-full px-3 py-2 pr-8 border-2 border-gray-300 rounded-lg text-sm cursor-pointer">
+                    <option value="all">Paid and unpaid</option>
+                    <option value="paid">Paid</option>
+                    <option value="unpaid">Not paid</option>
+                  </select>
+                </div>
+                <div>
+                  <label htmlFor="orders-shipping" className="block text-sm font-semibold text-gray-700 mb-2">Shipping</label>
+                  <select id="orders-shipping" value={shippingFilter} onChange={(e) => setShippingFilter(e.target.value as typeof shippingFilter)} className="w-full px-3 py-2 pr-8 border-2 border-gray-300 rounded-lg text-sm cursor-pointer">
+                    <option value="all">All methods</option>
+                    <option value="delivery">Doorstep delivery</option>
+                    <option value="pickup">Store pickup</option>
+                  </select>
+                </div>
               </div>
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">Payment Method</label>
-                <select className="w-full px-3 py-2 pr-8 border-2 border-gray-300 rounded-lg text-sm cursor-pointer">
-                  <option>All Methods</option>
-                  <option>Moolre</option>
-                  <option>Mobile Money</option>
-                  <option>Card</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">Shipping Method</label>
-                <select className="w-full px-3 py-2 pr-8 border-2 border-gray-300 rounded-lg text-sm cursor-pointer">
-                  <option>All Methods</option>
-                  <option>Standard</option>
-                  <option>Express</option>
-                  <option>Store Pickup</option>
-                </select>
-              </div>
+              {activeFilterCount > 0 && (
+                <button
+                  onClick={() => { setDateFrom(''); setDateTo(''); setPaymentFilter('all'); setShippingFilter('all'); }}
+                  className="mt-3 text-sm font-medium text-rose-700 hover:underline cursor-pointer"
+                >
+                  Clear filters
+                </button>
+              )}
             </div>
           )}
         </div>
