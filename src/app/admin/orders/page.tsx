@@ -11,6 +11,8 @@ import {
   type OrdersViewTab,
 } from '@/lib/admin-orders-view-state';
 import ProductSalesStats from './ProductSalesStats';
+import ReconcilePanel from './ReconcilePanel';
+import { classifyOrder, FULFILLED_STATUSES } from '@/lib/order-classification';
 
 /** The parts of the orders.shipping_address jsonb this page reads. */
 interface ShippingAddressJson {
@@ -50,58 +52,6 @@ interface Order {
   is_confirmed: boolean;
 }
 
-/**
- * Smart classifier — decides whether an order belongs in the "Confirmed" or
- * "Abandoned Carts" tab. The previous logic only checked the `payments` table,
- * which incorrectly flagged real sales as abandoned in three cases:
- *
- *   1. POS walk-in sales paid via MoMo (cashier received money in person; no
- *      payment row gets written until / unless the Moolre webhook fires).
- *   2. Online orders the admin manually advanced to processing/shipped/
- *      delivered (clearly fulfilled, but no `paid` payment row existed).
- *   3. Cash-on-delivery style flows added in the future.
- *
- * The new rules treat an order as confirmed if ANY of these are true:
- *   - it has a successful payment row (paid / completed)
- *   - the admin has advanced its status past `pending` (processing, shipped,
- *     delivered, completed) — i.e. someone is actively fulfilling it
- *   - it's a POS sale (the customer was physically at the counter)
- *
- * Only "still pending, never advanced, no payment recorded, not a POS sale"
- * shows up under Abandoned Carts now.
- */
-function isPosSale(order: { notes?: string | null; guest_email?: string | null }): boolean {
-  const notes = (order.notes || '').toLowerCase();
-  if (notes.startsWith('pos sale') || notes.includes('pos sale')) return true;
-  if (notes.includes('pos checkout') || notes.includes('pos walk')) return true;
-  if ((order.guest_email || '').toLowerCase() === 'pos-walkin@store.local') return true;
-  return false;
-}
-
-const FULFILLED_STATUSES = new Set([
-  'paid',
-  'processing',
-  'shipped',
-  'out_for_delivery',
-  'delivered',
-  'completed',
-]);
-
-function classifyOrder(order: {
-  status?: string | null;
-  payments?: { status: string }[] | null;
-  notes?: string | null;
-  guest_email?: string | null;
-}): { isPaid: boolean; isPos: boolean; isConfirmed: boolean } {
-  const isPaid = !!order.payments?.some((p) => p.status === 'paid' || p.status === 'completed');
-  const isPos = isPosSale({ notes: order.notes, guest_email: order.guest_email });
-  const status = (order.status || '').toLowerCase();
-  const advancedByAdmin = FULFILLED_STATUSES.has(status);
-
-  const isConfirmed = isPaid || advancedByAdmin || isPos;
-  return { isPaid, isPos, isConfirmed };
-}
-
 interface OrderStats {
   label: string;
   count: number;
@@ -124,6 +74,7 @@ export default function AdminOrdersPage() {
   const [sendingPaymentLink, setSendingPaymentLink] = useState<string | null>(null);
   const [verifyingPayment, setVerifyingPayment] = useState<string | null>(null);
   const [showProductStats, setShowProductStats] = useState(false);
+  const [showReconcile, setShowReconcile] = useState(false);
   const [productFilter, setProductFilter] = useState(savedView.productFilter);
   const [highlightedOrderId, setHighlightedOrderId] = useState<string | null>(savedView.lastOpenedOrderId);
   const positionRestored = useRef(false);
@@ -529,6 +480,14 @@ export default function AdminOrdersPage() {
         </div>
         <div className="flex items-center gap-3 w-full md:w-auto">
           <button
+            onClick={() => setShowReconcile(true)}
+            title="Check with Moolre which unpaid orders were actually paid"
+            className="flex-1 md:flex-none bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 px-6 py-3 rounded-lg font-semibold transition-colors whitespace-nowrap cursor-pointer shadow-sm flex items-center justify-center"
+          >
+            <i className="ri-scales-3-line mr-2"></i>
+            Reconcile
+          </button>
+          <button
             onClick={() => setShowProductStats(true)}
             className="flex-1 md:flex-none bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 px-6 py-3 rounded-lg font-semibold transition-colors whitespace-nowrap cursor-pointer shadow-sm flex items-center justify-center"
           >
@@ -863,6 +822,16 @@ export default function AdminOrdersPage() {
       </div>
 
       <ProductSalesStats isOpen={showProductStats} onClose={() => setShowProductStats(false)} />
+      <ReconcilePanel
+        isOpen={showReconcile}
+        onClose={() => setShowReconcile(false)}
+        orders={orders}
+        customerName={(orderId) => {
+          const order = orders.find((o) => o.id === orderId);
+          return order ? getCustomerName(order) : '';
+        }}
+        onChanged={fetchOrders}
+      />
     </div>
   );
 }

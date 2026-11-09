@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 import { sendOrderConfirmation } from "@/lib/notifications"
 import { reduceOrderStock } from "@/lib/order-stock"
 import { amountMatchesOrder } from "@/lib/moolre-status"
+import { FULFILLED_STATUSES } from "@/lib/order-classification"
 
 type AdminClient = SupabaseClient
 
@@ -9,6 +10,7 @@ export type FulfillOrder = {
   id: string
   order_number: string
   grand_total: number
+  status?: string | null
   guest_email?: string | null
   guest_phone?: string | null
   shipping_address?: unknown
@@ -46,7 +48,7 @@ async function findOrderByNumber(
   const { data, error } = await supabase
     .from("orders")
     .select(
-      "id, order_number, grand_total, guest_email, guest_phone, shipping_address, payments(status)",
+      "id, order_number, grand_total, status, guest_email, guest_phone, shipping_address, payments(status)",
     )
     .eq("order_number", orderNumber)
     .maybeSingle()
@@ -224,11 +226,15 @@ export async function fulfillMoolrePaidOrder(
     if (error) console.error("[Moolre fulfill] payment insert:", error.message)
   }
 
-  const { error: orderUpdateErr } = await supabase
-    .from("orders")
-    .update({ status: "paid", updated_at: new Date().toISOString() })
-    .eq("id", order.id)
-  if (orderUpdateErr) console.error("[Moolre fulfill] order update:", orderUpdateErr.message)
+  // An order the admin already moved on (packaged, with rider, delivered…)
+  // keeps its status; only orders still waiting on payment become "paid".
+  if (!FULFILLED_STATUSES.has((order.status || "").toLowerCase())) {
+    const { error: orderUpdateErr } = await supabase
+      .from("orders")
+      .update({ status: "paid", updated_at: new Date().toISOString() })
+      .eq("id", order.id)
+    if (orderUpdateErr) console.error("[Moolre fulfill] order update:", orderUpdateErr.message)
+  }
 
   try {
     const stockResult = await reduceOrderStock(supabase, order.id)

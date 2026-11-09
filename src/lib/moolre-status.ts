@@ -47,19 +47,37 @@ export function amountMatchesOrder(paid: number, expected: number): boolean {
   return paid > expected && paid - expected <= feeAllowance + 0.05
 }
 
+/** Moolre API origin; overridable so a test double can stand in locally. */
+export function moolreApiBase(): string {
+  return (process.env.MOOLRE_API_URL || "https://api.moolre.com").replace(/\/+$/, "")
+}
+
+export function moolreConfigured(): boolean {
+  return !!(process.env.MOOLRE_API_USER && process.env.MOOLRE_API_PUBKEY && process.env.MOOLRE_ACCOUNT_NUMBER)
+}
+
 export async function fetchMoolreTransaction(opts: {
   id: string
   idtype: 1 | 2
 }): Promise<MoolreTx | null> {
+  return (await lookupMoolreTransaction(opts)).tx
+}
+
+/**
+ * Like fetchMoolreTransaction, but says whether Moolre actually answered, so
+ * "no such payment" can be told apart from "could not reach Moolre".
+ */
+export async function lookupMoolreTransaction(opts: {
+  id: string
+  idtype: 1 | 2
+}): Promise<{ reached: boolean; tx: MoolreTx | null }> {
   const accountnumber = process.env.MOOLRE_ACCOUNT_NUMBER
-  if (!process.env.MOOLRE_API_USER || !process.env.MOOLRE_API_PUBKEY || !accountnumber) {
-    return null
-  }
+  if (!moolreConfigured()) return { reached: false, tx: null }
 
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), 15_000)
   try {
-    const res = await fetch("https://api.moolre.com/open/transact/status", {
+    const res = await fetch(`${moolreApiBase()}/open/transact/status`, {
       method: "POST",
       headers: headers(),
       body: JSON.stringify({
@@ -70,12 +88,12 @@ export async function fetchMoolreTransaction(opts: {
       }),
       signal: controller.signal,
     })
+    if (!res.ok && res.status >= 500) return { reached: false, tx: null }
     const json = (await res.json()) as StatusEnvelope
-    if (!json?.data) return null
-    return json.data
+    return { reached: true, tx: json?.data ?? null }
   } catch (e) {
     console.warn("[Moolre status] lookup failed:", opts, e)
-    return null
+    return { reached: false, tx: null }
   } finally {
     clearTimeout(timeout)
   }
