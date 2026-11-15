@@ -12,6 +12,7 @@ import { adminImageSrc, normalizePublicImageSrc } from '@/lib/product-image';
 import { ACCEPT_PRODUCT_IMAGES, prepareImageForUpload } from '@/lib/browser-image-upload';
 import { normalizeHex, sameOptionValue } from '@/lib/variant-options';
 import { planVariantSync, type DesiredVariant } from '@/lib/admin-variant-sync';
+import { ProductSeoPanel } from '@/components/admin/ProductSeoPanel';
 
 const DEFAULT_CUSTOM_HEX = '#888888';
 
@@ -345,6 +346,17 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
         Boolean(isEditMode && String(initialData?.slug || '').trim()),
     );
     const [keywords, setKeywords] = useState(initialData?.tags?.join(', ') || '');
+    const storedSeo = (initialData?.metadata && typeof initialData.metadata === 'object' ? (initialData.metadata as { seo?: Record<string, unknown> }).seo : undefined) || {};
+    const [focusKeyword, setFocusKeyword] = useState(String(storedSeo.focusKeyword || ''));
+    const [ogTitle, setOgTitle] = useState(String(storedSeo.ogTitle || ''));
+    const [ogDescription, setOgDescription] = useState(String(storedSeo.ogDescription || ''));
+    const [imageAlt, setImageAlt] = useState(String(storedSeo.imageAlt || ''));
+    const [canonical, setCanonical] = useState(String(storedSeo.canonical || ''));
+    const [indexable, setIndexable] = useState(storedSeo.index !== false);
+    const [followable, setFollowable] = useState(storedSeo.follow !== false);
+    const [seoBrand, setSeoBrand] = useState(String(storedSeo.brand || ''));
+    const [gtin, setGtin] = useState(String(storedSeo.gtin || ''));
+    const [breadcrumb, setBreadcrumb] = useState(String(storedSeo.breadcrumb || ''));
 
     const tabs = [
         { id: 'general', label: 'General', icon: 'ri-information-line' },
@@ -530,6 +542,10 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
                 metadata: {
                     ...restMeta,
                     ...(hasPromoSalesPrice ? { sales_price: sal } : {}),
+                    seo: {
+                        focusKeyword, ogTitle, ogDescription, imageAlt, canonical,
+                        index: indexable, follow: followable, brand: seoBrand, gtin, breadcrumb,
+                    },
                     low_stock_threshold: parseInt(String(lowStockThreshold)) || 5,
                     preorder_shipping: preorderShipping.trim() || null,
                     on_sale: metaOnSale,
@@ -1402,162 +1418,57 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
                     )}
 
                     {activeTab === 'seo' && (
-                        <div className="space-y-6 max-w-3xl">
-                            <div className="flex flex-wrap items-start justify-between gap-3">
-                                <div>
-                                    <h3 className="text-lg font-bold text-gray-900 mb-1">Search Engine Optimization</h3>
-                                    <p className="text-gray-600">Title, description, link, and the words Google uses to find this product.</p>
-                                </div>
-                                <button
-                                    type="button"
-                                    onClick={() => {
-                                        setSeoTitle((productName ? `${productName} | ${BRAND_NAME}` : '').slice(0, 60));
-                                        setSeoTitleTouched(true);
-                                        const plain = (description || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
-                                        setMetaDescription(plain.slice(0, 160));
-                                        setMetaDescTouched(true);
-                                        setUrlSlug(slugifyProductName(productName));
-                                        setSlugTouched(true);
-                                    }}
-                                    className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-800 hover:bg-gray-50"
-                                >
-                                    Fill from this product
-                                </button>
-                            </div>
-
-                            {/* Google Search Preview */}
-                            {(seoTitle || urlSlug) && (
-                                <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
-                                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Google Search Preview</p>
-                                    <p className="text-lg text-blue-700 font-medium truncate">{seoTitle || productName}</p>
-                                    <p className="text-sm text-green-700 truncate">{publicOrigin}/products/{urlSlug || slugifyProductName(productName)}</p>
-                                    <p className="text-sm text-gray-600 line-clamp-2 mt-0.5">{metaDescription || description?.replace(/<[^>]*>/g, '').slice(0, 160) || 'No description set.'}</p>
-                                </div>
-                            )}
-
-                            <div>
-                                <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
-                                    <label className="block text-sm font-semibold text-gray-900">
-                                        Page Title
-                                    </label>
-                                    <button
-                                        type="button"
-                                        onClick={() => {
-                                            setSeoTitle(productName ? `${productName} | ${BRAND_NAME}` : '');
-                                            setSeoTitleTouched(false);
-                                        }}
-                                        className="text-sm font-medium text-rose-600 hover:text-rose-700 underline-offset-2 hover:underline"
-                                    >
-                                        Sync with product name
-                                    </button>
-                                </div>
-                                <input
-                                    type="text"
-                                    value={seoTitle}
-                                    onChange={(e) => {
-                                        setSeoTitleTouched(true);
-                                        setSeoTitle(e.target.value);
-                                    }}
-                                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-rose-400 focus:border-rose-400"
-                                    placeholder="Seo friendly title"
-                                />
-                                <p className={`text-sm mt-2 ${seoTitle.length > 60 ? 'text-amber-600' : 'text-gray-500'}`}>
-                                    {seoTitle.length}/60 characters recommended
-                                </p>
-                            </div>
-
-                            <div>
-                                <label className="block text-sm font-semibold text-gray-900 mb-2">
-                                    Meta Description
-                                </label>
-                                <textarea
-                                    rows={3}
-                                    maxLength={500}
-                                    value={metaDescription}
-                                    onChange={(e) => {
-                                        setMetaDescTouched(true);
-                                        setMetaDescription(e.target.value);
-                                    }}
-                                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-rose-400 focus:border-rose-400 resize-none"
-                                    placeholder="Seo friendly description"
-                                />
-                                <p className={`text-sm mt-2 ${metaDescription.length > 160 ? 'text-amber-600' : 'text-gray-500'}`}>
-                                    {metaDescription.length}/160 characters recommended
-                                </p>
-                            </div>
-
-                            <div>
-                                <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
-                                    <label className="block text-sm font-semibold text-gray-900">
-                                        URL Slug
-                                    </label>
-                                    <button
-                                        type="button"
-                                        onClick={syncSlugFromTitle}
-                                        className="text-sm font-medium text-rose-600 hover:text-rose-700 underline-offset-2 hover:underline"
-                                    >
-                                        Sync with product name
-                                    </button>
-                                </div>
-                                <div className="flex min-w-0 items-stretch">
-                                    <span className="shrink-0 max-w-[min(100%,14rem)] truncate text-gray-600 bg-gray-100 px-3 py-3 border-2 border-r-0 border-gray-300 rounded-l-lg text-sm sm:max-w-none sm:px-4">
-                                        {publicOrigin}/products/
-                                    </span>
-                                    <input
-                                        type="text"
-                                        value={urlSlug}
-                                        onChange={(e) => {
-                                            setSlugTouched(true);
-                                            setUrlSlug(e.target.value);
-                                        }}
-                                        className="min-w-0 flex-1 px-4 py-3 border-2 border-gray-300 rounded-r-lg focus:ring-2 focus:ring-rose-400 focus:border-rose-400"
-                                        placeholder="product-slug"
-                                        autoComplete="off"
-                                        spellCheck={false}
-                                    />
-                                </div>
-                                <p className="text-sm text-gray-500 mt-2">
-                                    Auto-updates when you change the product name until you edit this field. Use &quot;Sync with product name&quot; to regenerate.
-                                </p>
-                            </div>
-
-                            <div>
-                                <label className="block text-sm font-semibold text-gray-900 mb-2">Search words</label>
-                                <div className="mb-2 flex flex-wrap gap-2">
-                                    {(keywords as string).split(',').map((word) => word.trim()).filter(Boolean).map((word) => (
-                                        <button
-                                            key={word}
-                                            type="button"
-                                            onClick={() => setKeywords((keywords as string).split(',').map((item) => item.trim()).filter((item) => item && item !== word).join(', '))}
-                                            className="rounded-full border border-gray-300 bg-white px-3 py-1 text-sm"
-                                        >
-                                            {word} ×
-                                        </button>
-                                    ))}
-                                </div>
-                                <input
-                                    type="text"
-                                    onKeyDown={(e) => {
-                                        if (e.key !== 'Enter' && e.key !== ',') return;
-                                        e.preventDefault();
-                                        const next = (e.target as HTMLInputElement).value.trim().replace(/,/g, '');
-                                        if (!next) return;
-                                        const current = (keywords as string).split(',').map((item) => item.trim()).filter(Boolean);
-                                        if (current.some((item) => item.toLowerCase() === next.toLowerCase())) return;
-                                        setKeywords([...current, next].join(', '));
-                                        (e.target as HTMLInputElement).value = '';
-                                    }}
-                                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-rose-400 focus:border-rose-400"
-                                    placeholder="Type a word and press Enter, for example lip gloss"
-                                />
-                                <p className="text-sm text-gray-500 mt-2">Saved on the product and used as the page keywords. Click a word to remove it.</p>
-                            </div>
-                            <div className="rounded-lg border border-gray-200 bg-white p-4">
-                                <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">Social share</p>
-                                <p className="font-semibold text-gray-900">{seoTitle || productName || 'Product name'}</p>
-                                <p className="text-sm text-gray-600 mt-1">{metaDescription || 'The description people see when this product is shared.'}</p>
-                            </div>
-                        </div>
+                        <ProductSeoPanel
+                            productName={productName}
+                            description={description}
+                            publicOrigin={publicOrigin}
+                            seoTitle={seoTitle}
+                            setSeoTitle={setSeoTitle}
+                            metaDescription={metaDescription}
+                            setMetaDescription={setMetaDescription}
+                            urlSlug={urlSlug}
+                            setUrlSlug={setUrlSlug}
+                            keywords={keywords}
+                            setKeywords={setKeywords}
+                            focusKeyword={focusKeyword}
+                            setFocusKeyword={setFocusKeyword}
+                            ogTitle={ogTitle}
+                            setOgTitle={setOgTitle}
+                            ogDescription={ogDescription}
+                            setOgDescription={setOgDescription}
+                            imageAlt={imageAlt}
+                            setImageAlt={setImageAlt}
+                            canonical={canonical}
+                            setCanonical={setCanonical}
+                            indexable={indexable}
+                            setIndexable={setIndexable}
+                            followable={followable}
+                            setFollowable={setFollowable}
+                            brand={seoBrand}
+                            setBrand={setSeoBrand}
+                            gtin={gtin}
+                            setGtin={setGtin}
+                            breadcrumb={breadcrumb}
+                            setBreadcrumb={setBreadcrumb}
+                            onTouchTitle={() => setSeoTitleTouched(true)}
+                            onTouchDescription={() => setMetaDescTouched(true)}
+                            onTouchSlug={() => setSlugTouched(true)}
+                            onSyncTitle={() => { setSeoTitle(productName ? `${productName} | ${BRAND_NAME}` : ''); setSeoTitleTouched(true); }}
+                            onSyncSlug={syncSlugFromTitle}
+                            onFill={() => {
+                                setSeoTitle((productName ? `${productName} | ${BRAND_NAME}` : '').slice(0, 60));
+                                setSeoTitleTouched(true);
+                                const plain = (description || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+                                setMetaDescription(plain.slice(0, 160));
+                                setMetaDescTouched(true);
+                                setUrlSlug(slugifyProductName(productName));
+                                setSlugTouched(true);
+                                setFocusKeyword(productName);
+                                setImageAlt(productName);
+                                setOgTitle(`${productName} | ${BRAND_NAME}`);
+                                setBreadcrumb(productName);
+                            }}
+                        />
                     )}
                 </div>
             </div>

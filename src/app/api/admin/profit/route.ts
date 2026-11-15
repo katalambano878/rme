@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server"
 import { requireAdmin } from "@/lib/auth"
 import { supabaseAdmin } from "@/lib/supabase-admin"
+import { parseStorePricing, effectivePriceForProduct, withResolvedSalePrice } from "@/lib/effective-price"
+import { isPosSale } from "@/lib/order-classification"
 
 export const dynamic = "force-dynamic"
 
@@ -13,56 +15,72 @@ export async function GET(request: NextRequest) {
   }
 
   const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
-  const [productsRes, soldRes] = await Promise.all([
+  const [productsRes, costsRes, settingsRes, recentOrdersRes] = await Promise.all([
     supabaseAdmin
       .from("products")
-      .select("id, name, sku, status, price, quantity, categories(name), variants(price, stock_quantity), product_images(url, sort_order), product_costs(cost_price, supplier_name, notes, updated_at)")
+      .select("id, name, sku, status, price, sale_price, compare_at_price, quantity, metadata, categories(name), variants(price, sale_price, compare_at_price, stock_quantity), product_images(url, sort_order)")
       .neq("status", "archived")
       .order("name"),
-    supabaseAdmin
-      .from("order_items")
-      .select("product_id, quantity, orders!inner(created_at, payments(status))")
-      .gte("orders.created_at", since),
+    supabaseAdmin.from("product_costs").select("product_id, cost_price, supplier_name, notes, updated_at"),
+    supabaseAdmin.from("site_settings").select("feature_flags").eq("id", 1).maybeSingle(),
+    supabaseAdmin.from("orders").select("id, notes, guest_email").gte("created_at", since),
   ])
 
-  if (productsRes.error) {
-    return NextResponse.json({ error: productsRes.error.message }, { status: 500 })
-  }
+  if (productsRes.error) return NextResponse.json({ error: productsRes.error.message }, { status: 500 })
 
+  const recentIds = (recentOrdersRes.data ?? []).map((order) => order.id)
+  const paidOrders = new Set<string>()
+  if (recentIds.length) {
+    const { data: payments } = await supabaseAdmin.from("payments").select("order_id, status").in("order_id", recentIds)
+    for (const payment of payments ?? []) {
+      if (payment.status === "paid" || payment.status === "completed") paidOrders.add(payment.order_id)
+    }
+    for (const order of recentOrdersRes.data ?? []) {
+      if (isPosSale({ notes: order.notes, guest_email: order.guest_email })) paidOrders.add(order.id)
+    }
+  }
+  const { data: soldRows } = paidOrders.size
+    ? await supabaseAdmin.from("order_items").select("product_id, quantity, order_id").in("order_id", [...paidOrders])
+    : { data: [] }
   const sold = new Map<string, number>()
-  for (const row of soldRes.data ?? []) {
-    const payments = (row.orders as { payments?: { status: string }[] } | null)?.payments
-    const paid = payments?.some((p) => p.status === "paid" || p.status === "completed")
-    if (!paid || !row.product_id) continue
+  for (const row of soldRows ?? []) {
+    if (!row.product_id || !paidOrders.has(row.order_id)) continue
     sold.set(row.product_id, (sold.get(row.product_id) ?? 0) + (Number(row.quantity) || 0))
   }
 
-  const products = (productsRes.data ?? []).map((p) => {
-    const variants = (p.variants ?? []) as { price: number | string | null }[]
-    const prices = variants.map((v) => Number(v.price)).filter((n) => n > 0)
-    const productPrice = Number(p.price)
-    const sellingPrice = prices.length ? Math.min(...prices) : productPrice > 0 ? productPrice : null
-    const images = [...((p.product_images ?? []) as { url: string | null; sort_order: number | null }[])].sort(
+  const costs = new Map((costsRes.data ?? []).map((row) => [row.product_id, row]))
+  const pricing = parseStorePricing(settingsRes.data?.feature_flags)
+
+  const products = (productsRes.data ?? []).map((product) => {
+    const priced = withResolvedSalePrice(product)
+    const resolved = effectivePriceForProduct(priced, pricing)
+    const variants = (product.variants ?? []) as { stock_quantity?: number }[]
+    const stock = variants.length
+      ? variants.reduce((sum, variant) => sum + (Number(variant.stock_quantity) || 0), 0)
+      : Number(product.quantity) || 0
+    const images = [...((product.product_images ?? []) as { url: string | null; sort_order: number | null }[])].sort(
       (a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0),
     )
-    const cost = Array.isArray(p.product_costs) ? p.product_costs[0] : p.product_costs
-    const cat = Array.isArray(p.categories) ? p.categories[0] : p.categories
-    const stock = variants.length
-      ? variants.reduce((sum, v) => sum + (Number((v as { stock_quantity?: number }).stock_quantity) || 0), 0)
-      : Number(p.quantity) || 0
+    const category = Array.isArray(product.categories) ? product.categories[0] : product.categories
+    const cost = costs.get(product.id)
+    const regularPrice = resolved.original > 0 ? resolved.original : Number(product.price) || 0
+    const sellingPrice = resolved.effective > 0 ? resolved.effective : regularPrice
     return {
-      id: p.id,
-      name: p.name,
-      sku: p.sku,
-      status: p.status,
-      category: cat?.name ?? null,
+      id: product.id,
+      name: product.name,
+      sku: product.sku,
+      status: product.status,
+      category: category?.name ?? null,
       image: images[0]?.url ?? null,
       stock,
+      regularPrice,
       sellingPrice,
+      onPromotion: resolved.onSale,
       costPrice: cost?.cost_price != null ? Number(cost.cost_price) : null,
-      supplierName: cost?.supplier_name ?? "",
-      notes: cost?.notes ?? "",
-      unitsSold30d: sold.get(p.id) ?? 0,
+      supplierName: cost?.supplier_name ?? null,
+      notes: cost?.notes ?? null,
+      costUpdatedAt: cost?.updated_at ?? null,
+      unitsSold30d: sold.get(product.id) ?? 0,
     }
   })
 

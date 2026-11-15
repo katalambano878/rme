@@ -41,6 +41,7 @@ const PRODUCT_SELECT = `
   delivery_estimate,
   seo_title,
   seo_description,
+  tags,
   quantity,
   sku,
   created_at,
@@ -67,6 +68,7 @@ type ProductRow = {
   delivery_estimate: string | null
   seo_title: string | null
   seo_description: string | null
+  tags: string[] | null
   quantity: number | null
   sku: string | null
   created_at: string
@@ -209,6 +211,8 @@ export function mapProductRowToProduct(row: ProductRow, saleEnabled: StorePricin
     createdAt: row.created_at,
     seoTitle: row.seo_title?.trim() || undefined,
     seoDescription: row.seo_description?.trim() || undefined,
+    keywords: row.tags ?? [],
+    seo: (row.metadata?.seo && typeof row.metadata.seo === "object" ? row.metadata.seo : undefined) as Product["seo"],
   }
 }
 

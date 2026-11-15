@@ -43,21 +43,17 @@ export async function generateMetadata({
   return {
     title,
     description,
-    keywords: [
-      product.name,
-      product.categoryName,
-      `${product.name} Ghana`,
-      `buy ${product.name}`,
-      `${product.categoryName} Ghana`,
-      BRAND_NAME,
-      "Ghana beauty",
-    ],
+    keywords: product.keywords?.length ? product.keywords : [product.name, product.categoryName, BRAND_NAME],
+    robots: {
+      index: product.seo?.index !== false,
+      follow: product.seo?.follow !== false,
+    },
     alternates: {
-      canonical: productUrl,
+      canonical: product.seo?.canonical || productUrl,
     },
     openGraph: {
-      title: product.seoTitle || `${product.name} | ${BRAND_NAME}`,
-      description,
+      title: product.seo?.ogTitle || product.seoTitle || `${product.name} | ${BRAND_NAME}`,
+      description: product.seo?.ogDescription || description,
       url: productUrl,
       siteName: BRAND_NAME,
       type: "website",
@@ -68,15 +64,15 @@ export async function generateMetadata({
               url: primaryImage,
               width: 800,
               height: 800,
-              alt: product.name,
+              alt: product.seo?.imageAlt || product.name,
             },
           ]
           : [{ url: "/opengraph-image.png", alt: BRAND_NAME }],
     },
     twitter: {
       card: "summary_large_image",
-      title: `${product.name} | ${BRAND_NAME}`,
-      description,
+      title: product.seo?.ogTitle || `${product.name} | ${BRAND_NAME}`,
+      description: product.seo?.ogDescription || description,
       images: primaryImage ? [primaryImage] : ["/opengraph-image.png"],
     },
     other: {

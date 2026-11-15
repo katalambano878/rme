@@ -165,6 +165,7 @@ export default function AdminLayout({
     title: string;
     icon: string;
     path: string;
+    group: 'Sell' | 'Catalog' | 'Customers' | 'Reports' | 'Team' | 'Store';
     exact?: boolean;
     badge?: string;
     moduleId?: string;
@@ -175,6 +176,7 @@ export default function AdminLayout({
       title: 'Dashboard',
       icon: 'ri-dashboard-line',
       path: '/admin',
+      group: 'Sell',
       exact: true,
       permissionKey: 'dashboard',
     },
@@ -182,6 +184,7 @@ export default function AdminLayout({
       title: 'Orders',
       icon: 'ri-shopping-bag-line',
       path: '/admin/orders',
+      group: 'Sell',
       badge: '',
       permissionKey: 'orders',
     },
@@ -189,90 +192,105 @@ export default function AdminLayout({
       title: 'POS System',
       icon: 'ri-store-3-line',
       path: '/admin/pos',
+      group: 'Sell',
       permissionKey: 'pos',
     },
     {
       title: 'Live shoppers',
       icon: 'ri-user-heart-line',
       path: '/admin/live',
+      group: 'Sell',
       permissionKey: 'live',
     },
     {
       title: 'Profit margins',
       icon: 'ri-line-chart-line',
       path: '/admin/profit',
+      group: 'Reports',
       permissionKey: 'profit',
     },
     {
       title: 'End of day',
       icon: 'ri-calendar-check-line',
       path: '/admin/end-of-day',
+      group: 'Sell',
       permissionKey: 'end_of_day',
     },
     {
       title: 'Buy SMS',
       icon: 'ri-bank-card-line',
       path: '/admin/sms-credit',
+      group: 'Sell',
       requiresAdmin: true,
     },
     {
       title: 'Products',
       icon: 'ri-box-3-line',
       path: '/admin/products',
+      group: 'Catalog',
       permissionKey: 'products',
     },
     {
       title: 'Sale & discounts',
       icon: 'ri-price-tag-3-line',
       path: '/admin/sales',
+      group: 'Catalog',
       permissionKey: 'sales',
     },
     {
       title: 'Categories',
       icon: 'ri-folder-line',
       path: '/admin/categories',
+      group: 'Catalog',
       permissionKey: 'categories',
     },
     {
       title: 'Customers',
       icon: 'ri-group-line',
       path: '/admin/customers',
+      group: 'Customers',
       permissionKey: 'customers',
     },
     {
       title: 'Staff',
       icon: 'ri-team-line',
       path: '/admin/staff',
+      group: 'Team',
       requiresAdmin: true,
     },
     {
       title: 'Reviews',
       icon: 'ri-chat-smile-2-line',
       path: '/admin/reviews',
+      group: 'Customers',
       permissionKey: 'reviews',
     },
     {
       title: 'Inventory',
       icon: 'ri-stack-line',
       path: '/admin/inventory',
+      group: 'Catalog',
       permissionKey: 'inventory',
     },
     {
       title: 'Analytics',
       icon: 'ri-bar-chart-line',
       path: '/admin/analytics',
+      group: 'Reports',
       permissionKey: 'analytics',
     },
     {
       title: 'Coupons',
       icon: 'ri-coupon-2-line',
       path: '/admin/coupons',
+      group: 'Catalog',
       permissionKey: 'coupons',
     },
     {
       title: 'Customer Insights',
       icon: 'ri-user-search-line',
       path: '/admin/customer-insights',
+      group: 'Customers',
       moduleId: 'customer-insights',
       permissionKey: 'customer_insights',
     },
@@ -280,6 +298,7 @@ export default function AdminLayout({
       title: 'Notifications',
       icon: 'ri-notification-3-line',
       path: '/admin/notifications',
+      group: 'Customers',
       moduleId: 'notifications',
       permissionKey: 'notifications',
     },
@@ -287,12 +306,14 @@ export default function AdminLayout({
       title: 'Support Hub',
       icon: 'ri-customer-service-2-line',
       path: '/admin/support',
+      group: 'Customers',
       permissionKey: 'support',
     },
     {
       title: 'SMS Debugger',
       icon: 'ri-message-2-line',
       path: '/admin/test-sms',
+      group: 'Store',
       permissionKey: 'sms_debug',
     },
 
@@ -300,6 +321,7 @@ export default function AdminLayout({
       title: 'Blog',
       icon: 'ri-article-line',
       path: '/admin/blog',
+      group: 'Store',
       moduleId: 'blog',
       permissionKey: 'blog',
     },
@@ -307,6 +329,7 @@ export default function AdminLayout({
       title: 'Modules',
       icon: 'ri-puzzle-line',
       path: '/admin/modules',
+      group: 'Store',
       permissionKey: 'modules',
     },
   ];
@@ -352,29 +375,40 @@ export default function AdminLayout({
             <span className="text-[10px] font-semibold text-gray-500 tracking-wide">ADMIN</span>
           </Link>
 
-          <nav className="space-y-0.5">
-            {visibleMenuItems.map((item) => {
-              const isActive = item.exact ? pathname === item.path : pathname.startsWith(item.path);
+          <nav className="space-y-4">
+            {(['Sell', 'Catalog', 'Customers', 'Reports', 'Team', 'Store'] as const).map((group) => {
+              const items = visibleMenuItems.filter((item) => item.group === group);
+              if (!items.length) return null;
               return (
-                <Link
-                  key={item.path}
-                  href={item.path}
-                  onClick={() => window.innerWidth < 1024 && setIsSidebarOpen(false)} // Close on mobile click
-                  className={`flex items-center justify-between px-3 py-2 rounded-lg transition-colors cursor-pointer ${isActive
-                    ? 'bg-pink-50 text-rose-800 font-semibold'
-                    : 'text-gray-700 hover:bg-gray-50'
-                    }`}
-                >
-                  <div className="flex items-center gap-2.5 min-w-0">
-                    <i className={`${item.icon} text-base w-4 h-4 shrink-0 flex items-center justify-center`}></i>
-                    <span className="truncate">{item.title}</span>
+                <div key={group}>
+                  <p className="px-3 mb-1 text-[10px] font-bold uppercase tracking-[0.18em] text-gray-400">{group}</p>
+                  <div className="space-y-0.5">
+                    {items.map((item) => {
+                      const isActive = item.exact ? pathname === item.path : pathname.startsWith(item.path);
+                      return (
+                        <Link
+                          key={item.path}
+                          href={item.path}
+                          onClick={() => window.innerWidth < 1024 && setIsSidebarOpen(false)}
+                          className={`flex items-center justify-between px-3 py-2 rounded-lg transition-colors cursor-pointer ${isActive
+                            ? 'bg-pink-50 text-rose-800 font-semibold'
+                            : 'text-gray-700 hover:bg-gray-50'
+                            }`}
+                        >
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <i className={`${item.icon} text-base w-4 h-4 shrink-0 flex items-center justify-center`}></i>
+                            <span className="truncate">{item.title}</span>
+                          </div>
+                          {item.badge && (
+                            <span className="bg-red-100 text-red-700 text-[10px] font-bold px-1.5 py-0.5 rounded-full shrink-0">
+                              {item.badge}
+                            </span>
+                          )}
+                        </Link>
+                      );
+                    })}
                   </div>
-                  {item.badge && (
-                    <span className="bg-red-100 text-red-700 text-[10px] font-bold px-1.5 py-0.5 rounded-full shrink-0">
-                      {item.badge}
-                    </span>
-                  )}
-                </Link>
+                </div>
               );
             })}
           </nav>

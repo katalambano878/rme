@@ -44,6 +44,19 @@ export type Product = {
   createdAt: string
   seoTitle?: string
   seoDescription?: string
+  keywords?: string[]
+  seo?: {
+    focusKeyword?: string
+    ogTitle?: string
+    ogDescription?: string
+    imageAlt?: string
+    canonical?: string
+    index?: boolean
+    follow?: boolean
+    brand?: string
+    gtin?: string
+    breadcrumb?: string
+  }
 }
 
 export type ProductVariantRow = {
