@@ -60,7 +60,7 @@ export function QuickViewModal({ open, onClose, product }: QuickViewModalProps) 
         : null
 
   function handleAddToBag() {
-    if (!product || missingOption) return
+    if (!product || missingOption || !(product.price > 0)) return
     addItem(
       product,
       quantity,
@@ -120,6 +120,7 @@ export function QuickViewModal({ open, onClose, product }: QuickViewModalProps) 
               </span>
             </div>
 
+            {displayPrice > 0 && (
             <div className="mt-3 flex items-baseline gap-2">
               <span
                 className={cn(
@@ -135,6 +136,7 @@ export function QuickViewModal({ open, onClose, product }: QuickViewModalProps) 
                 </span>
               )}
             </div>
+            )}
 
             <DialogDescription className="mt-3 line-clamp-3 text-sm leading-relaxed text-muted-foreground">
               {product.shortDescription}
@@ -215,7 +217,7 @@ export function QuickViewModal({ open, onClose, product }: QuickViewModalProps) 
                 <button
                   type="button"
                   onClick={handleAddToBag}
-                  disabled={!!missingOption}
+                  disabled={!!missingOption || !(product.price > 0)}
                   className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-rose-100 px-5 py-2.5 text-sm font-semibold text-navy transition-all hover:bg-rose-200 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   <ShoppingBag className="size-4" />

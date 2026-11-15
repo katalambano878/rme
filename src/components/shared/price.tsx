@@ -17,7 +17,8 @@ const sizeClasses = {
 }
 
 export function Price({ amount, salePrice, className, size = "md" }: PriceProps) {
-  const hasSale = salePrice !== undefined && salePrice < amount
+  const hasSale = salePrice !== undefined && salePrice > 0 && salePrice < amount
+  if (!hasSale && !(amount > 0)) return null
 
   return (
     <div className={cn("flex items-baseline gap-2", sizeClasses[size], className)}>

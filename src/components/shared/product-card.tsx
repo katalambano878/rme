@@ -134,11 +134,15 @@ export function ProductCard({ product, className, onQuickView }: ProductCardProp
         ) : (
           <button
             type="button"
-            onClick={() => (needsOptions ? onQuickView?.(product) : addItem(product))}
+            onClick={() =>
+              needsOptions || !(product.price > 0)
+                ? onQuickView?.(product) ?? undefined
+                : addItem(product)
+            }
             className={addButtonClass}
           >
             <ShoppingBag className="size-4" />
-            {needsOptions ? "Choose Options" : "Add to Bag"}
+            {needsOptions ? "Choose Options" : product.price > 0 ? "Add to Bag" : "View"}
           </button>
         )}
       </div>

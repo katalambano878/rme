@@ -628,13 +628,13 @@ function ShopProductCard({
                 type="button"
                 onClick={(e) => {
                   e.preventDefault()
-                  if (product.variants.length > 0) onQuickView(product)
+                  if (product.variants.length > 0 || !(product.price > 0)) onQuickView(product)
                   else addItem(product)
                 }}
                 className="pointer-events-auto inline-flex items-center gap-2 rounded-full bg-white px-7 py-3 text-base font-semibold text-rose-primary shadow-xl"
               >
                 <ShoppingBag className="size-4" />
-                {product.variants.length > 0 ? "Choose Options" : "Add to Bag"}
+                {product.variants.length > 0 ? "Choose Options" : product.price > 0 ? "Add to Bag" : "View"}
               </button>
             )}
           </div>

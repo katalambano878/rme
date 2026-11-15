@@ -244,7 +244,7 @@ function ProductDetailInner({
             }
 
   const canPurchase =
-    !needsVariantSelection && effectiveStock > 0
+    !needsVariantSelection && effectiveStock > 0 && (product.salePrice ?? product.price) > 0
 
   function handleAddToBag() {
     if (!canPurchase) return
@@ -530,6 +530,8 @@ function ProductDetailInner({
                   </div>
                 </div>
 
+                {(product.salePrice ?? product.price) > 0 && (
+                <>
                 <button
                   type="button"
                   onClick={handleAddToBag}
@@ -552,6 +554,8 @@ function ProductDetailInner({
                 >
                   Buy Now
                 </button>
+                </>
+                )}
               </div>
 
               <p className="mt-2 text-xs text-muted-foreground">

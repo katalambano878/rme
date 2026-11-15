@@ -41,6 +41,8 @@ const PRODUCT_SELECT = `
   delivery_estimate,
   seo_title,
   seo_description,
+  quantity,
+  sku,
   created_at,
   categories ( id, name, slug ),
   product_images ( url, storage_path, sort_order, alt ),
@@ -65,6 +67,8 @@ type ProductRow = {
   delivery_estimate: string | null
   seo_title: string | null
   seo_description: string | null
+  quantity: number | null
+  sku: string | null
   created_at: string
   categories: { id: string; name: string; slug: string } | null
   product_images: DbProductImageRow[] | null
@@ -194,10 +198,10 @@ export function mapProductRowToProduct(row: ProductRow, saleEnabled: StorePricin
       return b
     })(),
     variants: buildVariantGroups(variantRows),
-    stock: totalStock(variantRows),
+    stock: variantRows.length > 0 ? totalStock(variantRows) : Number(row.quantity) || 0,
     rating: Number(row.rating_avg) || 0,
     reviewCount: row.review_count ?? 0,
-    sku: variantRows[0]?.sku ?? "",
+    sku: variantRows[0]?.sku || row.sku || "",
     isFeatured: row.is_featured ?? false,
     isNewArrival: row.is_new_arrival ?? false,
     isBestSeller: row.is_best_seller ?? false,

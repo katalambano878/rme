@@ -132,7 +132,7 @@ export default async function ProductPage({
       name: BRAND_NAME,
     },
     category: product.categoryName,
-    offers: {
+    ...(price > 0 ? { offers: {
       "@type": "Offer",
       url: `${siteUrl}/products/${product.slug}`,
       priceCurrency: "GHS",
@@ -148,7 +148,7 @@ export default async function ProductPage({
         url: siteUrl,
       },
       itemCondition: "https://schema.org/NewCondition",
-    },
+    } } : {}),
     ...(product.rating > 0 && {
       aggregateRating: {
         "@type": "AggregateRating",
