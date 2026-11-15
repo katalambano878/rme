@@ -163,7 +163,18 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
         { name: 'Gold', hex: '#D4AF37' },
         { name: 'Silver', hex: '#C0C0C0' },
     ];
-    const sizePresets = ['XS', 'S', 'M', 'L', 'XL', 'XXL', '3XL'];
+    const unitGroups = [
+        { id: 'clothing', label: 'Clothing', values: ['XS', 'S', 'M', 'L', 'XL', 'XXL', '3XL'] },
+        { id: 'yards', label: 'Cloth (yards)', values: ['0.5 yard', '1 yard', '2 yards', '3 yards', '4 yards', '5 yards', '6 yards', '10 yards'] },
+        { id: 'volume', label: 'Volume', values: ['15ml', '30ml', '50ml', '100ml', '150ml', '200ml', '250ml', '500ml', '1L'] },
+        { id: 'weight', label: 'Weight', values: ['50g', '100g', '250g', '500g', '1kg', '2kg', '5kg'] },
+        { id: 'length', label: 'Length', values: ['10cm', '25cm', '50cm', '1m', '2m'] },
+        { id: 'shoes', label: 'Shoes', values: ['36', '37', '38', '39', '40', '41', '42', '43', '44', '45'] },
+        { id: 'pieces', label: 'Pieces', values: ['1 pc', '2 pcs', '3 pcs', '6 pcs', '12 pcs', '24 pcs'] },
+    ] as const;
+    const [unitGroup, setUnitGroup] = useState<(typeof unitGroups)[number]['id']>('clothing');
+    const [customUnit, setCustomUnit] = useState('ml');
+    const sizePresets = unitGroups.find((group) => group.id === unitGroup)?.values ?? unitGroups[0].values;
 
     // Parse existing variants to extract unique colors and sizes
     const existingVariants = (initialData?.product_variants || initialData?.variants || []).map((v) => ({
@@ -1103,14 +1114,26 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
                             <div className="bg-gray-50 rounded-xl p-6 border border-gray-200">
                                 <h4 className="text-sm font-bold text-gray-900 mb-1 flex items-center">
                                     <i className="ri-ruler-line mr-2 text-lg text-rose-600"></i>
-                                    Step 2: Select Sizes
+                                    Step 2: Options — size, yards, ml, weight
                                     {selectedSizes.length > 0 && (
                                         <span className="ml-2 bg-rose-100 text-rose-900 text-xs font-semibold px-2 py-0.5 rounded-full">
                                             {selectedSizes.length} selected
                                         </span>
                                     )}
                                 </h4>
-                                <p className="text-xs text-gray-500 mb-4">Click sizes to add/remove. Use custom for volumes (100ml), weights, etc.</p>
+                                <p className="text-xs text-gray-500 mb-4">Pick the kind of option, then the amounts. A cloth can be sold by the yard, a perfume by ml, shoes by size. Custom covers anything else.</p>
+                                <div className="flex flex-wrap gap-2 mb-4">
+                                    {unitGroups.map((group) => (
+                                        <button
+                                            key={group.id}
+                                            type="button"
+                                            onClick={() => setUnitGroup(group.id)}
+                                            className={`px-3 py-1.5 rounded-full text-xs font-semibold border ${unitGroup === group.id ? 'bg-rose-600 text-white border-rose-600' : 'bg-white text-gray-700 border-gray-200'}`}
+                                        >
+                                            {group.label}
+                                        </button>
+                                    ))}
+                                </div>
 
                                 <div className="flex flex-wrap gap-2 mb-4">
                                     {sizePresets.map(size => {
@@ -1132,21 +1155,37 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
                                 </div>
 
                                 {/* Custom size */}
-                                <div className="flex items-center gap-2 pt-3 border-t border-gray-200">
+                                <div className="flex flex-wrap items-center gap-2 pt-3 border-t border-gray-200">
                                     <input
                                         type="text"
                                         value={customSize}
                                         onChange={(e) => setCustomSize(e.target.value)}
-                                        placeholder="Custom size (e.g. 100ml, One Size, 42)"
-                                        className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                                        placeholder="Amount, e.g. 8 or 100"
+                                        className="w-36 px-3 py-2 border border-gray-300 rounded-lg text-sm"
                                         onKeyDown={(e) => e.key === 'Enter' && addCustomSize()}
                                     />
+                                    <select
+                                        value={customUnit}
+                                        onChange={(e) => setCustomUnit(e.target.value)}
+                                        className="px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                                    >
+                                        {['yard', 'yards', 'ml', 'L', 'g', 'kg', 'cm', 'm', 'pc', 'pcs', 'pair', 'pack', 'inch'].map((unit) => (
+                                            <option key={unit} value={unit}>{unit}</option>
+                                        ))}
+                                    </select>
                                     <button
-                                        onClick={addCustomSize}
+                                        type="button"
+                                        onClick={() => {
+                                            const amount = customSize.trim();
+                                            if (!amount) return;
+                                            const label = `${amount} ${customUnit}`.replace(/\s+/g, ' ');
+                                            toggleSize(label);
+                                            setCustomSize('');
+                                        }}
                                         disabled={!customSize.trim()}
                                         className="px-4 py-2 bg-gray-800 text-white rounded-lg text-sm font-medium hover:bg-gray-900 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                                     >
-                                        Add Size
+                                        Add option
                                     </button>
                                 </div>
 
@@ -1364,9 +1403,26 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
 
                     {activeTab === 'seo' && (
                         <div className="space-y-6 max-w-3xl">
-                            <div>
-                                <h3 className="text-lg font-bold text-gray-900 mb-1">Search Engine Optimization</h3>
-                                <p className="text-gray-600">Optimize how this product appears in search results</p>
+                            <div className="flex flex-wrap items-start justify-between gap-3">
+                                <div>
+                                    <h3 className="text-lg font-bold text-gray-900 mb-1">Search Engine Optimization</h3>
+                                    <p className="text-gray-600">Title, description, link, and the words Google uses to find this product.</p>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setSeoTitle((productName ? `${productName} | ${BRAND_NAME}` : '').slice(0, 60));
+                                        setSeoTitleTouched(true);
+                                        const plain = (description || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+                                        setMetaDescription(plain.slice(0, 160));
+                                        setMetaDescTouched(true);
+                                        setUrlSlug(slugifyProductName(productName));
+                                        setSlugTouched(true);
+                                    }}
+                                    className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-800 hover:bg-gray-50"
+                                >
+                                    Fill from this product
+                                </button>
                             </div>
 
                             {/* Google Search Preview */}
@@ -1466,17 +1522,40 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
                             </div>
 
                             <div>
-                                <label className="block text-sm font-semibold text-gray-900 mb-2">
-                                    Keywords
-                                </label>
+                                <label className="block text-sm font-semibold text-gray-900 mb-2">Search words</label>
+                                <div className="mb-2 flex flex-wrap gap-2">
+                                    {(keywords as string).split(',').map((word) => word.trim()).filter(Boolean).map((word) => (
+                                        <button
+                                            key={word}
+                                            type="button"
+                                            onClick={() => setKeywords((keywords as string).split(',').map((item) => item.trim()).filter((item) => item && item !== word).join(', '))}
+                                            className="rounded-full border border-gray-300 bg-white px-3 py-1 text-sm"
+                                        >
+                                            {word} ×
+                                        </button>
+                                    ))}
+                                </div>
                                 <input
                                     type="text"
-                                    value={keywords}
-                                    onChange={(e) => setKeywords(e.target.value)}
+                                    onKeyDown={(e) => {
+                                        if (e.key !== 'Enter' && e.key !== ',') return;
+                                        e.preventDefault();
+                                        const next = (e.target as HTMLInputElement).value.trim().replace(/,/g, '');
+                                        if (!next) return;
+                                        const current = (keywords as string).split(',').map((item) => item.trim()).filter(Boolean);
+                                        if (current.some((item) => item.toLowerCase() === next.toLowerCase())) return;
+                                        setKeywords([...current, next].join(', '));
+                                        (e.target as HTMLInputElement).value = '';
+                                    }}
                                     className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-rose-400 focus:border-rose-400"
-                                    placeholder="keyword1, keyword2"
+                                    placeholder="Type a word and press Enter, for example lip gloss"
                                 />
-                                <p className="text-sm text-gray-500 mt-2">Separate keywords with commas</p>
+                                <p className="text-sm text-gray-500 mt-2">Saved on the product and used as the page keywords. Click a word to remove it.</p>
+                            </div>
+                            <div className="rounded-lg border border-gray-200 bg-white p-4">
+                                <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">Social share</p>
+                                <p className="font-semibold text-gray-900">{seoTitle || productName || 'Product name'}</p>
+                                <p className="text-sm text-gray-600 mt-1">{metaDescription || 'The description people see when this product is shared.'}</p>
                             </div>
                         </div>
                     )}

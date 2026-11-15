@@ -192,6 +192,24 @@ export default function AdminLayout({
       permissionKey: 'pos',
     },
     {
+      title: 'Live shoppers',
+      icon: 'ri-user-heart-line',
+      path: '/admin/live',
+      permissionKey: 'live',
+    },
+    {
+      title: 'Profit margins',
+      icon: 'ri-line-chart-line',
+      path: '/admin/profit',
+      permissionKey: 'profit',
+    },
+    {
+      title: 'End of day',
+      icon: 'ri-calendar-check-line',
+      path: '/admin/end-of-day',
+      permissionKey: 'end_of_day',
+    },
+    {
       title: 'Buy SMS',
       icon: 'ri-bank-card-line',
       path: '/admin/sms-credit',

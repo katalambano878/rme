@@ -65,6 +65,9 @@ export const FK_MAP: Record<string, FkEdge[]> = {
   "product_images": [
     { column: "product_id", foreignTable: "products", foreignColumn: "id" },
   ],
+  "product_costs": [
+    { column: "product_id", foreignTable: "products", foreignColumn: "id" },
+  ],
   "products": [
     { column: "category_id", foreignTable: "categories", foreignColumn: "id" },
   ],

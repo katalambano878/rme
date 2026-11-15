@@ -3,6 +3,7 @@ import { Navbar } from "@/components/layout/navbar"
 import { Footer } from "@/components/layout/footer"
 import { CartDrawer } from "@/components/layout/cart-drawer"
 import { StorePricingProvider } from "@/components/store-pricing-provider"
+import { LiveShopperPing } from "@/components/live-shopper-ping"
 import { createClient } from "@/lib/supabase/server"
 import { fetchStorefrontCategoriesWithCounts } from "@/lib/supabase/storefront-products"
 
@@ -51,6 +52,7 @@ export default async function StorefrontLayout({
       <main className="flex-1">{children}</main>
       <Footer shopLinks={shopLinks} />
       <CartDrawer />
+      <LiveShopperPing />
     </StorePricingProvider>
   )
 }
