@@ -9,6 +9,7 @@ import { supabase } from '@/lib/supabase';
 import { BRAND_LOGO_ALT, BRAND_LOGO_SRC } from '@/lib/brand';
 import { canAccessAdminPanel, canManageStaffRoles } from '@/lib/admin-role-access';
 import { firstAccessibleAdminPath, staffCanAccessPath } from '@/lib/staff-permissions';
+import AdminPlaceMemory from '@/components/admin/AdminPlaceMemory';
 
 // Optional-module menu ids; all shown when store_modules can't be read.
 const ALL_MODULE_IDS = ['customer-insights', 'notifications', 'blog'];
@@ -157,8 +158,21 @@ export default function AdminLayout({
     router.push('/admin/login');
   };
 
+  if (pathname === '/admin/login') {
+    return isLoading ? (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 text-gray-500">Loading Admin...</div>
+    ) : (
+      <>{children}</>
+    );
+  }
+
   if (isLoading) {
-    return <div className="min-h-screen flex items-center justify-center bg-gray-50 text-gray-500">Loading Admin...</div>;
+    return (
+      <>
+        <AdminPlaceMemory />
+        <div className="min-h-screen flex items-center justify-center bg-gray-50 text-gray-500">Loading Admin...</div>
+      </>
+    );
   }
 
   const menuItems: {
@@ -344,13 +358,9 @@ export default function AdminLayout({
     return true;
   });
 
-  // Special layout for Login Page
-  if (pathname === '/admin/login') {
-    return <>{children}</>;
-  }
-
   return (
     <div className="min-h-screen bg-gray-50 admin-app">
+      <AdminPlaceMemory />
 
       {/* Mobile Overlay */}
       {isSidebarOpen && (

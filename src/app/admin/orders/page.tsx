@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { supabase } from '@/lib/supabase';
 import { downloadCsv } from '@/lib/admin-csv';
 import { setOrderStockHeld, STOCK_RELEASED_STATUSES } from '@/lib/order-stock';
@@ -89,7 +89,6 @@ export default function AdminOrdersPage() {
   const activeFilterCount = [dateFrom, dateTo, paymentFilter !== 'all', shippingFilter !== 'all'].filter(Boolean).length;
   const [productFilter, setProductFilter] = useState(savedView.productFilter);
   const [highlightedOrderId, setHighlightedOrderId] = useState<string | null>(savedView.lastOpenedOrderId);
-  const positionRestored = useRef(false);
 
   useEffect(() => {
     fetchOrders();
@@ -98,21 +97,6 @@ export default function AdminOrdersPage() {
   useEffect(() => {
     writeOrdersViewState({ tab: orderViewTab, statusFilter, searchQuery, productFilter, sortBy });
   }, [orderViewTab, statusFilter, searchQuery, productFilter, sortBy]);
-
-  useEffect(() => {
-    let frame = 0;
-    const onScroll = () => {
-      cancelAnimationFrame(frame);
-      frame = requestAnimationFrame(() => {
-        if (positionRestored.current) writeOrdersViewState({ scrollY: window.scrollY });
-      });
-    };
-    window.addEventListener('scroll', onScroll, { passive: true });
-    return () => {
-      cancelAnimationFrame(frame);
-      window.removeEventListener('scroll', onScroll);
-    };
-  }, []);
 
   const { confirmedCount, abandonedCount, orderStats, availableProducts } = useMemo(() => {
     const confirmedOrders = orders.filter(o => o.is_confirmed);
@@ -473,22 +457,15 @@ export default function AdminOrdersPage() {
     return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
   });
 
-  // Return to the order she last opened (or the last scroll position) once rows are on screen.
+  // Keep the order she just opened on screen. The shared place memory restores the
+  // scroll; this only nudges if that row has moved, without jumping to the top.
   useEffect(() => {
-    if (loading || positionRestored.current) return;
-    positionRestored.current = true;
-    const lastId = savedView.lastOpenedOrderId;
-    const row = lastId ? document.querySelector<HTMLElement>(`[data-order-id="${CSS.escape(lastId)}"]`) : null;
-    requestAnimationFrame(() => {
-      if (row) row.scrollIntoView({ block: 'center' });
-      else if (savedView.scrollY > 0) window.scrollTo(0, savedView.scrollY);
-    });
-    if (row) {
-      const timer = window.setTimeout(() => setHighlightedOrderId(null), 4000);
-      return () => window.clearTimeout(timer);
-    }
-    setHighlightedOrderId(null);
-  }, [loading, savedView]);
+    if (loading || !savedView.lastOpenedOrderId) return;
+    const row = document.querySelector<HTMLElement>(`[data-order-id="${CSS.escape(savedView.lastOpenedOrderId)}"]`);
+    row?.scrollIntoView({ block: 'nearest' });
+    const timer = window.setTimeout(() => setHighlightedOrderId(null), 4000);
+    return () => window.clearTimeout(timer);
+  }, [loading, savedView.lastOpenedOrderId]);
 
   return (
     <div className="space-y-6">
