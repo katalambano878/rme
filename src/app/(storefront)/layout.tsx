@@ -47,12 +47,14 @@ export default async function StorefrontLayout({
 
   return (
     <StorePricingProvider>
-      <AnnouncementBar message={announcement} />
-      <Navbar />
-      <main className="flex-1">{children}</main>
-      <Footer shopLinks={shopLinks} />
-      <CartDrawer />
-      <LiveShopperPing />
+      <div className="store flex min-h-full flex-1 flex-col">
+        <AnnouncementBar message={announcement} />
+        <Navbar />
+        <main className="flex-1">{children}</main>
+        <Footer shopLinks={shopLinks} />
+        <CartDrawer />
+        <LiveShopperPing />
+      </div>
     </StorePricingProvider>
   )
 }

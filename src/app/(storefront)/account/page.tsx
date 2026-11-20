@@ -3,33 +3,17 @@
 import { useCallback, useEffect, useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { motion } from "framer-motion"
-import {
-  User,
-  Package,
-  Heart,
-  ChevronRight,
-  ShoppingBag,
-  Loader2,
-  LogOut,
-} from "lucide-react"
-import { Container } from "@/components/shared/container"
-import { Section } from "@/components/shared/section"
-import { Heading } from "@/components/shared/heading"
+import { Loader2, LogOut } from "lucide-react"
 import { ProductCard } from "@/components/shared/product-card"
 import { useWishlistStore } from "@/lib/store/wishlist-store"
 import { createClient } from "@/lib/supabase/client"
 import { formatPrice } from "@/lib/utils"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
-import { Card, CardContent } from "@/components/ui/card"
 
 const tabs = [
-  { value: "profile", label: "Profile", icon: User },
-  { value: "orders", label: "Orders", icon: Package },
-  { value: "wishlist", label: "Wishlist", icon: Heart },
+  { value: "orders", label: "Orders" },
+  { value: "profile", label: "Profile" },
+  { value: "wishlist", label: "Wishlist" },
 ] as const
 
 type AccountProfile = {
@@ -48,16 +32,22 @@ type AccountOrder = {
   items: { id: string; name: string; quantity: number }[]
 }
 
+const PILL_PROCESSING = "bg-[#FFF4D6] text-[#6B4A00]"
+const PILL_ON_THE_WAY = "bg-[#E3EEFF] text-[#1D4A8F]"
+const PILL_SUCCESS = "bg-[#E2F4E8] text-[#1E6B3A]"
+const PILL_NEUTRAL = "bg-counter text-mute"
+const PILL_ERROR = "bg-[#FDECEA] text-[#B42318]"
+
 const STATUS_LABELS: Record<string, { label: string; className: string }> = {
-  pending: { label: "Awaiting payment", className: "bg-amber-50 text-amber-700 border-amber-200" },
-  paid: { label: "Paid", className: "bg-emerald-50 text-emerald-700 border-emerald-200" },
-  processing: { label: "Processing", className: "bg-amber-50 text-amber-700 border-amber-200" },
-  shipped: { label: "Packaged", className: "bg-blue-50 text-blue-700 border-blue-200" },
-  out_for_delivery: { label: "With rider", className: "bg-blue-50 text-blue-700 border-blue-200" },
-  delivered: { label: "Delivered", className: "bg-emerald-50 text-emerald-700 border-emerald-200" },
-  cancelled: { label: "Cancelled", className: "bg-slate-50 text-slate-600 border-slate-200" },
-  refunded: { label: "Refunded", className: "bg-slate-50 text-slate-600 border-slate-200" },
-  failed: { label: "Payment failed", className: "bg-red-50 text-red-700 border-red-200" },
+  pending: { label: "Awaiting payment", className: PILL_PROCESSING },
+  paid: { label: "Paid", className: PILL_SUCCESS },
+  processing: { label: "Processing", className: PILL_PROCESSING },
+  shipped: { label: "Packaged", className: PILL_ON_THE_WAY },
+  out_for_delivery: { label: "With rider", className: PILL_ON_THE_WAY },
+  delivered: { label: "Delivered", className: PILL_SUCCESS },
+  cancelled: { label: "Cancelled", className: PILL_NEUTRAL },
+  refunded: { label: "Refunded", className: PILL_NEUTRAL },
+  failed: { label: "Payment failed", className: PILL_ERROR },
 }
 
 function statusBadge(order: AccountOrder) {
@@ -66,22 +56,19 @@ function statusBadge(order: AccountOrder) {
   return (
     known ?? {
       label: order.status.replace(/_/g, " "),
-      className: "bg-slate-50 text-slate-600 border-slate-200",
+      className: PILL_NEUTRAL,
     }
   )
 }
 
-const fadeUp = {
-  hidden: { opacity: 0, y: 16 },
-  visible: (i: number) => ({
-    opacity: 1,
-    y: 0,
-    transition: { delay: i * 0.08, duration: 0.5, ease: [0.22, 1, 0.36, 1] as const },
-  }),
-}
-
+const labelClass = "text-[15px] font-semibold text-ink"
 const inputClass =
-  "h-10 rounded-xl border-rose-border focus-visible:border-rose-primary focus-visible:ring-rose-primary/20"
+  "block min-h-[52px] w-full rounded-[10px] border border-field bg-white px-3.5 text-base text-ink placeholder:text-mute transition-colors duration-150 focus:border-ink"
+const linkClass = "font-bold text-raspberry transition-colors duration-150 hover:text-raspberry-deep"
+const primaryButton =
+  "inline-flex min-h-[52px] items-center justify-center gap-2 rounded-xl bg-brand px-6 text-base font-bold text-white transition-opacity duration-150 hover:opacity-90 disabled:opacity-50"
+const secondaryButton =
+  "inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-field bg-white px-4 text-[15px] font-bold text-ink transition-colors duration-150 hover:bg-counter disabled:opacity-60"
 
 function ProfileTab({
   profile,
@@ -123,26 +110,17 @@ function ProfileTab({
   }
 
   return (
-    <motion.form
-      onSubmit={handleSave}
-      initial={{ opacity: 0, y: 12 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.4 }}
-      className="space-y-8"
-    >
-      <div>
-        <h3 className="font-heading text-xl font-semibold text-navy">
-          Personal Information
-        </h3>
-        <p className="mt-1 text-sm text-muted-foreground">
+    <section aria-label="Profile" className="flex flex-wrap items-start gap-8">
+      <form onSubmit={handleSave} className="flex min-w-0 max-w-[560px] flex-[999_1_420px] flex-col gap-4">
+        <p className="text-[15px] leading-normal text-mute">
           Update the name and phone number we use for your orders.
         </p>
-      </div>
 
-      <div className="grid gap-6 sm:grid-cols-2">
-        <div className="space-y-2">
-          <Label htmlFor="fullName">Full Name</Label>
-          <Input
+        <div className="flex flex-col gap-1.5">
+          <label htmlFor="fullName" className={labelClass}>
+            Full name
+          </label>
+          <input
             id="fullName"
             value={fullName}
             onChange={(e) => setFullName(e.target.value)}
@@ -151,9 +129,12 @@ function ProfileTab({
             className={inputClass}
           />
         </div>
-        <div className="space-y-2">
-          <Label htmlFor="phone">Phone Number</Label>
-          <Input
+
+        <div className="flex flex-col gap-1.5">
+          <label htmlFor="phone" className={labelClass}>
+            Phone
+          </label>
+          <input
             id="phone"
             type="tel"
             value={phone}
@@ -164,44 +145,56 @@ function ProfileTab({
             className={inputClass}
           />
         </div>
-        <div className="space-y-2 sm:col-span-2">
-          <Label htmlFor="email">Email Address</Label>
-          <Input
+
+        <div className="flex flex-col gap-1.5">
+          <label htmlFor="email" className={labelClass}>
+            Email
+          </label>
+          <input
             id="email"
             type="email"
             value={profile.email}
             readOnly
             disabled
-            className={inputClass}
+            aria-describedby="email-help"
+            className="block min-h-[52px] w-full rounded-[10px] border border-transparent bg-counter px-3.5 text-base text-ink disabled:opacity-100"
           />
-          <p className="text-xs text-muted-foreground">
-            Need to change your email? Contact us and we&apos;ll help.
+          <p id="email-help" className="text-sm text-mute">
+            Need to change your email?{" "}
+            <Link href="/contact" className={linkClass}>
+              Contact us
+            </Link>{" "}
+            and we&apos;ll help.
           </p>
         </div>
-      </div>
 
-      {message && (
-        <p
-          role="status"
-          className={
-            message.type === "success"
-              ? "rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm text-emerald-700"
-              : "rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-600"
-          }
-        >
-          {message.text}
-        </p>
-      )}
+        {message && (
+          <p
+            role="status"
+            className={
+              message.type === "success"
+                ? "rounded-[10px] bg-[#E2F4E8] px-4 py-3 text-[15px] text-[#1E6B3A]"
+                : "rounded-[10px] bg-[#FDECEA] px-4 py-3 text-[15px] text-[#B42318]"
+            }
+          >
+            {message.text}
+          </p>
+        )}
 
-      <Button
-        type="submit"
-        disabled={saving || !dirty}
-        className="gap-2 rounded-xl bg-rose-100 px-8 py-2.5 text-navy hover:bg-rose-200"
-      >
-        {saving && <Loader2 className="size-4 animate-spin" />}
-        {saving ? "Saving…" : "Save Changes"}
-      </Button>
-    </motion.form>
+        <button type="submit" disabled={saving || !dirty} className={`${primaryButton} self-start`}>
+          {saving && <Loader2 className="size-4 animate-spin motion-reduce:animate-none" aria-hidden="true" />}
+          {saving ? "Saving…" : "Save changes"}
+        </button>
+      </form>
+
+      <aside className="flex min-w-0 flex-[1_1_300px] flex-col gap-3 rounded-[18px] bg-counter p-6">
+        <h2 className="text-lg font-extrabold text-ink">Password</h2>
+        <p className="text-[15px] leading-normal text-mute">We&apos;ll email you a link to set a new one.</p>
+        <Link href="/auth/forgot-password" className={`${secondaryButton} self-start`}>
+          Reset password
+        </Link>
+      </aside>
+    </section>
   )
 }
 
@@ -216,124 +209,89 @@ function OrdersTab({
   error: string
   onRetry: () => void
 }) {
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 12 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.4 }}
-      className="space-y-6"
-    >
-      <div>
-        <h3 className="font-heading text-xl font-semibold text-navy">
-          Order History
-        </h3>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Orders placed while signed in to this account.
-        </p>
+  if (loading) {
+    return (
+      <div className="flex items-center gap-2 py-10 text-[15px] text-mute" role="status">
+        <Loader2 className="size-4 animate-spin motion-reduce:animate-none" aria-hidden="true" />
+        Loading your orders…
       </div>
+    )
+  }
 
-      {loading ? (
-        <div className="flex items-center gap-2 py-10 text-sm text-muted-foreground">
-          <Loader2 className="size-4 animate-spin" />
-          Loading your orders…
-        </div>
-      ) : error ? (
-        <div className="rounded-2xl border border-red-200 bg-red-50 p-5 text-sm text-red-600">
-          <p>{error}</p>
-          <Button
-            variant="outline"
-            onClick={onRetry}
-            className="mt-3 rounded-xl border-red-200 text-red-600"
+  if (error) {
+    return (
+      <div className="flex flex-col items-start gap-3 rounded-[18px] bg-[#FDECEA] p-6" role="alert">
+        <p className="text-[15px] text-[#B42318]">{error}</p>
+        <button type="button" onClick={onRetry} className={secondaryButton}>
+          Try again
+        </button>
+      </div>
+    )
+  }
+
+  if (orders.length === 0) {
+    return (
+      <div className="flex flex-col items-start gap-3 rounded-[18px] bg-counter p-6 sm:p-8">
+        <h2 className="text-[22px] font-extrabold text-ink">No orders yet</h2>
+        <p className="text-[15px] leading-normal text-mute">
+          Orders placed while signed in to this account show up here.
+        </p>
+        <Link href="/shop" className={`${primaryButton} mt-1`}>
+          Start shopping
+        </Link>
+      </div>
+    )
+  }
+
+  return (
+    <section aria-label="Orders" className="flex flex-col gap-4">
+      <p className="text-[15px] text-mute">Orders placed while signed in to this account.</p>
+      {orders.map((order) => {
+        const badge = statusBadge(order)
+        const itemCount = order.items.reduce((sum, it) => sum + it.quantity, 0)
+        return (
+          <article
+            key={order.order_number}
+            className="flex flex-wrap items-center gap-5 rounded-[18px] border border-line px-5 py-5 sm:px-6 sm:py-[22px]"
           >
-            Try again
-          </Button>
-        </div>
-      ) : orders.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-16 text-center">
-          <div className="flex size-20 items-center justify-center rounded-full bg-[#FFF5F5]">
-            <Package className="size-8 text-rose-300" />
-          </div>
-          <h4 className="mt-6 font-heading text-xl font-semibold text-navy">
-            No orders yet
-          </h4>
-          <p className="mt-2 max-w-sm text-sm text-muted-foreground">
-            When you place an order it will show up here.
-          </p>
-          <Button
-            className="mt-6 gap-2 rounded-xl border border-rose-200 bg-[#FFF5F5] px-6 text-rose-400 hover:bg-rose-100"
-            render={<Link href="/shop" />}
-          >
-            <ShoppingBag className="size-4" />
-            Start Shopping
-          </Button>
-        </div>
-      ) : (
-        <div className="space-y-4">
-          {orders.map((order, i) => {
-            const badge = statusBadge(order)
-            const itemCount = order.items.reduce((sum, it) => sum + it.quantity, 0)
-            return (
-              <motion.div
-                key={order.order_number}
-                custom={Math.min(i, 8)}
-                variants={fadeUp}
-                initial="hidden"
-                animate="visible"
+            <div className="flex min-w-0 flex-[1_1_280px] flex-col gap-1.5">
+              <div className="flex flex-wrap items-center gap-2.5">
+                <h2 className="text-lg font-extrabold text-ink">Order {order.order_number}</h2>
+                <span
+                  className={`inline-flex min-h-7 items-center rounded-full px-2.5 text-[13px] font-bold capitalize ${badge.className}`}
+                >
+                  {badge.label}
+                </span>
+              </div>
+              {order.items.length > 0 && (
+                <p className="text-[15px] leading-normal text-mute">
+                  {order.items.map((it) => it.name).join(" · ")}
+                </p>
+              )}
+              <p className="text-sm text-mute">
+                {new Date(order.created_at).toLocaleDateString("en-GB", {
+                  day: "numeric",
+                  month: "long",
+                  year: "numeric",
+                })}{" "}
+                · {itemCount} {itemCount === 1 ? "item" : "items"}
+              </p>
+            </div>
+            <div className="ml-auto flex flex-none flex-col items-end gap-2.5">
+              <span className="text-xl font-extrabold tabular-nums text-ink">
+                {formatPrice(order.grand_total)}
+              </span>
+              <Link
+                href={`/track-order?order=${encodeURIComponent(order.order_number)}`}
+                className={secondaryButton}
               >
-                <Card className="overflow-hidden rounded-2xl border-rose-border/50 ring-0 shadow-none border">
-                  <CardContent className="p-0">
-                    <div className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
-                      <div className="min-w-0 space-y-1">
-                        <div className="flex flex-wrap items-center gap-3">
-                          <p className="font-heading font-semibold text-navy">
-                            {order.order_number}
-                          </p>
-                          <span
-                            className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium capitalize ${badge.className}`}
-                          >
-                            {badge.label}
-                          </span>
-                        </div>
-                        <p className="text-sm text-muted-foreground">
-                          {new Date(order.created_at).toLocaleDateString("en-GB", {
-                            day: "numeric",
-                            month: "long",
-                            year: "numeric",
-                          })}{" "}
-                          · {itemCount} {itemCount === 1 ? "item" : "items"}
-                        </p>
-                        {order.items.length > 0 && (
-                          <p className="truncate text-xs text-muted-foreground">
-                            {order.items.map((it) => it.name).join(", ")}
-                          </p>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-4">
-                        <p className="font-heading text-lg font-semibold text-navy">
-                          {formatPrice(order.grand_total)}
-                        </p>
-                        <Button
-                          variant="outline"
-                          className="gap-1.5 rounded-xl border-rose-border text-navy hover:border-rose-primary hover:text-rose-primary"
-                          render={
-                            <Link
-                              href={`/track-order?order=${encodeURIComponent(order.order_number)}`}
-                            />
-                          }
-                        >
-                          Track
-                          <ChevronRight className="size-3.5" />
-                        </Button>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              </motion.div>
-            )
-          })}
-        </div>
-      )}
-    </motion.div>
+                Track order
+              </Link>
+            </div>
+          </article>
+        )
+      })}
+    </section>
   )
 }
 
@@ -342,60 +300,36 @@ function WishlistTab() {
 
   if (items.length === 0) {
     return (
-      <motion.div
-        initial={{ opacity: 0, y: 12 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.4 }}
-        className="flex flex-col items-center justify-center py-20 text-center"
-      >
-        <div className="flex size-20 items-center justify-center rounded-full bg-[#FFF5F5]">
-          <Heart className="size-8 text-rose-300" />
-        </div>
-        <h3 className="mt-6 font-heading text-xl font-semibold text-navy">
-          Your wishlist is empty
-        </h3>
-        <p className="mt-2 max-w-sm text-sm text-muted-foreground">
-          Save pieces you love by tapping the heart icon on any product. Your
-          wishlist is kept on this device.
+      <div className="flex flex-col items-start gap-3 rounded-[18px] bg-counter p-6 sm:p-8">
+        <h2 className="text-[22px] font-extrabold text-ink">Your wishlist is empty</h2>
+        <p className="max-w-md text-[15px] leading-normal text-mute">
+          Save pieces you love by tapping the heart icon on any product. Your wishlist is kept on
+          this device.
         </p>
-        <Button
-          className="mt-6 gap-2 rounded-xl border border-rose-200 bg-[#FFF5F5] px-6 text-rose-400 hover:bg-rose-100"
-          render={<Link href="/shop" />}
-        >
-          <ShoppingBag className="size-4" />
-          Start Shopping
-        </Button>
-      </motion.div>
+        <Link href="/shop" className={`${primaryButton} mt-1`}>
+          Start shopping
+        </Link>
+      </div>
     )
   }
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 12 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.4 }}
-      className="space-y-6"
-    >
-      <div>
-        <h3 className="font-heading text-xl font-semibold text-navy">
-          My Wishlist
-        </h3>
-        <p className="mt-1 text-sm text-muted-foreground">
-          {`${items.length} ${items.length === 1 ? "piece" : "pieces"} you've saved on this device.`}
-        </p>
-      </div>
-      <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+    <section aria-label="Wishlist" className="flex flex-col gap-5">
+      <p className="text-[15px] text-mute">
+        {`${items.length} ${items.length === 1 ? "piece" : "pieces"} you've saved on this device.`}
+      </p>
+      <div className="grid grid-cols-2 gap-x-4 gap-y-8 sm:gap-5 md:grid-cols-3 lg:grid-cols-4">
         {items.map((product) => (
           <ProductCard key={product.id} product={product} />
         ))}
       </div>
-    </motion.div>
+    </section>
   )
 }
 
 export default function AccountPage() {
   const router = useRouter()
-  const [activeTab, setActiveTab] = useState<string>("profile")
+  const [activeTab, setActiveTab] = useState<string>("orders")
   const [profile, setProfile] = useState<AccountProfile | null>(null)
   const [orders, setOrders] = useState<AccountOrder[]>([])
   const [ordersLoading, setOrdersLoading] = useState(true)
@@ -481,71 +415,68 @@ export default function AccountPage() {
 
   if (!profile) {
     return (
-      <Section className="min-h-screen bg-gradient-to-b from-rose-light/50 to-white">
-        <Container className="flex justify-center py-24">
-          <Loader2 className="size-8 animate-spin text-rose-primary" aria-label="Loading your account" />
-        </Container>
-      </Section>
+      <div className="mx-auto flex w-full max-w-[1240px] justify-center px-4 py-24 sm:px-6 lg:px-10">
+        <Loader2
+          className="size-8 animate-spin text-raspberry motion-reduce:animate-none"
+          aria-label="Loading your account"
+        />
+      </div>
     )
   }
 
   const firstName = profile.fullName.split(/\s+/)[0]
 
   return (
-    <Section className="min-h-screen bg-gradient-to-b from-rose-light/50 to-white">
-      <Container>
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-          <Heading
-            as="h1"
-            subtitle={`Signed in as ${profile.email}`}
-          >
-            {firstName ? `Hi, ${firstName}` : "My Account"}
-          </Heading>
-          <Button
-            variant="outline"
-            onClick={handleSignOut}
-            disabled={signingOut}
-            className="gap-2 self-start rounded-xl border-rose-border text-navy hover:border-rose-primary hover:text-rose-primary sm:self-auto"
-          >
-            {signingOut ? <Loader2 className="size-4 animate-spin" /> : <LogOut className="size-4" />}
-            Sign out
-          </Button>
+    <div className="mx-auto flex w-full max-w-[1240px] flex-col gap-8 px-4 pb-16 pt-10 sm:px-6 sm:pb-[72px] sm:pt-12 lg:px-10">
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div className="flex min-w-0 flex-col gap-1.5">
+          <h1 className="text-[34px] font-extrabold leading-[1.05] tracking-[-0.03em] text-ink sm:text-[44px]">
+            {firstName ? `Hi, ${firstName}` : "My account"}
+          </h1>
+          <p className="break-words text-[17px] text-mute">Signed in as {profile.email}</p>
         </div>
+        <button type="button" onClick={handleSignOut} disabled={signingOut} className={secondaryButton}>
+          {signingOut ? (
+            <Loader2 className="size-4 animate-spin motion-reduce:animate-none" aria-hidden="true" />
+          ) : (
+            <LogOut className="size-4" aria-hidden="true" />
+          )}
+          Sign out
+        </button>
+      </div>
 
-        <div className="mt-10">
-          <Tabs value={activeTab} onValueChange={setActiveTab}>
-            <TabsList
-              className="mb-8 flex h-auto w-full flex-wrap gap-1 rounded-2xl bg-white p-1.5 shadow-sm ring-1 ring-rose-border/50 sm:w-fit"
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="gap-8">
+        <TabsList
+          variant="line"
+          aria-label="Account sections"
+          className="flex w-full justify-start gap-1 rounded-none border-b border-line p-0 group-data-horizontal/tabs:h-auto"
+        >
+          {tabs.map((tab) => (
+            <TabsTrigger
+              key={tab.value}
+              value={tab.value}
+              className="min-h-12 flex-none rounded-none border-0 px-[18px] py-0 text-base font-bold text-mute transition-colors duration-150 hover:text-ink data-active:text-ink after:bg-raspberry group-data-horizontal/tabs:h-auto group-data-horizontal/tabs:after:bottom-[-1px] group-data-horizontal/tabs:after:h-[3px]"
             >
-              {tabs.map((tab) => (
-                <TabsTrigger
-                  key={tab.value}
-                  value={tab.value}
-                  className="gap-2 rounded-xl px-4 py-2.5 text-sm font-medium text-muted-foreground transition-all data-active:border data-active:border-rose-200 data-active:bg-[#FFF5F5] data-active:text-rose-400 data-active:shadow-none hover:text-navy"
-                >
-                  <tab.icon className="size-4" />
-                  {tab.label}
-                </TabsTrigger>
-              ))}
-            </TabsList>
+              {tab.label}
+            </TabsTrigger>
+          ))}
+        </TabsList>
 
-            <TabsContent value="profile">
-              <ProfileTab profile={profile} onSaved={setProfile} />
-            </TabsContent>
-            <TabsContent value="orders">
-              <OrdersTab
-                orders={orders}
-                loading={ordersLoading}
-                error={ordersError}
-                onRetry={retryOrders}
-              />
-            </TabsContent>
-            <TabsContent value="wishlist">
-              <WishlistTab />
-            </TabsContent>
-          </Tabs>
-        </div>
-      </Container>
-    </Section>
+        <TabsContent value="orders" className="text-base">
+          <OrdersTab
+            orders={orders}
+            loading={ordersLoading}
+            error={ordersError}
+            onRetry={retryOrders}
+          />
+        </TabsContent>
+        <TabsContent value="profile" className="text-base">
+          <ProfileTab profile={profile} onSaved={setProfile} />
+        </TabsContent>
+        <TabsContent value="wishlist" className="text-base">
+          <WishlistTab />
+        </TabsContent>
+      </Tabs>
+    </div>
   )
 }

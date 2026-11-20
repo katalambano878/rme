@@ -1,26 +1,14 @@
 "use client"
 
-import { useState, useEffect, useMemo, Fragment } from "react"
+import { useState, useEffect, useMemo } from "react"
 import Link from "next/link"
-import { motion, AnimatePresence } from "framer-motion"
-import {
-  Check,
-  ChevronRight,
-  ChevronDown,
-  ArrowLeft,
-  ArrowRight,
-  ShieldCheck,
-  Truck,
-
-  CreditCard,
-  Package,
-  MessageCircle,
-} from "lucide-react"
+import { ChevronDown, Smartphone } from "lucide-react"
 import {
   cn,
+  formatFreeShippingMinimumLabel,
   formatPrice,
 } from "@/lib/utils"
-import { Container } from "@/components/shared/container"
+import { WHATSAPP_URL } from "@/lib/brand"
 import { useCartStore } from "@/lib/store/cart-store"
 import { createClient } from "@/lib/supabase/client"
 import { useStorePricing } from "@/components/store-pricing-provider"
@@ -29,20 +17,7 @@ import {
   getProductPrimaryImageUrl,
   optimizedImageUrl,
 } from "@/lib/product-image"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Separator } from "@/components/ui/separator"
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
-import { Checkbox } from "@/components/ui/checkbox"
-import { Card, CardContent } from "@/components/ui/card"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
+import type { Product } from "@/types/product"
 
 type FormData = {
   email: string
@@ -82,19 +57,25 @@ const initialFormData: FormData = {
   orderNotes: "",
 }
 
-const steps = [
-  { id: 1, name: "Details" },
-  { id: 2, name: "Shipping" },
-  { id: 3, name: "Payment" },
-  { id: 4, name: "Review" },
-]
-
 const paymentMethods = [
   {
     id: "moolre",
     name: "Mobile Money",
-    description: "Pay with mobile money from your network",
-    recommended: true,
+    description:
+      "After you tap Pay, a secure Mobile Money page opens to approve the payment. Your order is confirmed once it goes through.",
+  },
+]
+
+const shippingOptions = [
+  {
+    id: "pickup",
+    name: "Store pickup · Free",
+    detail: "Manet Ville Estates, East Airport Spintex, Accra.",
+  },
+  {
+    id: "delivery",
+    name: "Doorstep delivery",
+    detail: `We will contact you with the delivery cost. Free over ${formatFreeShippingMinimumLabel()}.`,
   },
 ]
 
@@ -118,7 +99,6 @@ const ghanaRegions = [
   "Western North",
 ]
 
-
 /** JSON headers, plus the shopper's session when signed in so the order is linked to their account. */
 async function checkoutHeaders(): Promise<Record<string, string>> {
   const headers: Record<string, string> = { "Content-Type": "application/json" }
@@ -131,83 +111,67 @@ async function checkoutHeaders(): Promise<Record<string, string>> {
   return headers
 }
 
-function StepIndicator({ currentStep }: { currentStep: number }) {
+/** `product.price` is the display price; it's the struck-through "was" when above the charge. */
+function wasPriceFor(product: Product, effective: number): number | undefined {
+  const was = Number(product.price)
+  return Number.isFinite(was) && was > effective ? was : undefined
+}
+
+const inputClass =
+  "min-h-[52px] w-full rounded-[10px] border border-field bg-white px-3.5 text-base font-normal text-ink placeholder:text-mute/70 transition-colors focus:border-ink focus:outline-none"
+const errorInputClass = "border-[#B42318]"
+
+function Field({
+  id,
+  label,
+  optional,
+  hint,
+  error,
+  className,
+  children,
+}: {
+  id: string
+  label: string
+  optional?: boolean
+  hint?: string
+  error?: string
+  className?: string
+  children: React.ReactNode
+}) {
   return (
-    <div className="flex items-center justify-center">
-      {steps.map((step, index) => (
-        <Fragment key={step.id}>
-          <div className="flex flex-col items-center gap-2">
-            <motion.div
-              className={cn(
-                "flex size-9 items-center justify-center rounded-full text-sm font-semibold transition-colors duration-300 sm:size-10",
-                step.id < currentStep && "bg-navy text-white",
-                step.id === currentStep &&
-                  "bg-rose-100 text-navy shadow-lg shadow-rose-200/40",
-                step.id > currentStep &&
-                  "border-2 border-gray-300 text-gray-400",
-              )}
-              animate={
-                step.id === currentStep ? { scale: [0.95, 1] } : { scale: 1 }
-              }
-              transition={{ duration: 0.3 }}
-            >
-              {step.id < currentStep ? (
-                <Check className="size-4" />
-              ) : (
-                step.id
-              )}
-            </motion.div>
-            <span
-              className={cn(
-                "text-[11px] font-medium sm:text-xs",
-                step.id <= currentStep
-                  ? "text-navy"
-                  : "text-gray-400",
-              )}
-            >
-              {step.name}
-            </span>
-          </div>
-          {index < steps.length - 1 && (
-            <div
-              className={cn(
-                "-mt-5 mx-1.5 h-0.5 w-8 sm:mx-3 sm:w-16",
-                step.id < currentStep ? "bg-navy" : "bg-gray-200",
-              )}
-            />
-          )}
-        </Fragment>
-      ))}
+    <div className={cn("flex flex-col gap-1.5", className)}>
+      <label htmlFor={id} className="text-[15px] font-semibold text-ink">
+        {label}
+        {optional && <span className="font-normal text-mute"> (optional)</span>}
+      </label>
+      {children}
+      {hint && !error && (
+        <p id={`${id}-hint`} className="text-[13px] text-mute">
+          {hint}
+        </p>
+      )}
+      {error && (
+        <p id={`${id}-error`} className="text-sm font-medium text-[#B42318]">
+          {error}
+        </p>
+      )}
     </div>
   )
 }
 
-function FormField({
-  label,
-  required,
-  children,
-}: {
-  label: string
-  required?: boolean
-  children: React.ReactNode
-}) {
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="space-y-1.5">
-      <Label className="text-[17px] font-semibold text-navy">
-        {label}
-        {required && <span className="ml-0.5 text-rose-primary">*</span>}
-      </Label>
+    <section className="flex flex-col gap-4 rounded-[18px] bg-white p-5 sm:p-[26px]">
+      <h2 className="text-[22px] font-extrabold tracking-[-0.01em]">{title}</h2>
       {children}
-    </div>
+    </section>
   )
 }
 
 export default function CheckoutPage() {
   const [mounted, setMounted] = useState(false)
-  const [step, setStep] = useState(1)
   const [formData, setFormData] = useState<FormData>(initialFormData)
   const [mobileSummaryOpen, setMobileSummaryOpen] = useState(false)
-  const [couponMessage, setCouponMessage] = useState("")
 
   const items = useCartStore((s) => s.items)
   const storePricing = useStorePricing()
@@ -217,6 +181,16 @@ export default function CheckoutPage() {
     () =>
       items.reduce((sum, item) => {
         return sum + liveLinePrice(item.product, storePricing) * item.quantity
+      }, 0),
+    [items, storePricing],
+  )
+
+  const savings = useMemo(
+    () =>
+      items.reduce((sum, item) => {
+        const effective = liveLinePrice(item.product, storePricing)
+        const was = wasPriceFor(item.product, effective)
+        return was === undefined ? sum : sum + (was - effective) * item.quantity
       }, 0),
     [items, storePricing],
   )
@@ -236,17 +210,6 @@ export default function CheckoutPage() {
   ) => {
     setFormData((prev) => ({ ...prev, [field]: value }))
   }
-
-  const handleApplyCoupon = () => {
-    setCouponMessage(
-      formData.couponCode.trim()
-        ? "That code isn't active, so the total is unchanged."
-        : "Enter a coupon code.",
-    )
-  }
-
-  const fieldClass =
-    "h-14 rounded-2xl border-2 border-rose-100 bg-white text-base text-navy placeholder:text-gray-400 focus-visible:border-rose-200 focus-visible:ring-0"
 
   const canProceedStep1 =
     formData.phone.trim() !== "" &&
@@ -363,826 +326,502 @@ export default function CheckoutPage() {
     }
   }
 
+  // The old step gates (details, then shipping method, then terms) all run
+  // here before the unchanged place-order call.
+  const handlePay = () => {
+    setStep1Touched(true)
+    const missing = [
+      ["firstName", formData.firstName.trim()],
+      ["lastName", formData.lastName.trim()],
+      ["phone", formData.phone.trim()],
+      ["shippingMethod", formData.shippingMethod],
+      ["address1", formData.address1.trim()],
+      ["city", formData.city.trim()],
+      ["region", formData.region.trim()],
+    ].find(([, value]) => !value)
+    if (missing) {
+      const el = document.getElementById(
+        missing[0] === "shippingMethod" ? "shipping-pickup" : missing[0],
+      )
+      el?.focus()
+      return
+    }
+    if (!canProceedStep1 || !formData.shippingMethod) return
+    void handlePlaceOrder()
+  }
+
+  const showError = (value: string) => step1Touched && !value.trim()
+  const describedBy = (id: string, invalid: boolean, hint?: boolean) =>
+    invalid ? `${id}-error` : hint ? `${id}-hint` : undefined
+
   if (!mounted) {
-    return (
-      <main className="min-h-[60vh]">
-        <Container>
-          <div className="py-20" />
-        </Container>
-      </main>
-    )
+    return <main className="min-h-[60vh]" />
   }
 
   if (items.length === 0) {
     return (
-      <main>
-        <Container>
-          <div className="flex flex-col items-center justify-center py-32">
-            <Package className="size-16 text-rose-primary/30" />
-            <h2 className="mt-6 font-heading text-2xl font-semibold text-navy">
-              Your bag is empty
-            </h2>
-            <p className="mt-2 text-muted-foreground">
-              Add some items before checking out
-            </p>
-            <Link href="/shop" className="mt-8">
-              <Button className="h-auto rounded-full bg-rose-100 px-10 py-3.5 text-base font-semibold text-navy hover:bg-rose-200">
-                Continue Shopping
-              </Button>
+      <main className="bg-white text-ink">
+        <div className="mx-auto max-w-[1200px] px-4 pt-7 pb-16 sm:px-6 lg:px-10">
+          <div className="flex max-w-2xl flex-col items-start gap-3 rounded-2xl bg-counter p-6 sm:p-8">
+            <h1 className="text-2xl font-extrabold">Your bag is empty</h1>
+            <p className="text-base text-mute">Add some items before checking out.</p>
+            <Link
+              href="/shop"
+              className="mt-1 inline-flex min-h-[52px] items-center rounded-xl bg-brand px-6 text-base font-bold text-white transition-colors hover:bg-brand-deep"
+            >
+              Shop essentials
             </Link>
           </div>
-        </Container>
+        </div>
       </main>
     )
   }
 
+  const payNote =
+    formData.shippingMethod === "pickup"
+      ? `You pay ${formatPrice(total)} now. Collect your order at Spintex.`
+      : formData.shippingMethod === "delivery"
+        ? `You pay ${formatPrice(total)} now. The store contacts you about the delivery fee.`
+        : ""
+
+  const summary = (
+    <OrderSummaryContent
+      items={items}
+      subtotal={subtotal}
+      savings={savings}
+      shippingMethod={formData.shippingMethod}
+      total={total}
+    />
+  )
+
   return (
-    <main className="pb-12">
-      <Container>
-        <motion.nav
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          className="py-4"
+    <main className="bg-counter text-ink">
+      <div className="mx-auto max-w-[1200px] px-4 pt-5 pb-16 sm:px-6 lg:px-10">
+        <Link
+          href="/cart"
+          className="inline-flex min-h-11 items-center text-[15px] font-bold text-raspberry hover:text-raspberry-deep"
         >
-          <ol className="flex items-center gap-2 text-sm text-muted-foreground">
-            <li>
-              <Link
-                href="/"
-                className="transition-colors hover:text-rose-primary"
-              >
-                Home
-              </Link>
-            </li>
-            <li>
-              <ChevronRight className="size-3.5" />
-            </li>
-            <li>
-              <Link
-                href="/cart"
-                className="transition-colors hover:text-rose-primary"
-              >
-                Your Bag
-              </Link>
-            </li>
-            <li>
-              <ChevronRight className="size-3.5" />
-            </li>
-            <li className="font-medium text-navy">Checkout</li>
-          </ol>
-        </motion.nav>
+          ← Back to bag
+        </Link>
 
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5 }}
-          className="mb-7"
-        >
-          <StepIndicator currentStep={step} />
-        </motion.div>
-
-        <div className="mb-8 lg:hidden">
+        <div className="mt-3 mb-5 lg:hidden">
           <button
+            type="button"
             onClick={() => setMobileSummaryOpen(!mobileSummaryOpen)}
-            className="flex w-full items-center justify-between rounded-2xl border border-rose-border bg-rose-light/50 px-5 py-4"
+            aria-expanded={mobileSummaryOpen}
+            aria-controls="mobile-order-summary"
+            className="flex min-h-14 w-full items-center justify-between gap-3 rounded-[14px] bg-white px-5 py-3 text-left"
           >
-            <div className="flex items-center gap-2">
-              <ShieldCheck className="size-4 text-rose-primary" />
-              <span className="text-sm font-medium text-navy">
-                Order Summary ({itemCount} {itemCount === 1 ? "item" : "items"})
-              </span>
-            </div>
-            <div className="flex items-center gap-3">
-              <span className="text-sm font-bold text-navy">
-                {formatPrice(total)}
-              </span>
+            <span className="text-[15px] font-bold">
+              Your order ({itemCount} {itemCount === 1 ? "item" : "items"})
+            </span>
+            <span className="flex items-center gap-2">
+              <span className="text-base font-extrabold tabular-nums">{formatPrice(total)}</span>
               <ChevronDown
+                aria-hidden
                 className={cn(
-                  "size-4 text-muted-foreground transition-transform duration-200",
+                  "size-5 text-mute transition-transform duration-200 motion-reduce:transition-none",
                   mobileSummaryOpen && "rotate-180",
                 )}
               />
-            </div>
+            </span>
           </button>
-          <AnimatePresence>
-            {mobileSummaryOpen && (
-              <motion.div
-                initial={{ height: 0, opacity: 0 }}
-                animate={{ height: "auto", opacity: 1 }}
-                exit={{ height: 0, opacity: 0 }}
-                transition={{ duration: 0.25 }}
-                className="overflow-hidden"
-              >
-                <div className="px-1 pt-4">
-                  <OrderSummaryContent
-                    items={items}
-                    subtotal={subtotal}
-                    shippingCost={shippingCost}
-                    shippingMethod={formData.shippingMethod}
-                    total={total}
-                    couponCode={formData.couponCode}
-                    onCouponChange={(val) => updateField("couponCode", val)}
-                    onApplyCoupon={handleApplyCoupon}
-                    couponMessage={couponMessage}
-                  />
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </div>
-
-        <div className="grid gap-7 lg:grid-cols-[1fr_360px] lg:gap-8">
-          <div>
-            <AnimatePresence mode="wait">
-              {step === 1 && (
-                <StepWrapper key="details">
-                  <h2 className="mb-6 font-heading text-2xl font-semibold text-navy">
-                    Your Details
-                  </h2>
-
-                  <div className="space-y-4">
-                    <div className="grid gap-4 sm:grid-cols-2">
-                      <FormField label="First Name" required>
-                        <Input
-                          placeholder="First name"
-                          value={formData.firstName}
-                          onChange={(e) =>
-                            updateField("firstName", e.target.value)
-                          }
-                          className={cn(fieldClass, step1Touched && !formData.firstName.trim() && "border-red-400")}
-                        />
-                        {step1Touched && !formData.firstName.trim() && (
-                          <p className="text-xs text-red-500 mt-1">First name is required</p>
-                        )}
-                      </FormField>
-                      <FormField label="Last Name" required>
-                        <Input
-                          placeholder="Last name"
-                          value={formData.lastName}
-                          onChange={(e) =>
-                            updateField("lastName", e.target.value)
-                          }
-                          className={cn(fieldClass, step1Touched && !formData.lastName.trim() && "border-red-400")}
-                        />
-                        {step1Touched && !formData.lastName.trim() && (
-                          <p className="text-xs text-red-500 mt-1">Last name is required</p>
-                        )}
-                      </FormField>
-                    </div>
-
-                    <FormField label="Email Address (optional)">
-                      <Input
-                        type="email"
-                        placeholder="your@email.com"
-                        value={formData.email}
-                        onChange={(e) =>
-                          updateField("email", e.target.value)
-                        }
-                        className={fieldClass}
-                      />
-                    </FormField>
-
-                    <FormField label="Phone Number" required>
-                      <Input
-                        type="tel"
-                        placeholder="059 270 7791"
-                        value={formData.phone}
-                        onChange={(e) =>
-                          updateField("phone", e.target.value)
-                        }
-                        className={cn(fieldClass, step1Touched && !formData.phone.trim() && "border-red-400")}
-                      />
-                      {step1Touched && !formData.phone.trim() && (
-                        <p className="text-xs text-red-500 mt-1">Phone number is required</p>
-                      )}
-                    </FormField>
-
-                    <FormField label="Street Address / Delivery Address" required>
-                      <Input
-                        placeholder="e.g. 111 Newtown Rd, Accra Newtown"
-                        value={formData.address1}
-                        onChange={(e) =>
-                          updateField("address1", e.target.value)
-                        }
-                        className={cn(fieldClass, step1Touched && !formData.address1.trim() && "border-red-400")}
-                      />
-                      {step1Touched && !formData.address1.trim() && (
-                        <p className="text-xs text-red-500 mt-1">Delivery address is required</p>
-                      )}
-                    </FormField>
-
-                    <div className="grid gap-4 sm:grid-cols-2">
-                      <FormField label="City" required>
-                        <Input
-                          placeholder="City"
-                          value={formData.city}
-                          onChange={(e) =>
-                            updateField("city", e.target.value)
-                          }
-                          className={cn(fieldClass, step1Touched && !formData.city.trim() && "border-red-400")}
-                        />
-                        {step1Touched && !formData.city.trim() && (
-                          <p className="text-xs text-red-500 mt-1">City is required</p>
-                        )}
-                      </FormField>
-                      <FormField label="Region" required>
-                        <Select
-                          value={formData.region}
-                          onValueChange={(val) =>
-                            updateField("region", val as string)
-                          }
-                        >
-                          <SelectTrigger className={cn("w-full", fieldClass, step1Touched && !formData.region && "border-red-400")}>
-                            <SelectValue placeholder="Select Region" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {ghanaRegions.map((r) => (
-                              <SelectItem key={r} value={r}>
-                                {r}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        {step1Touched && !formData.region && (
-                          <p className="text-xs text-red-500 mt-1">Please select your region</p>
-                        )}
-                      </FormField>
-                    </div>
-
-                    <div className="flex items-center gap-3 pt-2">
-                      <Checkbox
-                        checked={formData.saveForNextTime}
-                        onCheckedChange={(checked) =>
-                          updateField("saveForNextTime", checked as boolean)
-                        }
-                      />
-                      <Label className="cursor-pointer text-sm text-muted-foreground">
-                        Save this address for future orders
-                      </Label>
-                    </div>
-                  </div>
-
-                  <div className="mt-6 space-y-2">
-                    <Label htmlFor="orderNotes" className="text-sm font-medium">
-                      Order Notes <span className="text-muted-foreground font-normal">(optional)</span>
-                    </Label>
-                    <textarea
-                      id="orderNotes"
-                      rows={3}
-                      placeholder="Any special instructions, delivery notes, or requests for your order…"
-                      value={formData.orderNotes}
-                      onChange={(e) => updateField("orderNotes", e.target.value)}
-                      className="w-full resize-none rounded-lg border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-rose-200"
-                    />
-                  </div>
-
-                  <div className="mt-7 flex justify-end">
-                    <Button
-                      onClick={() => {
-                        setStep1Touched(true)
-                        if (canProceedStep1) setStep(2)
-                      }}
-                      className="h-auto rounded-full bg-rose-200 px-9 py-4 text-base font-semibold text-rose-800 hover:bg-rose-300"
-                    >
-                      Continue to Shipping
-                      <ArrowRight className="ml-2 size-4" />
-                    </Button>
-                  </div>
-                </StepWrapper>
-              )}
-
-              {step === 2 && (
-                <StepWrapper key="shipping">
-                  <h2 className="mb-5 font-heading text-2xl font-semibold text-navy">
-                    Shipping Method
-                  </h2>
-
-                  <RadioGroup
-                    value={formData.shippingMethod}
-                    onValueChange={(val) =>
-                      updateField("shippingMethod", val as string)
-                    }
-                    className="space-y-3"
-                  >
-                    {[
-                      {
-                        id: "pickup",
-                        name: "Store Pickup",
-                        estimate: "Manet Ville Estates, East Airport Spintex, Accra",
-                        price: 0,
-                        icon: Package,
-                      },
-                      {
-                        id: "delivery",
-                        name: "Doorstep Delivery",
-                        estimate: "We will contact you with the delivery cost",
-                        price: -1,
-                        icon: Truck,
-                      },
-                    ].map((option) => (
-                      <label
-                        key={option.id}
-                        className={cn(
-                          "flex cursor-pointer items-center gap-3 rounded-2xl border-2 p-4 transition-all",
-                          formData.shippingMethod === option.id
-                            ? "border-rose-300 bg-rose-light/50"
-                            : "border-rose-border hover:border-rose-300/50",
-                        )}
-                      >
-                        <RadioGroupItem value={option.id} />
-                        <option.icon className="size-5 shrink-0 text-navy" />
-                        <div className="flex-1">
-                          <p className="font-medium text-navy">{option.name}</p>
-                          <p className="text-sm text-muted-foreground">
-                            {option.estimate}
-                          </p>
-                        </div>
-                        <span
-                          className={cn(
-                            "text-sm font-semibold",
-                            option.price === 0
-                              ? "text-emerald-600"
-                              : "text-amber-600",
-                          )}
-                        >
-                          {option.price === 0
-                            ? "Free"
-                            : "At a Cost"}
-                        </span>
-                      </label>
-                    ))}
-                  </RadioGroup>
-
-
-                  <div className="mt-7 flex justify-between">
-                    <Button
-                      variant="ghost"
-                      onClick={() => setStep(1)}
-                      className="h-auto gap-2 px-5 py-3"
-                    >
-                      <ArrowLeft className="size-4" />
-                      Back
-                    </Button>
-                    <Button
-                      onClick={() => formData.shippingMethod && setStep(3)}
-                      disabled={!formData.shippingMethod}
-                      className="h-auto rounded-full bg-rose-100 px-8 py-3 text-sm font-semibold text-navy hover:bg-rose-200"
-                    >
-                      Continue to Payment
-                      <ArrowRight className="ml-2 size-4" />
-                    </Button>
-                  </div>
-                </StepWrapper>
-              )}
-
-              {step === 3 && (
-                <StepWrapper key="payment">
-                  <h2 className="mb-5 font-heading text-2xl font-semibold text-navy">
-                    Payment Method
-                  </h2>
-
-                  <RadioGroup
-                    value={formData.paymentMethod}
-                    onValueChange={(val) =>
-                      updateField("paymentMethod", val as string)
-                    }
-                    className="space-y-3"
-                  >
-                    {paymentMethods.map((method) => (
-                      <label
-                        key={method.id}
-                        className={cn(
-                          "flex cursor-pointer items-start gap-3 rounded-2xl border-2 p-4 transition-all",
-                          formData.paymentMethod === method.id
-                            ? "border-rose-300 bg-rose-light/50"
-                            : "border-rose-border hover:border-rose-300/50",
-                        )}
-                      >
-                        <RadioGroupItem value={method.id} className="mt-0.5" />
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2">
-                            <CreditCard className="size-4 text-navy" />
-                            <p className="font-medium text-navy">
-                              {method.name}
-                            </p>
-                            {method.recommended && (
-                              <span className="rounded-full bg-rose-200/60 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-navy">
-                                Recommended
-                              </span>
-                            )}
-                          </div>
-                          <p className="mt-1 text-sm text-muted-foreground">
-                            {method.description}
-                          </p>
-                        </div>
-                      </label>
-                    ))}
-                  </RadioGroup>
-
-                  <p className="mt-6 text-center text-sm text-muted-foreground">
-                    You&apos;ll be redirected to{" "}
-                    <span className="font-medium text-navy">
-                      {
-                        paymentMethods.find(
-                          (m) => m.id === formData.paymentMethod,
-                        )?.name
-                      }
-                    </span>{" "}
-                    to complete payment
-                  </p>
-
-                  <div className="mt-7 flex justify-between">
-                    <Button
-                      variant="ghost"
-                      onClick={() => setStep(2)}
-                      className="h-auto gap-2 px-5 py-3"
-                    >
-                      <ArrowLeft className="size-4" />
-                      Back
-                    </Button>
-                    <Button
-                      onClick={() => setStep(4)}
-                      className="h-auto rounded-full bg-rose-100 px-8 py-3 text-sm font-semibold text-navy hover:bg-rose-200"
-                    >
-                      Review Order
-                      <ArrowRight className="ml-2 size-4" />
-                    </Button>
-                  </div>
-                </StepWrapper>
-              )}
-
-              {step === 4 && (
-                <StepWrapper key="review">
-                  <h2 className="mb-5 font-heading text-2xl font-semibold text-navy">
-                    Review Your Order
-                  </h2>
-
-                  <div className="space-y-6">
-                    <div>
-                      <h3 className="mb-4 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
-                        Items ({itemCount})
-                      </h3>
-                      <div className="space-y-4">
-                        {items.map((item) => {
-                          const price = liveLinePrice(item.product, storePricing)
-                          return (
-                            <div
-                              key={`${item.product.id}-${item.selectedSize}-${item.selectedColor}`}
-                              className="flex items-center gap-4"
-                            >
-                              <div className="size-14 shrink-0 overflow-hidden rounded-xl bg-rose-light">
-                                <img
-                                  src={optimizedImageUrl(getProductPrimaryImageUrl(item.product), 160)}
-                                  alt=""
-                                  className="size-full object-cover"
-                                />
-                              </div>
-                              <div className="min-w-0 flex-1">
-                                <p className="truncate text-sm font-medium text-navy">
-                                  {item.product.name}
-                                </p>
-                                <p className="text-xs text-muted-foreground">
-                                  Qty: {item.quantity}
-                                  {item.selectedSize &&
-                                    ` · ${item.selectedSize}`}
-                                  {item.selectedColor &&
-                                    ` · ${item.selectedColor}`}
-                                </p>
-                              </div>
-                              <span className="text-sm font-semibold text-navy">
-                                {formatPrice(price * item.quantity)}
-                              </span>
-                            </div>
-                          )
-                        })}
-                      </div>
-                    </div>
-
-                    <Separator className="bg-rose-border" />
-
-                    <div>
-                      <h3 className="mb-3 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
-                        Shipping Address
-                      </h3>
-                      <p className="text-sm leading-relaxed text-navy">
-                        {formData.firstName} {formData.lastName}
-                        <br />
-                        {formData.address1}
-                        {formData.address2 && (
-                          <>
-                            <br />
-                            {formData.address2}
-                          </>
-                        )}
-                        <br />
-                        {formData.city}, {formData.region}
-                        <br />
-                        {formData.country}
-                        {formData.postalCode && ` · ${formData.postalCode}`}
-                      </p>
-                    </div>
-
-                    <Separator className="bg-rose-border" />
-
-                    <div className="grid gap-6 sm:grid-cols-2">
-                      <div>
-                        <h3 className="mb-2 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
-                          Shipping Method
-                        </h3>
-                        <p className="text-sm text-navy">
-                          {formData.shippingMethod === "pickup"
-                            ? "Store Pickup"
-                            : "Doorstep Delivery"}
-                        </p>
-                      </div>
-                      <div>
-                        <h3 className="mb-2 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
-                          Payment
-                        </h3>
-                        <p className="text-sm text-navy">
-                          {
-                            paymentMethods.find(
-                              (m) => m.id === formData.paymentMethod,
-                            )?.name
-                          }
-                        </p>
-                      </div>
-                    </div>
-
-                    {formData.orderNotes && (
-                      <>
-                        <Separator className="bg-rose-border" />
-                        <div>
-                          <h3 className="mb-2 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
-                            Order Notes
-                          </h3>
-                          <p className="text-sm text-navy">{formData.orderNotes}</p>
-                        </div>
-                      </>
-                    )}
-
-                    <Separator className="bg-rose-border" />
-
-                    <div className="space-y-3">
-                      <div className="flex justify-between text-sm">
-                        <span className="text-muted-foreground">Subtotal</span>
-                        <span className="font-medium text-navy">
-                          {formatPrice(subtotal)}
-                        </span>
-                      </div>
-                      <div className="flex justify-between text-sm">
-                        <span className="text-muted-foreground">Shipping</span>
-                        <span className="font-medium text-navy">
-                          Confirmed by store
-                        </span>
-                      </div>
-                      <Separator className="bg-rose-border" />
-                      <div className="flex justify-between pt-1">
-                        <span className="text-base font-semibold text-navy">
-                          Total
-                        </span>
-                        <span className="text-lg font-bold text-navy">
-                          {formatPrice(total)}
-                        </span>
-                      </div>
-                    </div>
-
-                    <div className="flex items-start gap-3">
-                      <Checkbox
-                        checked={formData.agreeToTerms}
-                        onCheckedChange={(checked) =>
-                          updateField("agreeToTerms", checked as boolean)
-                        }
-                      />
-                      <Label className="cursor-pointer text-sm leading-relaxed text-muted-foreground">
-                        I agree to the{" "}
-                        <Link
-                          href="/policies/terms"
-                          target="_blank"
-                          className="font-medium text-navy underline underline-offset-2"
-                        >
-                          Terms & Conditions
-                        </Link>{" "}
-                        and{" "}
-                        <Link
-                          href="/policies/privacy"
-                          target="_blank"
-                          className="font-medium text-navy underline underline-offset-2"
-                        >
-                          Privacy Policy
-                        </Link>
-                      </Label>
-                    </div>
-                  </div>
-
-                  {orderError && (
-                    <p className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">
-                      {orderError}
-                    </p>
-                  )}
-
-                  <div className="mt-7 flex flex-col gap-3 sm:flex-row sm:justify-between">
-                    <Button
-                      variant="ghost"
-                      onClick={() => setStep(3)}
-                      className="h-auto gap-2 px-5 py-3"
-                      disabled={placingOrder}
-                    >
-                      <ArrowLeft className="size-4" />
-                      Back
-                    </Button>
-                    <Button
-                      onClick={handlePlaceOrder}
-                      disabled={!formData.agreeToTerms || placingOrder}
-                      className="h-auto rounded-full bg-rose-100 px-10 py-3.5 text-base font-semibold text-navy hover:bg-rose-200"
-                    >
-                      {placingOrder ? (
-                        <>
-                          <span className="mr-2 size-5 animate-spin rounded-full border-2 border-navy border-t-transparent" />
-                          Processing…
-                        </>
-                      ) : (
-                        <>
-                          <ShieldCheck className="mr-2 size-5" />
-                          Place Order
-                        </>
-                      )}
-                    </Button>
-                  </div>
-                </StepWrapper>
-              )}
-            </AnimatePresence>
-          </div>
-
-          <div className="hidden lg:block">
-            <div className="sticky top-20 space-y-3">
-              <Card className="overflow-visible rounded-[2rem] border border-rose-border/60 bg-rose-100 text-navy shadow-[0_22px_50px_-25px_rgba(15,23,42,0.12)]">
-                <CardContent className="p-5">
-                  <h3 className="mb-4 font-heading text-2xl font-semibold text-navy">
-                    Order Summary
-                  </h3>
-                  <OrderSummaryContent
-                    items={items}
-                    subtotal={subtotal}
-                    shippingCost={shippingCost}
-                    shippingMethod={formData.shippingMethod}
-                    total={total}
-                    couponCode={formData.couponCode}
-                    onCouponChange={(val) => updateField("couponCode", val)}
-                    onApplyCoupon={handleApplyCoupon}
-                    couponMessage={couponMessage}
-                  />
-                </CardContent>
-              </Card>
-              <Card className="border-rose-border/80">
-                <CardContent className="flex items-start gap-3 p-4">
-                  <MessageCircle className="mt-0.5 size-4 text-rose-primary" />
-                  <div>
-                    <p className="text-sm font-semibold text-navy">Need help?</p>
-                    <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">
-                      Our concierge can help with shipping, payment, and fit before you place your order.
-                    </p>
-                  </div>
-                </CardContent>
-              </Card>
+          {mobileSummaryOpen && (
+            <div id="mobile-order-summary" className="mt-2 rounded-[18px] bg-white p-5">
+              {summary}
             </div>
-          </div>
+          )}
         </div>
-      </Container>
-    </main>
-  )
-}
 
-function StepWrapper({ children }: { children: React.ReactNode }) {
-  return (
-    <motion.div
-      initial={{ opacity: 0, x: 30 }}
-      animate={{ opacity: 1, x: 0 }}
-      exit={{ opacity: 0, x: -30 }}
-      transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] as const }}
-      className="rounded-[2rem] border border-rose-border/40 bg-white p-6 shadow-[0_16px_40px_-28px_rgba(15,23,42,0.35)] sm:p-8"
-    >
-      {children}
-    </motion.div>
+        <div className="grid items-start gap-6 lg:mt-3 lg:grid-cols-[minmax(0,1fr)_380px] lg:gap-8">
+          <form
+            noValidate
+            onSubmit={(e) => {
+              e.preventDefault()
+              if (formData.agreeToTerms && !placingOrder) handlePay()
+            }}
+            className="flex min-w-0 flex-col gap-5"
+          >
+            <h1 className="text-[34px] leading-[1.05] font-extrabold tracking-[-0.03em] sm:text-[40px]">
+              Checkout
+            </h1>
+
+            <Section title="Contact">
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Field id="firstName" label="First name" error={showError(formData.firstName) ? "First name is required" : undefined}>
+                  <input
+                    id="firstName"
+                    type="text"
+                    autoComplete="given-name"
+                    value={formData.firstName}
+                    onChange={(e) => updateField("firstName", e.target.value)}
+                    aria-required
+                    aria-invalid={showError(formData.firstName) || undefined}
+                    aria-describedby={describedBy("firstName", showError(formData.firstName))}
+                    className={cn(inputClass, showError(formData.firstName) && errorInputClass)}
+                  />
+                </Field>
+                <Field id="lastName" label="Last name" error={showError(formData.lastName) ? "Last name is required" : undefined}>
+                  <input
+                    id="lastName"
+                    type="text"
+                    autoComplete="family-name"
+                    value={formData.lastName}
+                    onChange={(e) => updateField("lastName", e.target.value)}
+                    aria-required
+                    aria-invalid={showError(formData.lastName) || undefined}
+                    aria-describedby={describedBy("lastName", showError(formData.lastName))}
+                    className={cn(inputClass, showError(formData.lastName) && errorInputClass)}
+                  />
+                </Field>
+                <Field
+                  id="phone"
+                  label="Phone number"
+                  hint="We'll reach you on this number with order updates."
+                  error={showError(formData.phone) ? "Phone number is required" : undefined}
+                >
+                  <input
+                    id="phone"
+                    type="tel"
+                    inputMode="tel"
+                    autoComplete="tel"
+                    placeholder="059 270 7791"
+                    value={formData.phone}
+                    onChange={(e) => updateField("phone", e.target.value)}
+                    aria-required
+                    aria-invalid={showError(formData.phone) || undefined}
+                    aria-describedby={describedBy("phone", showError(formData.phone), true)}
+                    className={cn(inputClass, showError(formData.phone) && errorInputClass)}
+                  />
+                </Field>
+                <Field id="email" label="Email" optional>
+                  <input
+                    id="email"
+                    type="email"
+                    autoComplete="email"
+                    placeholder="your@email.com"
+                    value={formData.email}
+                    onChange={(e) => updateField("email", e.target.value)}
+                    className={inputClass}
+                  />
+                </Field>
+              </div>
+            </Section>
+
+            <Section title="Delivery">
+              <div
+                role="radiogroup"
+                aria-label="How would you like to get your order?"
+                aria-describedby={step1Touched && !formData.shippingMethod ? "shipping-error" : undefined}
+                className="grid gap-3 sm:grid-cols-2"
+              >
+                {shippingOptions.map((option) => {
+                  const selected = formData.shippingMethod === option.id
+                  return (
+                    <label
+                      key={option.id}
+                      className={cn(
+                        "flex cursor-pointer gap-3 rounded-[14px] p-[18px] transition-colors has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-raspberry",
+                        selected
+                          ? "border-2 border-brand bg-blush"
+                          : "border border-line bg-white hover:border-field",
+                      )}
+                    >
+                      <input
+                        id={`shipping-${option.id}`}
+                        type="radio"
+                        name="shippingMethod"
+                        value={option.id}
+                        checked={selected}
+                        onChange={() => updateField("shippingMethod", option.id)}
+                        className="sr-only"
+                      />
+                      <span
+                        aria-hidden
+                        className="mt-px flex size-[22px] shrink-0 items-center justify-center rounded-full border-2 border-brand"
+                      >
+                        <span className={cn("size-2.5 rounded-full", selected ? "bg-brand" : "bg-transparent")} />
+                      </span>
+                      <span className="flex flex-col gap-1">
+                        <strong className="text-base font-bold">{option.name}</strong>
+                        <span className={cn("text-sm leading-[1.45]", selected ? "text-ink/80" : "text-mute")}>
+                          {option.detail}
+                        </span>
+                      </span>
+                    </label>
+                  )
+                })}
+              </div>
+              {step1Touched && !formData.shippingMethod && (
+                <p id="shipping-error" className="text-sm font-medium text-[#B42318]">
+                  Choose store pickup or doorstep delivery
+                </p>
+              )}
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Field
+                  id="address1"
+                  label="Street address / delivery address"
+                  className="sm:col-span-2"
+                  error={showError(formData.address1) ? "Delivery address is required" : undefined}
+                >
+                  <input
+                    id="address1"
+                    type="text"
+                    autoComplete="street-address"
+                    placeholder="e.g. 111 Newtown Rd, Accra Newtown"
+                    value={formData.address1}
+                    onChange={(e) => updateField("address1", e.target.value)}
+                    aria-required
+                    aria-invalid={showError(formData.address1) || undefined}
+                    aria-describedby={describedBy("address1", showError(formData.address1))}
+                    className={cn(inputClass, showError(formData.address1) && errorInputClass)}
+                  />
+                </Field>
+                <Field id="city" label="City" error={showError(formData.city) ? "City is required" : undefined}>
+                  <input
+                    id="city"
+                    type="text"
+                    autoComplete="address-level2"
+                    value={formData.city}
+                    onChange={(e) => updateField("city", e.target.value)}
+                    aria-required
+                    aria-invalid={showError(formData.city) || undefined}
+                    aria-describedby={describedBy("city", showError(formData.city))}
+                    className={cn(inputClass, showError(formData.city) && errorInputClass)}
+                  />
+                </Field>
+                <Field id="region" label="Region" error={showError(formData.region) ? "Please select your region" : undefined}>
+                  <select
+                    id="region"
+                    autoComplete="address-level1"
+                    value={formData.region}
+                    onChange={(e) => updateField("region", e.target.value)}
+                    aria-required
+                    aria-invalid={showError(formData.region) || undefined}
+                    aria-describedby={describedBy("region", showError(formData.region))}
+                    className={cn(inputClass, "px-3", !formData.region && "text-mute", showError(formData.region) && errorInputClass)}
+                  >
+                    <option value="" disabled>
+                      Select region
+                    </option>
+                    {ghanaRegions.map((r) => (
+                      <option key={r} value={r} className="text-ink">
+                        {r}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+                <Field id="orderNotes" label="Order notes" optional className="sm:col-span-2">
+                  <textarea
+                    id="orderNotes"
+                    rows={3}
+                    placeholder="Any special instructions, delivery notes, or requests for your order…"
+                    value={formData.orderNotes}
+                    onChange={(e) => updateField("orderNotes", e.target.value)}
+                    className={cn(inputClass, "resize-none py-3 leading-normal")}
+                  />
+                </Field>
+              </div>
+
+              <label className="flex min-h-11 cursor-pointer items-center gap-3 text-[15px]">
+                <input
+                  type="checkbox"
+                  checked={formData.saveForNextTime}
+                  onChange={(e) => updateField("saveForNextTime", e.target.checked)}
+                  className="size-5 shrink-0 accent-raspberry"
+                />
+                Save this address for future orders
+              </label>
+            </Section>
+
+            <Section title="Payment">
+              <div role="radiogroup" aria-label="Payment method" className="flex flex-col gap-3">
+                {paymentMethods.map((method) => {
+                  const selected = formData.paymentMethod === method.id
+                  return (
+                    <label
+                      key={method.id}
+                      className={cn(
+                        "flex cursor-pointer items-start gap-3.5 rounded-[14px] p-[18px] has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-raspberry",
+                        selected ? "border-2 border-brand bg-blush" : "border border-line bg-white",
+                      )}
+                    >
+                      <input
+                        type="radio"
+                        name="paymentMethod"
+                        value={method.id}
+                        checked={selected}
+                        onChange={() => updateField("paymentMethod", method.id)}
+                        className="sr-only"
+                      />
+                      <Smartphone className="size-[26px] shrink-0 text-raspberry" aria-hidden />
+                      <span className="flex flex-col gap-1">
+                        <strong className="text-base font-bold">{method.name}</strong>
+                        <span className="text-sm leading-[1.45] text-ink/80">{method.description}</span>
+                      </span>
+                    </label>
+                  )
+                })}
+              </div>
+
+              <label className="flex cursor-pointer items-start gap-2.5 py-1 text-[15px] leading-[1.45]">
+                <input
+                  type="checkbox"
+                  checked={formData.agreeToTerms}
+                  onChange={(e) => updateField("agreeToTerms", e.target.checked)}
+                  className="mt-px size-5 shrink-0 accent-raspberry"
+                />
+                <span>
+                  I agree to the{" "}
+                  <Link
+                    href="/policies/terms"
+                    target="_blank"
+                    className="font-semibold text-raspberry underline underline-offset-2 hover:text-raspberry-deep"
+                  >
+                    Terms &amp; Conditions
+                  </Link>{" "}
+                  and{" "}
+                  <Link
+                    href="/policies/privacy"
+                    target="_blank"
+                    className="font-semibold text-raspberry underline underline-offset-2 hover:text-raspberry-deep"
+                  >
+                    Privacy Policy
+                  </Link>
+                  .
+                </span>
+              </label>
+
+              {orderError && (
+                <p role="alert" className="rounded-[10px] bg-[#FDECEA] px-4 py-3 text-[15px] font-medium text-[#B42318]">
+                  {orderError}
+                </p>
+              )}
+
+              <button
+                type="submit"
+                disabled={!formData.agreeToTerms || placingOrder}
+                className="inline-flex min-h-[58px] items-center justify-center gap-2 rounded-xl bg-brand px-5 text-center text-[17px] font-extrabold text-white transition-colors hover:bg-brand-deep disabled:cursor-not-allowed disabled:opacity-45 sm:text-lg"
+              >
+                {placingOrder ? (
+                  <>
+                    <span
+                      aria-hidden
+                      className="size-5 animate-spin rounded-full border-2 border-white border-t-transparent motion-reduce:animate-none"
+                    />
+                    Processing…
+                  </>
+                ) : (
+                  <>Pay {formatPrice(total)} with Mobile Money</>
+                )}
+              </button>
+              {!formData.agreeToTerms && (
+                <p className="text-center text-sm text-mute">
+                  Tick the box above to agree to the terms before you pay.
+                </p>
+              )}
+              {formData.agreeToTerms && payNote && (
+                <p className="text-center text-sm text-mute">{payNote}</p>
+              )}
+            </Section>
+          </form>
+
+          <aside
+            aria-label="Order summary"
+            className="hidden flex-col gap-4 rounded-[18px] bg-white p-6 lg:sticky lg:top-6 lg:flex"
+          >
+            <h2 className="text-xl font-extrabold">Your order</h2>
+            {summary}
+          </aside>
+        </div>
+      </div>
+    </main>
   )
 }
 
 function OrderSummaryContent({
   items,
   subtotal,
-  shippingCost,
+  savings,
   shippingMethod,
   total,
-  couponCode,
-  onCouponChange,
-  onApplyCoupon,
-  couponMessage,
 }: {
   items: ReturnType<typeof useCartStore.getState>["items"]
   subtotal: number
-  shippingCost: number
+  savings: number
   shippingMethod: string
   total: number
-  couponCode: string
-  onCouponChange: (value: string) => void
-  onApplyCoupon: () => void
-  couponMessage: string
 }) {
-  const tax = 0
   const storePricing = useStorePricing()
 
   return (
-    <div className="space-y-5 text-navy">
-      <div className="max-h-64 space-y-3 overflow-y-auto pr-1">
+    <div className="flex flex-col gap-4 text-ink">
+      <ul className="flex max-h-72 flex-col gap-3.5 overflow-y-auto">
         {items.map((item) => {
           const price = liveLinePrice(item.product, storePricing)
+          const options = [item.selectedSize, item.selectedColor].filter(Boolean).join(" · ")
           return (
-            <div
+            <li
               key={`${item.product.id}-${item.selectedSize}-${item.selectedColor}`}
               className="flex items-center gap-3"
             >
-              <div className="relative size-12 shrink-0 overflow-hidden rounded-lg bg-white/80">
+              <div className="size-16 shrink-0 overflow-hidden rounded-[10px] bg-counter">
                 <img
                   src={optimizedImageUrl(getProductPrimaryImageUrl(item.product), 160)}
                   alt=""
                   className="size-full object-cover"
                 />
-                <span className="absolute -top-1 -right-1 flex size-5 items-center justify-center rounded-full bg-rose-200 text-[10px] font-bold text-navy">
-                  {item.quantity}
-                </span>
               </div>
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-semibold text-navy">
-                  {item.product.name}
+              <div className="min-w-0 flex-1 text-[15px] leading-[1.35]">
+                <p className="font-bold">{item.product.name}</p>
+                <p className="text-mute">
+                  {options && `${options} · `}Qty {item.quantity}
                 </p>
-                {(item.selectedSize || item.selectedColor) && (
-                  <p className="text-[11px] text-navy/70">
-                    {item.selectedSize}
-                    {item.selectedSize && item.selectedColor && " · "}
-                    {item.selectedColor}
-                  </p>
-                )}
               </div>
-              <span className="shrink-0 text-sm font-semibold text-navy">
+              <span className="shrink-0 text-[15px] font-bold tabular-nums">
                 {formatPrice(price * item.quantity)}
               </span>
-            </div>
+            </li>
           )
         })}
+      </ul>
+
+      <dl className="grid grid-cols-[1fr_auto] gap-x-3 gap-y-2.5 border-t border-line pt-3.5 text-[15px] tabular-nums">
+        <dt>Items</dt>
+        <dd className="text-right font-semibold">{formatPrice(subtotal)}</dd>
+        {savings > 0 && (
+          <>
+            <dt className="text-[#1E6B3A]">You save</dt>
+            <dd className="text-right font-bold text-[#1E6B3A]">{formatPrice(savings)}</dd>
+          </>
+        )}
+        <dt>{shippingMethod === "pickup" ? "Store pickup" : "Delivery"}</dt>
+        <dd className="text-right text-mute">
+          {shippingMethod === "pickup"
+            ? "Free"
+            : shippingMethod === "delivery"
+              ? "Confirmed by store"
+              : "Choose above"}
+        </dd>
+      </dl>
+
+      <div className="flex items-baseline justify-between gap-3 border-t border-line pt-3.5">
+        <span className="text-[17px] font-bold">Total</span>
+        <span className="text-[26px] font-extrabold tabular-nums sm:text-[28px]">{formatPrice(total)}</span>
       </div>
 
-      <div className="h-px bg-navy/10" />
-
-      <div>
-        <p className="mb-2 text-sm font-semibold">Coupon Code</p>
-        <div className="flex overflow-hidden rounded-xl border border-rose-border bg-white">
-          <Input
-            value={couponCode}
-            onChange={(e) => onCouponChange(e.target.value)}
-            placeholder="Enter coupon code"
-            className="h-11 border-0 bg-transparent text-base text-navy placeholder:text-navy/45 focus-visible:ring-0"
-            onKeyDown={(e) => e.key === "Enter" && onApplyCoupon()}
-          />
-          <button
-            type="button"
-            onClick={onApplyCoupon}
-            className="px-4 text-base font-semibold text-navy hover:bg-rose-50"
-          >
-            Apply
-          </button>
-        </div>
-        {couponMessage ? (
-          <p className="mt-2 text-xs text-navy/75">{couponMessage}</p>
-        ) : null}
-      </div>
-
-      <div className="space-y-2">
-        <div className="flex justify-between text-[15px]">
-          <span className="text-navy/75">Subtotal</span>
-          <span className="font-semibold text-navy">{formatPrice(subtotal)}</span>
-        </div>
-        <div className="flex justify-between text-[15px]">
-          <span className="text-navy/75">Shipping</span>
-          <span className="font-semibold text-navy">Confirmed by store</span>
-        </div>
-        <div className="flex justify-between text-[15px]">
-          <span className="text-navy/75">Tax</span>
-          <span className="font-semibold text-navy">{formatPrice(tax)}</span>
-        </div>
-      </div>
-
-      <div className="h-px bg-navy/10" />
-
-      <div className="flex justify-between">
-        <span className="text-2xl font-semibold text-navy">Total</span>
-        <span className="text-2xl font-semibold leading-none text-navy">
-          {formatPrice(total)}
-        </span>
-      </div>
-
-      <div className="flex items-center justify-center gap-2 pt-1 text-sm font-semibold text-navy/85">
-        <ShieldCheck className="size-4" />
-        <span>Secure Checkout</span>
-      </div>
+      <p className="text-sm leading-normal text-mute">
+        Questions before you pay?{" "}
+        <a
+          href={WHATSAPP_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="font-bold text-raspberry hover:text-raspberry-deep"
+        >
+          Ask us on WhatsApp
+        </a>
+      </p>
     </div>
   )
 }

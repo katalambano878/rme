@@ -32,7 +32,7 @@ export function HeroSection() {
 
   return (
     <section
-      className="relative isolate -mt-[4.25rem] min-h-[100svh] min-h-screen w-full overflow-hidden"
+      className="relative isolate min-h-[100svh] min-h-screen w-full overflow-hidden"
       aria-roledescription="carousel"
     >
       <div className="absolute inset-0">

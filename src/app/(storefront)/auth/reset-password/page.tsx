@@ -3,11 +3,12 @@
 import { Suspense, useState } from "react"
 import Link from "next/link"
 import { useSearchParams } from "next/navigation"
-import { motion } from "framer-motion"
-import { Eye, EyeOff, KeyRound, Loader2 } from "lucide-react"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
+import { Loader2 } from "lucide-react"
+
+const labelClass = "text-[15px] font-semibold text-ink"
+const inputClass =
+  "block min-h-[52px] w-full rounded-[10px] border border-field bg-white px-3.5 text-base text-ink placeholder:text-mute transition-colors duration-150 focus:border-ink"
+const linkClass = "font-bold text-raspberry transition-colors duration-150 hover:text-raspberry-deep"
 
 function ResetPasswordForm() {
   const token = useSearchParams().get("token") || ""
@@ -46,9 +47,9 @@ function ResetPasswordForm() {
 
   if (!token) {
     return (
-      <div className="space-y-4 text-center">
-        <p className="text-navy">This reset link is incomplete.</p>
-        <Link href="/auth/forgot-password" className="font-medium text-rose-primary hover:underline">
+      <div className="flex flex-col items-start gap-3 rounded-[18px] bg-counter p-6">
+        <p className="text-[17px] leading-[1.55] text-ink">This reset link is incomplete.</p>
+        <Link href="/auth/forgot-password" className={linkClass}>
           Request a new link
         </Link>
       </div>
@@ -57,11 +58,13 @@ function ResetPasswordForm() {
 
   if (done) {
     return (
-      <div className="space-y-4 text-center" role="status">
-        <p className="text-navy">Your password has been changed. You&apos;ve been signed out everywhere else.</p>
+      <div className="flex flex-col items-start gap-4 rounded-[18px] bg-counter p-6" role="status">
+        <p className="text-[17px] leading-[1.55] text-ink">
+          Your password has been changed. You&apos;ve been signed out everywhere else.
+        </p>
         <Link
           href="/auth/login"
-          className="inline-flex rounded-full bg-rose-100 px-6 py-2.5 font-medium text-navy transition-colors hover:bg-rose-200"
+          className="inline-flex min-h-[52px] items-center justify-center rounded-xl bg-brand px-6 text-base font-bold text-white transition-opacity duration-150 hover:opacity-90"
         >
           Sign in
         </Link>
@@ -70,11 +73,13 @@ function ResetPasswordForm() {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-5">
-      <div className="space-y-2">
-        <Label htmlFor="password">New password</Label>
+    <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+      <div className="flex flex-col gap-1.5">
+        <label htmlFor="password" className={labelClass}>
+          New password
+        </label>
         <div className="relative">
-          <Input
+          <input
             id="password"
             type={showPassword ? "text" : "password"}
             placeholder="At least 6 characters"
@@ -82,73 +87,76 @@ function ResetPasswordForm() {
             onChange={(e) => setPassword(e.target.value)}
             required
             autoComplete="new-password"
-            className="rounded-xl pr-10"
+            className={`${inputClass} pr-20`}
           />
           <button
             type="button"
             onClick={() => setShowPassword(!showPassword)}
             aria-label={showPassword ? "Hide password" : "Show password"}
-            className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+            aria-controls="password confirm"
+            className="absolute inset-y-1 right-1 min-h-11 rounded-lg px-3.5 text-sm font-bold text-ink transition-colors duration-150 hover:bg-counter"
           >
-            {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+            {showPassword ? "Hide" : "Show"}
           </button>
         </div>
       </div>
 
-      <div className="space-y-2">
-        <Label htmlFor="confirm">Confirm new password</Label>
-        <Input
+      <div className="flex flex-col gap-1.5">
+        <label htmlFor="confirm" className={labelClass}>
+          Confirm new password
+        </label>
+        <input
           id="confirm"
           type={showPassword ? "text" : "password"}
           value={confirm}
           onChange={(e) => setConfirm(e.target.value)}
           required
           autoComplete="new-password"
-          className="rounded-xl"
+          className={inputClass}
         />
       </div>
 
       {error && (
-        <p className="rounded-lg bg-red-50 p-3 text-sm text-red-600">
+        <p role="alert" className="rounded-[10px] bg-[#FDECEA] px-4 py-3 text-[15px] text-[#B42318]">
           {error}{" "}
           {/expired|invalid/i.test(error) && (
-            <Link href="/auth/forgot-password" className="font-medium underline">
+            <Link href="/auth/forgot-password" className="font-bold underline">
               Request a new link
             </Link>
           )}
         </p>
       )}
 
-      <Button
+      <button
         type="submit"
         disabled={loading}
-        className="w-full rounded-full bg-rose-100 py-5 text-navy hover:bg-rose-200"
+        className="inline-flex min-h-14 items-center justify-center gap-2 rounded-xl bg-brand px-6 text-[17px] font-bold text-white transition-opacity duration-150 hover:opacity-90 disabled:opacity-60"
       >
-        {loading ? <Loader2 className="mr-2 size-4 animate-spin" /> : <KeyRound className="mr-2 size-4" />}
-        Save new password
-      </Button>
+        {loading && <Loader2 className="size-5 animate-spin motion-reduce:animate-none" aria-hidden="true" />}
+        {loading ? "Saving…" : "Save new password"}
+      </button>
     </form>
   )
 }
 
 export default function ResetPasswordPage() {
   return (
-    <div className="flex min-h-[80vh] items-center justify-center px-4 py-12">
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5 }}
-        className="w-full max-w-md"
-      >
-        <div className="mb-8 text-center">
-          <h1 className="font-heading text-3xl text-navy">Choose a new password</h1>
-        </div>
-        <div className="rounded-2xl border border-rose-border/60 bg-white p-8 luxury-shadow">
-          <Suspense fallback={<Loader2 className="mx-auto size-5 animate-spin text-muted-foreground" />}>
-            <ResetPasswordForm />
-          </Suspense>
-        </div>
-      </motion.div>
+    <div className="mx-auto w-full max-w-[1180px] px-4 pb-16 pt-10 sm:px-6 sm:pb-[72px] sm:pt-14 lg:px-8">
+      <section className="flex w-full max-w-[520px] flex-col gap-6">
+        <h1 className="text-[34px] font-extrabold leading-[1.05] tracking-[-0.03em] text-ink sm:text-[44px]">
+          Choose a new password
+        </h1>
+        <Suspense
+          fallback={
+            <Loader2
+              className="size-5 animate-spin text-mute motion-reduce:animate-none"
+              aria-label="Loading"
+            />
+          }
+        >
+          <ResetPasswordForm />
+        </Suspense>
+      </section>
     </div>
   )
 }

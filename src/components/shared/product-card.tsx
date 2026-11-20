@@ -1,151 +1,108 @@
 "use client"
 
-import { useState } from "react"
 import Link from "next/link"
-import { motion } from "framer-motion"
-import { Heart, ShoppingBag, Eye } from "lucide-react"
+import { Heart } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { isOutOfStock, useCartStore } from "@/lib/store/cart-store"
 import { useWishlistStore } from "@/lib/store/wishlist-store"
 import { useHydrated } from "@/lib/hooks/use-hydrated"
 import type { Product } from "@/types/product"
-import {
-  getProductPrimaryImageUrl,
-  optimizedImageUrl,
-} from "@/lib/product-image"
-import { BadgeSet } from "./badge-set"
-import { Price } from "./price"
+import { getProductPrimaryImageUrl, optimizedImageUrl } from "@/lib/product-image"
+import { Price, savePercent } from "./price"
 
 interface ProductCardProps {
   product: Product
   className?: string
+  /** Opens the options picker for products with shades/sizes. Without it, those link to the product page. */
   onQuickView?: (product: Product) => void
+  /** Hide the category line (e.g. inside a single-category list). */
+  hideCategory?: boolean
 }
 
-export function ProductCard({ product, className, onQuickView }: ProductCardProps) {
-  const [isHovered, setIsHovered] = useState(false)
+/** Clean Counter product tile: square photo, category, name, price, one clear button. */
+export function ProductCard({ product, className, onQuickView, hideCategory }: ProductCardProps) {
   const addItem = useCartStore((s) => s.addItem)
   const toggleItem = useWishlistStore((s) => s.toggleItem)
   const hydrated = useHydrated()
   const storedInWishlist = useWishlistStore((s) => s.isInWishlist(product.id))
-  const isInWishlist = hydrated && storedInWishlist
+  const inWishlist = hydrated && storedInWishlist
   const needsOptions = product.variants.length > 0
   const soldOut = isOutOfStock(product)
-  const addButtonClass =
-    "flex w-full items-center justify-center gap-2 rounded-xl border border-rose-border bg-white py-2.5 text-sm font-medium text-navy transition-all hover:border-rose-primary hover:bg-rose-light hover:text-rose-primary"
+  const pct = savePercent(product.price, product.salePrice)
+  const href = `/products/${product.slug}`
+
+  const buttonClass =
+    "mt-auto inline-flex min-h-11 w-full items-center justify-center rounded-xl border-2 border-brand bg-white px-3 text-[15px] font-bold text-ink transition-colors hover:bg-brand hover:text-white"
 
   return (
-    <motion.div
-      className={cn("group relative", className)}
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
-      whileHover={{ y: -4 }}
-      transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] as const }}
-    >
-      <Link href={`/products/${product.slug}`} className="block">
-        <div className="relative aspect-[3/4] overflow-hidden rounded-2xl bg-rose-light">
+    <article className={cn("group relative flex h-full flex-col gap-2.5", className)}>
+      <div className="relative aspect-square overflow-hidden rounded-[14px] bg-counter">
+        <Link href={href} tabIndex={-1} aria-hidden className="block size-full">
           <img
             src={optimizedImageUrl(getProductPrimaryImageUrl(product), 480)}
             alt=""
-            className="absolute inset-0 h-full w-full object-cover"
+            className="size-full object-cover transition-transform duration-500 ease-out group-hover:scale-[1.03]"
             loading="lazy"
             decoding="async"
           />
-
-          {product.badges.length > 0 && (
-            <div className="absolute top-3 left-3 z-10">
-              <BadgeSet
-                badges={product.badges}
-                discountPercent={
-                  product.salePrice !== undefined && product.price > 0
-                    ? Math.round((1 - product.salePrice / product.price) * 100)
-                    : undefined
-                }
-              />
-            </div>
-          )}
-
-          {onQuickView && (
-            <motion.div
-              className="absolute inset-0 flex items-center justify-center bg-navy/30 backdrop-blur-[2px]"
-              initial={false}
-              animate={{ opacity: isHovered ? 1 : 0 }}
-              transition={{ duration: 0.25 }}
-              style={{ pointerEvents: isHovered ? "auto" : "none" }}
-            >
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.preventDefault()
-                  onQuickView(product)
-                }}
-                className="flex items-center gap-2 rounded-full bg-white/95 px-5 py-2.5 text-sm font-medium text-navy shadow-lg backdrop-blur-sm transition-transform hover:scale-105"
-              >
-                <Eye className="size-4" />
-                Quick View
-              </button>
-            </motion.div>
-          )}
-        </div>
-      </Link>
-
-      <button
-        onClick={() => toggleItem(product)}
-        className={cn(
-          "absolute top-3 right-3 z-10 flex size-9 items-center justify-center rounded-full bg-white/90 shadow-sm backdrop-blur-sm transition-all hover:scale-110",
-          isInWishlist && "text-rose-primary"
-        )}
-        aria-label={isInWishlist ? "Remove from wishlist" : "Add to wishlist"}
-      >
-        <Heart
-          className="size-4"
-          fill={isInWishlist ? "currentColor" : "none"}
-        />
-      </button>
-
-      <div className="mt-3.5 space-y-1.5 px-0.5">
-        <Link href={`/products/${product.slug}`} className="block">
-          <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-            {product.categoryName}
-          </p>
-          <h3 className="mt-0.5 font-heading text-base font-semibold text-navy transition-colors group-hover:text-rose-primary">
-            {product.name}
-          </h3>
         </Link>
-
-        <Price amount={product.price} salePrice={product.salePrice} size="sm" />
-
-        {soldOut ? (
-          <button
-            type="button"
-            disabled
-            className="flex w-full cursor-not-allowed items-center justify-center gap-2 rounded-xl border border-rose-border/60 bg-white py-2.5 text-sm font-medium text-muted-foreground opacity-70"
-          >
-            Out of stock
-          </button>
-        ) : needsOptions && !onQuickView ? (
-          <Link
-            href={`/products/${product.slug}`}
-            className={addButtonClass}
-          >
-            <ShoppingBag className="size-4" />
-            Choose Options
-          </Link>
-        ) : (
-          <button
-            type="button"
-            onClick={() =>
-              needsOptions || !(product.price > 0)
-                ? onQuickView?.(product) ?? undefined
-                : addItem(product)
-            }
-            className={addButtonClass}
-          >
-            <ShoppingBag className="size-4" />
-            {needsOptions ? "Choose Options" : product.price > 0 ? "Add to Bag" : "View"}
-          </button>
+        {pct !== undefined && (
+          <span className="pointer-events-none absolute top-2.5 left-2.5 rounded-lg bg-brand px-2 py-1 text-[13px] font-bold text-white">
+            Save {pct}%
+          </span>
         )}
+        {soldOut && (
+          <span className="pointer-events-none absolute bottom-2.5 left-2.5 rounded-lg bg-white px-2 py-1 text-[13px] font-bold text-ink">
+            Sold out
+          </span>
+        )}
+        <button
+          type="button"
+          onClick={() => toggleItem(product)}
+          aria-pressed={inWishlist}
+          aria-label={inWishlist ? `Remove ${product.name} from wishlist` : `Save ${product.name} to wishlist`}
+          className={cn(
+            "absolute top-1.5 right-1.5 inline-flex size-11 items-center justify-center rounded-full text-ink transition-colors",
+            inWishlist ? "text-raspberry" : "hover:text-raspberry",
+          )}
+        >
+          <span className="inline-flex size-9 items-center justify-center rounded-full bg-white/95 shadow-sm">
+            <Heart className="size-[18px]" fill={inWishlist ? "currentColor" : "none"} aria-hidden />
+          </span>
+        </button>
       </div>
-    </motion.div>
+
+      {!hideCategory && (
+        <p className="min-h-4 text-[13px] font-semibold text-mute">{product.categoryName}</p>
+      )}
+      <h3 className="text-base leading-snug font-bold text-ink">
+        <Link href={href} className="hover:text-raspberry">
+          {product.name}
+        </Link>
+      </h3>
+      <Price amount={product.price} salePrice={product.salePrice} size="sm" />
+
+      {soldOut ? (
+        <button
+          type="button"
+          disabled
+          className="mt-auto inline-flex min-h-11 w-full cursor-not-allowed items-center justify-center rounded-xl bg-counter text-[15px] font-bold text-[#6B7080]"
+        >
+          Sold out
+        </button>
+      ) : needsOptions && !onQuickView ? (
+        <Link href={href} className={buttonClass}>
+          Choose options
+        </Link>
+      ) : (
+        <button
+          type="button"
+          onClick={() => (needsOptions || !(product.price > 0) ? onQuickView?.(product) : addItem(product))}
+          className={buttonClass}
+        >
+          {needsOptions ? "Choose options" : product.price > 0 ? "Add to bag" : "View"}
+        </button>
+      )}
+    </article>
   )
 }

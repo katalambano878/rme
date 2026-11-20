@@ -2,12 +2,13 @@
 
 import { useState } from "react"
 import Link from "next/link"
-import { motion } from "framer-motion"
-import { Loader2, Mail } from "lucide-react"
+import { Loader2 } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
+
+const labelClass = "text-[15px] font-semibold text-ink"
+const inputClass =
+  "block min-h-[52px] w-full rounded-[10px] border border-field bg-white px-3.5 text-base text-ink placeholder:text-mute transition-colors duration-150 focus:border-ink"
+const linkClass = "font-bold text-raspberry transition-colors duration-150 hover:text-raspberry-deep"
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState("")
@@ -29,69 +30,68 @@ export default function ForgotPasswordPage() {
   }
 
   return (
-    <div className="flex min-h-[80vh] items-center justify-center px-4 py-12">
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5 }}
-        className="w-full max-w-md"
-      >
-        <div className="mb-8 text-center">
-          <h1 className="font-heading text-3xl text-navy">Forgot your password?</h1>
-          <p className="mt-2 text-muted-foreground">
+    <div className="mx-auto w-full max-w-[1180px] px-4 pb-16 pt-10 sm:px-6 sm:pb-[72px] sm:pt-14 lg:px-8">
+      <section className="flex w-full max-w-[520px] flex-col gap-6">
+        <div className="flex flex-col gap-2">
+          <h1 className="text-[34px] font-extrabold leading-[1.05] tracking-[-0.03em] text-ink sm:text-[44px]">
+            Forgot your password?
+          </h1>
+          <p className="text-[17px] leading-[1.55] text-mute">
             Enter your email and we&apos;ll send you a link to choose a new one.
           </p>
         </div>
 
-        <div className="rounded-2xl border border-rose-border/60 bg-white p-8 luxury-shadow">
-          {sent ? (
-            <div className="space-y-4 text-center" role="status">
-              <p className="text-navy">
-                If an account uses <span className="font-medium">{email.trim()}</span>, a reset link is on its way.
-              </p>
-              <p className="text-sm text-muted-foreground">
-                The link expires in 30 minutes. Check your spam folder if you don&apos;t see it.
-              </p>
+        {sent ? (
+          <div className="flex flex-col gap-2 rounded-[18px] bg-counter p-6" role="status">
+            <p className="text-[17px] leading-[1.55] text-ink">
+              If an account uses <span className="font-semibold">{email.trim()}</span>, a reset link is on its way.
+            </p>
+            <p className="text-[15px] leading-normal text-mute">
+              The link expires in 30 minutes. Check your spam folder if you don&apos;t see it.
+            </p>
+          </div>
+        ) : (
+          <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="email" className={labelClass}>
+                Email
+              </label>
+              <input
+                id="email"
+                type="email"
+                placeholder="you@example.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+                autoComplete="email"
+                className={inputClass}
+              />
             </div>
-          ) : (
-            <form onSubmit={handleSubmit} className="space-y-5">
-              <div className="space-y-2">
-                <Label htmlFor="email">Email</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  placeholder="you@example.com"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  required
-                  autoComplete="email"
-                  className="rounded-xl"
-                />
-              </div>
 
-              {error && (
-                <p className="rounded-lg bg-red-50 p-3 text-sm text-red-600">{error}</p>
-              )}
+            {error && (
+              <p role="alert" className="rounded-[10px] bg-[#FDECEA] px-4 py-3 text-[15px] text-[#B42318]">
+                {error}
+              </p>
+            )}
 
-              <Button
-                type="submit"
-                disabled={loading}
-                className="w-full rounded-full bg-rose-100 py-5 text-navy hover:bg-rose-200"
-              >
-                {loading ? <Loader2 className="mr-2 size-4 animate-spin" /> : <Mail className="mr-2 size-4" />}
-                Send reset link
-              </Button>
-            </form>
-          )}
+            <button
+              type="submit"
+              disabled={loading}
+              className="inline-flex min-h-14 items-center justify-center gap-2 rounded-xl bg-brand px-6 text-[17px] font-bold text-white transition-opacity duration-150 hover:opacity-90 disabled:opacity-60"
+            >
+              {loading && <Loader2 className="size-5 animate-spin motion-reduce:animate-none" aria-hidden="true" />}
+              {loading ? "Sending…" : "Send reset link"}
+            </button>
+          </form>
+        )}
 
-          <p className="mt-6 text-center text-sm text-muted-foreground">
-            Remembered it?{" "}
-            <Link href="/auth/login" className="font-medium text-rose-primary hover:underline">
-              Sign in
-            </Link>
-          </p>
-        </div>
-      </motion.div>
+        <p className="text-[15px] text-mute">
+          Remembered it?{" "}
+          <Link href="/auth/login" className={linkClass}>
+            Sign in
+          </Link>
+        </p>
+      </section>
     </div>
   )
 }

@@ -1,9 +1,9 @@
 "use client"
 
 import { useState, useMemo } from "react"
-import { ShoppingBag, Star } from "lucide-react"
+import Link from "next/link"
+import { Minus, Plus, Star, X } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { formatPrice } from "@/lib/utils"
 import { useCartStore } from "@/lib/store/cart-store"
 import type { Product } from "@/types/product"
 import {
@@ -12,12 +12,14 @@ import {
 } from "@/lib/product-image"
 import {
   Dialog,
+  DialogClose,
   DialogContent,
   DialogHeader,
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog"
 import { BadgeSet } from "./badge-set"
+import { Price, savePercent } from "./price"
 
 interface QuickViewModalProps {
   open: boolean
@@ -52,6 +54,7 @@ export function QuickViewModal({ open, onClose, product }: QuickViewModalProps) 
 
   const hasSale = product.salePrice !== undefined && product.salePrice < product.price
   const displayPrice = hasSale ? product.salePrice! : product.price
+  const pct = savePercent(product.price, product.salePrice)
   const missingOption =
     sizeVariant && !selectedSize
       ? sizeVariant.name || "size"
@@ -70,6 +73,10 @@ export function QuickViewModal({ open, onClose, product }: QuickViewModalProps) 
     onClose()
   }
 
+  const optionGroups = [colorVariant, sizeVariant].filter(
+    (v): v is NonNullable<typeof v> => !!v
+  )
+
   return (
     <Dialog
       open={open}
@@ -77,140 +84,134 @@ export function QuickViewModal({ open, onClose, product }: QuickViewModalProps) 
         if (!isOpen) onClose()
       }}
     >
-      <DialogContent className="max-w-2xl gap-0 overflow-hidden p-0 sm:max-w-2xl">
+      <DialogContent
+        showCloseButton={false}
+        className="store max-h-[calc(100dvh-2rem)] max-w-2xl gap-0 overflow-y-auto rounded-[20px] bg-white p-0 text-ink ring-0 sm:max-w-2xl"
+      >
+        <DialogClose
+          aria-label="Close"
+          className="absolute top-2 right-2 z-20 inline-flex size-11 items-center justify-center rounded-full text-ink"
+        >
+          <span className="inline-flex size-9 items-center justify-center rounded-full bg-white/95 shadow-sm transition-colors hover:bg-counter">
+            <X className="size-[18px]" aria-hidden />
+          </span>
+        </DialogClose>
+
         <div className="grid grid-cols-1 sm:grid-cols-2">
-          <div className="relative flex aspect-square overflow-hidden bg-rose-light sm:aspect-auto sm:min-h-[420px]">
+          <div className="relative aspect-square overflow-hidden bg-counter sm:aspect-auto sm:min-h-[440px]">
             <img
               src={optimizedImageUrl(getProductPrimaryImageUrl(product), 800)}
               alt=""
-              className="h-full w-full object-cover"
+              className="size-full object-cover"
               decoding="async"
             />
+            {product.badges.length > 0 && (
+              <div className="absolute top-3 left-3">
+                <BadgeSet
+                  badges={
+                    pct !== undefined
+                      ? product.badges.filter((b) => b !== "Sale")
+                      : product.badges
+                  }
+                />
+              </div>
+            )}
           </div>
 
           <div className="flex flex-col p-5 sm:p-6">
-            <DialogHeader className="gap-1.5">
-              {product.badges.length > 0 && (
-                <BadgeSet badges={product.badges} className="mb-1" />
+            <DialogHeader className="gap-1.5 pr-8">
+              {product.categoryName && (
+                <p className="text-sm font-bold text-mute">{product.categoryName}</p>
               )}
-              <DialogTitle className="font-heading text-xl font-semibold text-navy">
+              <DialogTitle className="text-[24px] leading-[1.15] font-extrabold tracking-[-0.02em] text-ink">
                 {product.name}
               </DialogTitle>
-              <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                {product.categoryName}
-              </p>
             </DialogHeader>
 
-            <div className="mt-3 flex items-center gap-1.5">
-              <div className="flex items-center gap-0.5">
-                {Array.from({ length: 5 }).map((_, i) => (
-                  <Star
-                    key={i}
-                    className={cn(
-                      "size-3.5",
-                      i < Math.round(product.rating)
-                        ? "fill-amber-400 text-amber-400"
-                        : "fill-muted text-muted"
-                    )}
-                  />
-                ))}
-              </div>
-              <span className="text-xs text-muted-foreground">
-                ({product.reviewCount})
-              </span>
-            </div>
-
-            {displayPrice > 0 && (
-            <div className="mt-3 flex items-baseline gap-2">
-              <span
-                className={cn(
-                  "text-xl font-semibold",
-                  hasSale ? "text-rose-primary" : "text-navy"
-                )}
-              >
-                {formatPrice(displayPrice)}
-              </span>
-              {hasSale && (
-                <span className="text-sm text-muted-foreground line-through">
-                  {formatPrice(product.price)}
+            {product.reviewCount > 0 && product.rating > 0 && (
+              <p className="mt-2 flex items-center gap-1.5 text-sm text-mute">
+                <Star className="size-3.5 fill-ink text-ink" aria-hidden />
+                <span className="font-semibold text-ink">{product.rating.toFixed(1)}</span>
+                <span aria-hidden>·</span>
+                <span>
+                  {product.reviewCount} {product.reviewCount === 1 ? "review" : "reviews"}
                 </span>
-              )}
-            </div>
+              </p>
             )}
 
-            <DialogDescription className="mt-3 line-clamp-3 text-sm leading-relaxed text-muted-foreground">
+            {displayPrice > 0 && (
+              <div className="mt-3 flex flex-wrap items-center gap-2.5">
+                <Price amount={product.price} salePrice={product.salePrice} size="md" />
+                {pct !== undefined && (
+                  <span className="rounded-lg bg-blush px-2 py-0.5 text-[13px] font-bold text-raspberry">
+                    Save {pct}%
+                  </span>
+                )}
+              </div>
+            )}
+
+            <DialogDescription className="mt-3 line-clamp-3 text-[15px] leading-relaxed text-mute">
               {product.shortDescription}
             </DialogDescription>
 
-            <div className="mt-auto space-y-4 pt-5">
-              {sizeVariant && (
-                <div>
-                  <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-navy">
-                    {sizeVariant.name}
-                  </p>
-                  <div className="flex flex-wrap gap-1.5">
-                    {sizeVariant.options.map((opt) => (
-                      <button
-                        key={opt}
-                        type="button"
-                        onClick={() => setSelectedSize(opt)}
-                        className={cn(
-                          "rounded-lg border px-3 py-1.5 text-xs font-medium transition-all",
-                          selectedSize === opt
-                            ? "border-rose-primary bg-rose-light text-rose-primary"
-                            : "border-rose-border text-navy hover:border-rose-primary/40"
-                        )}
-                      >
-                        {opt}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
+            <div className="mt-auto flex flex-col gap-5 pt-5">
+              {optionGroups.map((group) => {
+                const isSize = group.type === "size"
+                const selected = isSize ? selectedSize : selectedColor
+                const setSelected = isSize ? setSelectedSize : setSelectedColor
+                return (
+                  <fieldset key={group.id} className="m-0 border-0 p-0">
+                    <legend className="mb-2.5 p-0 text-[15px] font-bold text-ink">
+                      {group.name || (isSize ? "Size" : "Shade")}:{" "}
+                      <span className="font-medium">{selected || "pick one"}</span>
+                    </legend>
+                    <div className="flex flex-wrap gap-2">
+                      {group.options.map((opt) => (
+                        <button
+                          key={opt}
+                          type="button"
+                          onClick={() => setSelected(opt)}
+                          aria-pressed={selected === opt}
+                          className={cn(
+                            "inline-flex min-h-11 items-center rounded-full px-4 text-[15px] font-semibold transition-colors",
+                            selected === opt
+                              ? "border-2 border-brand bg-brand text-white"
+                              : "border border-field bg-white text-ink hover:border-ink"
+                          )}
+                        >
+                          {opt}
+                        </button>
+                      ))}
+                    </div>
+                  </fieldset>
+                )
+              })}
 
-              {colorVariant && (
-                <div>
-                  <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-navy">
-                    {colorVariant.name}
-                  </p>
-                  <div className="flex flex-wrap gap-1.5">
-                    {colorVariant.options.map((opt) => (
-                      <button
-                        key={opt}
-                        type="button"
-                        onClick={() => setSelectedColor(opt)}
-                        className={cn(
-                          "rounded-lg border px-3 py-1.5 text-xs font-medium transition-all",
-                          selectedColor === opt
-                            ? "border-rose-primary bg-rose-light text-rose-primary"
-                            : "border-rose-border text-navy hover:border-rose-primary/40"
-                        )}
-                      >
-                        {opt}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              <div className="flex items-center gap-3">
-                <div className="flex items-center rounded-xl border border-rose-border">
+              <div className="flex flex-wrap gap-3">
+                <div className="flex h-[52px] items-center rounded-xl border-2 border-brand">
                   <button
+                    type="button"
                     onClick={() => setQuantity((q) => Math.max(1, q - 1))}
-                    className="flex size-9 items-center justify-center text-navy transition-colors hover:text-rose-primary"
+                    disabled={quantity <= 1}
+                    className="flex h-full w-11 items-center justify-center text-ink disabled:text-field"
                     aria-label="Decrease quantity"
                   >
-                    −
+                    <Minus className="size-[18px]" aria-hidden />
                   </button>
-                  <span className="w-8 text-center text-sm font-semibold text-navy">
+                  <span
+                    aria-live="polite"
+                    aria-label={`Quantity ${quantity}`}
+                    className="min-w-7 text-center text-base font-bold tabular-nums"
+                  >
                     {quantity}
                   </span>
                   <button
+                    type="button"
                     onClick={() => setQuantity((q) => q + 1)}
-                    className="flex size-9 items-center justify-center text-navy transition-colors hover:text-rose-primary"
+                    className="flex h-full w-11 items-center justify-center text-ink"
                     aria-label="Increase quantity"
                   >
-                    +
+                    <Plus className="size-[18px]" aria-hidden />
                   </button>
                 </div>
 
@@ -218,12 +219,19 @@ export function QuickViewModal({ open, onClose, product }: QuickViewModalProps) 
                   type="button"
                   onClick={handleAddToBag}
                   disabled={!!missingOption || !(product.price > 0)}
-                  className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-rose-100 px-5 py-2.5 text-sm font-semibold text-navy transition-all hover:bg-rose-200 disabled:cursor-not-allowed disabled:opacity-60"
+                  className="inline-flex min-h-[52px] flex-[1_1_160px] items-center justify-center rounded-xl bg-brand px-5 text-base font-bold text-white transition-colors hover:bg-brand-deep disabled:cursor-not-allowed disabled:bg-counter disabled:text-[#6B7080]"
                 >
-                  <ShoppingBag className="size-4" />
-                  {missingOption ? `Select ${missingOption.toLowerCase()}` : "Add to Bag"}
+                  {missingOption ? `Choose ${missingOption.toLowerCase()}` : "Add to bag"}
                 </button>
               </div>
+
+              <Link
+                href={`/products/${product.slug}`}
+                onClick={onClose}
+                className="self-start text-[15px] font-bold text-raspberry hover:text-raspberry-deep"
+              >
+                See full details
+              </Link>
             </div>
           </div>
         </div>

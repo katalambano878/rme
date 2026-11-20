@@ -21,12 +21,27 @@
   --font-heading: var(--font-display);
 
   /* Default storefront palette — customize in globals.css */
-  --color-rose-primary: #E11D48;
-  --color-rose-soft: #FB7185;
-  --color-rose-light: #FFF5F8;
-  --color-rose-border: #F1D6DF;
-  --color-navy: #0B1B3A;
-  --color-navy-light: #1E3A5F;
+  --color-rose-primary: var(--rose-primary);
+  --color-rose-soft: var(--rose-soft);
+  --color-rose-light: var(--rose-light);
+  --color-rose-border: var(--rose-border);
+  --color-navy: var(--navy);
+  --color-navy-light: var(--navy-light);
+
+  /* Clean Counter storefront palette */
+  --color-ink: #16181D;
+  --color-brand: #D6336C;
+  --color-brand-deep: #B5225A;
+  --color-raspberry: #C2185B;
+  --color-raspberry-deep: #9A1248;
+  --color-blush: #FCE8F0;
+  --color-blush-deep: #F5B8CF;
+  --color-counter: #F4F2EF;
+  --color-counter-deep: #E9E6E1;
+  --color-line: #ECEAE6;
+  --color-field: #8F8A82;
+  --color-mute: #5B6170;
+  --font-store: var(--font-figtree);
 
   /* Extended radius for luxury rounded feel */
   --radius-sm: calc(var(--radius) * 0.6);
@@ -69,6 +84,12 @@
 }
 
 :root {
+  --rose-primary: #E11D48;
+  --rose-soft: #FB7185;
+  --rose-light: #FFF5F8;
+  --rose-border: #F1D6DF;
+  --navy: #0B1B3A;
+  --navy-light: #1E3A5F;
   --font-display: 'Playfair Display', Georgia, 'Times New Roman', serif;
   --font-body: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 
@@ -124,6 +145,58 @@
     font-family: var(--font-display);
     letter-spacing: -0.01em;
     line-height: 1.15;
+  }
+}
+
+/*
+ * Clean Counter — the storefront's look. Scoped to the storefront wrapper so
+ * the admin keeps its own palette. Older storefront components that still use
+ * the rose/navy tokens pick up the new colours through these overrides.
+ */
+.store {
+  --rose-primary: #C2185B;
+  --rose-soft: #E0457F;
+  --rose-light: #FCE8F0;
+  --rose-border: #ECEAE6;
+  --navy: #16181D;
+  --navy-light: #2A2D35;
+  --primary: #16181D;
+  --primary-foreground: #FFFFFF;
+  --secondary: #F4F2EF;
+  --secondary-foreground: #16181D;
+  --muted: #F4F2EF;
+  --muted-foreground: #5B6170;
+  --accent: #FCE8F0;
+  --accent-foreground: #16181D;
+  --border: #ECEAE6;
+  --input: #8F8A82;
+  --ring: #C2185B;
+  --foreground: #16181D;
+  --card-foreground: #16181D;
+  --popover-foreground: #16181D;
+  --radius: 0.75rem;
+  font-family: var(--font-figtree), -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  color: #16181D;
+  background: #FFFFFF;
+}
+.store h1, .store h2, .store h3, .store h4, .store h5, .store h6 {
+  font-family: var(--font-figtree), -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  letter-spacing: -0.02em;
+}
+.store ::selection {
+  background: #FCE8F0;
+  color: #16181D;
+}
+.store :focus-visible {
+  outline: 3px solid #C2185B;
+  outline-offset: 2px;
+}
+/* Keep form text at 16px on phones so iOS does not zoom into fields. */
+@media (max-width: 768px) {
+  .store input:not([type="checkbox"]):not([type="radio"]),
+  .store select,
+  .store textarea {
+    font-size: 16px;
   }
 }
 
