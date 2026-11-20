@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { adminFetch, cedis } from '@/lib/admin-api';
 
 type Session = { id: string; page: string; stage: string; cartItems: number; cartValue: number; lastSeen: string };
@@ -32,20 +32,26 @@ export default function LiveShoppersPage() {
   const [data, setData] = useState<LiveData | null>(null);
   const [error, setError] = useState('');
 
-  const load = useCallback(async () => {
-    try {
-      setData(await adminFetch<LiveData>('/api/live'));
-      setError('');
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not load live shoppers.');
-    }
-  }, []);
-
   useEffect(() => {
+    let cancelled = false;
+    // State is only set from the request's callbacks, never in the effect body.
+    const load = () =>
+      adminFetch<LiveData>('/api/live')
+        .then((next) => {
+          if (cancelled) return;
+          setData(next);
+          setError('');
+        })
+        .catch((err: unknown) => {
+          if (!cancelled) setError(err instanceof Error ? err.message : 'Could not load live shoppers.');
+        });
     void load();
     const timer = window.setInterval(() => void load(), 15000);
-    return () => window.clearInterval(timer);
-  }, [load]);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, []);
 
   const cards = [
     ['On the website now', data?.online ?? '—'],

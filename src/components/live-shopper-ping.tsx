@@ -24,9 +24,10 @@ export function LiveShopperPing() {
   const pathname = usePathname() || "/"
   const items = useCartStore((s) => s.items)
   const latest = useRef({ pathname, items })
-  latest.current = { pathname, items }
 
   useEffect(() => {
+    // Updated here rather than during render (refs mustn't change while rendering).
+    latest.current = { pathname, items }
     const id = visitorId()
     if (!id) return
 
