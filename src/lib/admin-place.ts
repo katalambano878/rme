@@ -63,3 +63,75 @@ export function writeAdminPlace(path: string, scrollY: number): void {
     // Storage can be unavailable; keeping her place is a convenience.
   }
 }
+
+// ─── Search boxes and filter dropdowns ─────────────────────────────────────────
+// Coming back to a list only lands on the same rows if its search and filters
+// are the same too, so their values are remembered per page alongside the scroll.
+
+const CONTROLS_KEY = 'admin-place-controls-v1';
+
+/** One remembered field: which control it was and what it held. */
+export type SavedControl = { key: string; value: string };
+
+/** Describes a control well enough to find it again after the page re-renders. */
+export type ControlIdentity = {
+  tag: 'input' | 'select';
+  type: string;
+  label: string;
+  /** Position among controls with the same tag, type and label. */
+  index: number;
+};
+
+export function controlKey(c: ControlIdentity): string {
+  return `${c.tag}:${c.type}:${c.label}#${c.index}`;
+}
+
+/** Text-like inputs and dropdowns only; never passwords, files or checkboxes. */
+export function isRememberedInputType(type: string): boolean {
+  return ['text', 'search', 'date', 'month', 'number', ''].includes(type.toLowerCase());
+}
+
+export function parseSavedControls(raw: string | null): Record<string, SavedControl[]> {
+  if (!raw) return {};
+  try {
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
+    const out: Record<string, SavedControl[]> = {};
+    for (const [path, list] of Object.entries(parsed)) {
+      if (!Array.isArray(list)) continue;
+      const controls = list.filter(
+        (c): c is SavedControl =>
+          !!c && typeof c === 'object' && typeof (c as SavedControl).key === 'string' && typeof (c as SavedControl).value === 'string',
+      );
+      out[normalizeAdminPath(path)] = controls.slice(0, 30).map((c) => ({ key: c.key, value: c.value.slice(0, 200) }));
+    }
+    return out;
+  } catch {
+    return {};
+  }
+}
+
+export function readSavedControls(path: string): SavedControl[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    return parseSavedControls(window.sessionStorage.getItem(CONTROLS_KEY))[normalizeAdminPath(path)] ?? [];
+  } catch {
+    return [];
+  }
+}
+
+export function writeSavedControls(path: string, controls: SavedControl[]): void {
+  if (typeof window === 'undefined') return;
+  const key = normalizeAdminPath(path);
+  if (!key || key === '/admin/login') return;
+  try {
+    const all = parseSavedControls(window.sessionStorage.getItem(CONTROLS_KEY));
+    if (controls.length === 0) delete all[key];
+    else all[key] = controls.slice(0, 30);
+    const entries = Object.entries(all);
+    const trimmed = entries.length > 40 ? Object.fromEntries(entries.slice(entries.length - 40)) : all;
+    window.sessionStorage.setItem(CONTROLS_KEY, JSON.stringify(trimmed));
+  } catch {
+    // Convenience only.
+  }
+}
