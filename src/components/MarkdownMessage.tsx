@@ -45,7 +45,7 @@ export default function MarkdownMessage({ content, className = '', isUserMessage
         if (block.type === 'paragraph') {
           if (!block.text.trim()) return null;
           return (
-            <p key={i} className="text-sm leading-relaxed">
+            <p key={i} className="text-sm leading-relaxed whitespace-pre-line">
               <InlineMarkdown text={block.text} isUser={isUserMessage} />
             </p>
           );
@@ -95,8 +95,13 @@ function parseBlocks(content: string): Block[] {
       while (i < lines.length) {
         const nextLine = lines[i];
         if (nextLine.match(/^\s*[-*•]\s+/) || nextLine.match(/^\s*\d+[.)]\s+/)) break;
-        paraLines.push(nextLine);
         i++;
+        // A blank line ends the paragraph, so each one gets its own spacing.
+        if (!nextLine.trim()) {
+          if (paraLines.length) break;
+          continue;
+        }
+        paraLines.push(nextLine);
       }
       const text = paraLines.join('\n');
       if (text.trim()) {

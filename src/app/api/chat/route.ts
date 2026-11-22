@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import Anthropic from '@anthropic-ai/sdk';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import {
@@ -13,6 +14,11 @@ import {
   getStoreInfo,
   getCustomerProfile,
   createChatOrder,
+  buildSkincareRoutine,
+  detectSkinProfile,
+  looksLikeSkincareQuestion,
+  formatRoutineMessage,
+  ROUTINE_HOW_TO,
   type ChatProduct,
   type ChatOrder,
   type ChatCoupon,
@@ -22,6 +28,8 @@ import {
   type ChatOrderResult,
 } from '@/lib/chat-tools';
 import { searchSiteKnowledge, getSiteMapSummary } from '@/lib/site-knowledge';
+import { formatPrice } from '@/lib/utils';
+import { findLibraryAnswer, saveLibraryAnswer, questionKey } from '@/lib/chat-answer-library';
 import {
   BRAND_NAME,
   BRAND_TAGLINE,
@@ -35,7 +43,55 @@ import {
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-const groqKey = process.env.GROQ_API_KEY;
+/**
+ * AI providers, tried in order. Both speak the OpenAI chat-completions format,
+ * so the same request works for either. Set OPENAI_API_KEY (preferred) and/or
+ * GROQ_API_KEY; CHAT_OPENAI_MODEL / CHAT_GROQ_MODEL override the models.
+ */
+interface LLMProvider { name: 'openai' | 'groq'; url: string; key: string; model: string }
+function configuredProviders(): LLMProvider[] {
+  const list: LLMProvider[] = [];
+  const openai = process.env.OPENAI_API_KEY?.trim();
+  const groq = process.env.GROQ_API_KEY?.trim();
+  if (openai) list.push({ name: 'openai', url: 'https://api.openai.com/v1/chat/completions', key: openai, model: process.env.CHAT_OPENAI_MODEL || 'gpt-4.1-mini' });
+  if (groq) list.push({ name: 'groq', url: 'https://api.groq.com/openai/v1/chat/completions', key: groq, model: process.env.CHAT_GROQ_MODEL || 'llama-3.3-70b-versatile' });
+  return list;
+}
+
+/**
+ * Claude is tried first. Claude Haiku 5.5 is Anthropic's low-cost model
+ * (about $0.10 per million input tokens), at low effort to keep replies quick
+ * and cheap. Override with CHAT_CLAUDE_MODEL.
+ */
+const anthropicKey = process.env.ANTHROPIC_API_KEY?.trim();
+const CLAUDE_MODEL = process.env.CHAT_CLAUDE_MODEL || 'claude-haiku-5-5';
+const claude = anthropicKey ? new Anthropic({ apiKey: anthropicKey, maxRetries: 2, timeout: 30_000 }) : null;
+
+const hasAI = !!claude || configuredProviders().length > 0;
+
+/**
+ * A soft daily ceiling on AI replies (per server instance). Past it the chat
+ * keeps working on the free rule-based assistant, so a traffic spike or abuse
+ * can never run up the bill. Set CHAT_AI_DAILY_LIMIT to change it (0 = no AI).
+ */
+const AI_DAILY_LIMIT = Number.isFinite(Number(process.env.CHAT_AI_DAILY_LIMIT))
+  && process.env.CHAT_AI_DAILY_LIMIT !== undefined && process.env.CHAT_AI_DAILY_LIMIT !== ''
+  ? Number(process.env.CHAT_AI_DAILY_LIMIT)
+  : 1500;
+const aiUsage = { day: '', count: 0 };
+function takeAiBudget(): boolean {
+  const today = new Date().toISOString().slice(0, 10);
+  if (aiUsage.day !== today) {
+    aiUsage.day = today;
+    aiUsage.count = 0;
+  }
+  if (aiUsage.count >= AI_DAILY_LIMIT) return false;
+  aiUsage.count++;
+  return true;
+}
+
+/** Small talk the free assistant answers just as well, so it never costs a call. */
+const SMALL_TALK = /^\s*(hi+|hello|hey|hiya|good (morning|afternoon|evening)|thanks?( you)?|thank u|ok(ay)?|bye|goodbye)[\s!.,]*$/i;
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -49,6 +105,10 @@ interface ChatReply {
   ticketCard?: ChatTicket;
   returnCard?: ChatReturn;
   couponCard?: ChatCoupon;
+  actions?: ChatAction[];
+  quickReplies?: string[];
+  /** Internal: set when the AI wrote this reply, for the answer library. Never sent to the browser. */
+  _library?: { toolsUsed: string[] };
 }
 
 /** A row from the get_ai_memories RPC. */
@@ -82,6 +142,9 @@ interface ToolArgs {
   shipping?: CreateChatOrderParams['shipping'];
   delivery_method?: string;
   payment_method?: string;
+  skin_type?: string;
+  concerns?: string[];
+  max_price_per_item?: number;
 }
 
 interface ChatMessage {
@@ -123,8 +186,6 @@ import { checkRateLimit as checkSharedRateLimit, getClientIdentifier, RATE_LIMIT
 
 // ─── LLM Configuration ──────────────────────────────────────────────────────
 
-const LLM_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
-const LLM_MODEL = 'meta-llama/llama-4-scout-17b-16e-instruct';
 
 async function fetchWithRetry(url: string, options: RequestInit, maxRetries = 2): Promise<Response> {
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
@@ -144,6 +205,26 @@ async function fetchWithRetry(url: string, options: RequestInit, maxRetries = 2)
 // ─── Tool Definitions ───────────────────────────────────────────────────────
 
 const LLM_TOOLS = [
+  {
+    type: 'function' as const,
+    function: {
+      name: 'build_skincare_routine',
+      description: 'Build a complete face routine (cleanser, toner, serum, moisturiser, sunscreen) from products we actually stock, matched to a skin type and concerns, plus ready-made skincare sets that fit. Use whenever the customer describes their skin, a skin concern, or asks for a routine, a skincare set, or "what should I use".',
+      parameters: {
+        type: 'object',
+        properties: {
+          skin_type: { type: 'string', enum: ['oily', 'dry', 'combination', 'sensitive', 'normal'], description: 'The customer\'s skin type. Use "normal" if unknown.' },
+          concerns: {
+            type: 'array',
+            items: { type: 'string', enum: ['acne', 'dark_spots', 'dullness', 'aging', 'dryness', 'oiliness', 'sensitivity'] },
+            description: 'Up to 3 concerns the customer mentioned.',
+          },
+          max_price_per_item: { type: 'number', description: 'Optional budget per product in GH₵, if the customer gave one.' },
+        },
+        required: ['skin_type'],
+      },
+    },
+  },
   {
     type: 'function' as const,
     function: {
@@ -342,34 +423,53 @@ const LLM_TOOLS = [
 
 // ─── System Prompt Builder ──────────────────────────────────────────────────
 
+/** The same tools in Claude's format. */
+const CLAUDE_TOOLS: Anthropic.Tool[] = LLM_TOOLS.map((t) => ({
+  name: t.function.name,
+  description: t.function.description,
+  input_schema: t.function.parameters as Anthropic.Tool.InputSchema,
+}));
+
+const PROMPT_CONTEXT_MARKER = '\n\n<<request context>>\n\n';
+
 function buildSystemPrompt(profile: ChatCustomerProfile | null, pagePath?: string): string {
   const now = new Date().toLocaleDateString('en-GB', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
 
-  let prompt = `You are the AI shopping assistant for ${BRAND_NAME} — ${BRAND_TAGLINE}. We sell beauty, skincare, body care, makeup, hair, and baby essentials in Ghana. Today is ${now}.
+  let prompt = `You are the ${BRAND_NAME} beauty advisor — ${BRAND_TAGLINE}. ${BRAND_NAME} is a beauty shop in Accra, Ghana (pickup at Spintex, delivery across Ghana) selling skincare, body care, makeup, hair, fragrance and home essentials.
+
+WHO YOU ARE:
+You are like a knowledgeable friend who works at a good beauty counter: warm, confident and genuinely helpful. Customers come to you the way they would ask ChatGPT for skincare help — "I have oily skin, put a set together for me", "what helps dark spots?", "is niacinamide good for me?". Give them real, specific advice AND the products from our shelves that fit.
 
 ABSOLUTE RULES — NEVER BREAK THESE:
-- NEVER show your internal reasoning, thinking steps, chain-of-thought, or planning process. NEVER output anything like "Step 1:", "## Step", "Let me think", or similar. Only output the final customer-facing response.
-- NEVER list your available tools or describe how you will use them. Just use them silently and respond with the result.
-- NEVER output markdown headers (##) in your responses. Use plain text with bold (**) for emphasis if needed.
+- NEVER show internal reasoning, planning, "Step 1:" scaffolding or tool names. Only the final customer-facing reply.
+- NEVER output markdown headers (#). Use short paragraphs, numbered steps and **bold** for product names.
 
-PRODUCT RULES — THE MOST IMPORTANT RULES:
-- You are ONLY allowed to mention products that appear in a tool result (search_products or get_recommendations). Every product name, brand name, ingredient name, and price you mention MUST come from the tool response data.
-- BEFORE mentioning ANY product, you MUST call search_products or get_recommendations. NEVER skip the tool call. NEVER respond about products without calling a tool first.
-- If the tool returns results, ONLY mention products from that response. Do NOT add extra products from your training knowledge, even if you "know" they exist.
-- If the tool returns NO results for what the customer asked, the tool will automatically provide alternative products from our store. Recommend THOSE alternatives instead. Say something like "We don't carry [what they asked for], but here are some products you might like:" and list the alternatives from the tool result.
-- If the customer describes a skin/hair/beauty concern (dry skin, acne, dark spots, frizzy hair, etc.), call search_products with relevant keywords. ONLY recommend products the tool returns. Do NOT suggest products, brands, or ingredients from your general knowledge.
-- NEVER say a product name that did not come from a tool result. This includes well-known brands (CeraVe, The Ordinary, Nivea, etc.) — if the tool didn't return it, do NOT mention it.
-- NEVER describe what a product does, its ingredients, or how it works UNLESS that information is in the tool result data. You only know what the database tells you.
-- When tool results include an "instruction" field, follow it exactly.
+BEAUTY ADVICE — WHAT YOU MAY DO FROM YOUR OWN KNOWLEDGE:
+- Explain skin types, what causes a concern (oiliness, acne, dark spots, dullness, dryness, sensitivity, ageing), which ingredients help (e.g. salicylic acid, niacinamide, hyaluronic acid, vitamin C, ceramides, sunscreen) and how to use them: order of steps, morning vs night, how often, patch-testing, how long results take.
+- Give practical, everyday tips (don't skip moisturiser on oily skin, sunscreen in the Accra sun, don't pick spots).
+- Keep it safe: no medical diagnoses. For severe, painful or sudden skin problems, rashes, or anything during pregnancy, suggest seeing a dermatologist or doctor, kindly and briefly.
 
-CORE BEHAVIORS:
+PRODUCTS — STRICT RULES:
+- Every product name and price you mention MUST come from a tool result in this conversation (build_skincare_routine, search_products or get_recommendations). Never name brands or products from memory, even well-known ones.
+- What a product does: use its "about" text from the tool result plus general knowledge of its key ingredient (e.g. "it has salicylic acid, which keeps pores clear"). Do not invent claims beyond that.
+- Prices are in GH₵, exactly as the tool returns them.
+
+HOW TO HANDLE SKINCARE REQUESTS:
+1. If the customer mentions their skin type or a concern, or asks for a routine/set/"what should I use", call build_skincare_routine right away. If they did not give a skin type, infer it from what they said (shiny → oily, tight/flaky → dry); only if there is truly no clue, ask ONE short question about their skin type, offering the options.
+2. Present the routine as numbered steps: cleanser → toner → serum → moisturiser → sunscreen. For each step: one or two options with **name** and price, and one sentence on why it suits them. Then mention a ready-made set if the tool returned one ("If you'd rather buy one set: …"). Finish with 2–3 short tips and one follow-up offer (cheaper options, how to use, another concern).
+3. For a single product question ("a good toner for acne", "vitamin C serum") use search_products with 1–3 focused keywords (e.g. "salicylic toner"), not the whole sentence.
+4. For a budget ("under GH₵100"), pass max_price_per_item.
+5. If we don't stock what they want, say so in one line and offer the closest thing the tools return.
+
+`;
+  prompt += `CORE BEHAVIORS:
 - Be warm, helpful, and concise. Use a friendly but professional tone.
 - Always quote prices in GH₵ (Ghana Cedis).
 - When mentioning products, include the exact name and price FROM THE TOOL RESULT ONLY.
 - If a product is out of stock, say so and proactively suggest alternatives using get_recommendations.
 - For order tracking, always ask for both order number AND email if not provided.
 - Never make up information — if unsure, use the appropriate tool to look it up.
-- Keep responses concise (2-4 sentences max for simple questions).
+- Keep simple answers short (2-4 sentences). Routines and advice can be longer but stay scannable.
 - For ANY product-related request — IMMEDIATELY call search_products or get_recommendations. Wait for the result before responding. Your response must only reference products from that result.
 
 CRITICAL CONVERSATION RULES — YOU MUST FOLLOW THESE:
@@ -377,7 +477,7 @@ CRITICAL CONVERSATION RULES — YOU MUST FOLLOW THESE:
 2. NEVER repeat the same question twice. If you already asked something and the customer responded, move forward with their answer.
 3. NEVER give a generic response like "How can I help?" or "Could you tell me more?" after the customer has clearly stated what they need. Always address their specific request.
 4. If a tool call fails or you can't complete an action, explain SPECIFICALLY what went wrong and what the customer can do instead. Never just reset to a generic greeting.
-5. When the customer provides information (like an email address), ACKNOWLEDGE it specifically (e.g. "Got it, using wepedam@gmail.com...") and proceed with the action immediately.
+5. When the customer provides information (like an email address), ACKNOWLEDGE it specifically (e.g. "Got it, using ama@example.com...") and proceed with the action immediately.
 6. Maintain context throughout the entire conversation. If the customer said they want a password reset 3 messages ago, you still know that's what they want.
 
 HONESTY ABOUT LIMITATIONS:
@@ -451,6 +551,10 @@ If you genuinely cannot answer a question or resolve an issue (whether it's beyo
 Never leave a customer stuck without a path forward.
 
 ${getSiteMapSummary()}`;
+
+  // Everything above is the same for every customer (and is cached by Claude);
+  // everything below changes per request.
+  prompt += PROMPT_CONTEXT_MARKER + `Today is ${now}.`;
 
   if (profile) {
     prompt += `\n\nCUSTOMER CONTEXT (logged in):
@@ -608,7 +712,7 @@ export async function POST(request: Request) {
 
     // Fetch relevant KB articles from Supabase for AI context
     let kbContext = '';
-    if (groqKey) {
+    if (hasAI) {
       try {
         const searchTerms = userText.toLowerCase().split(/\s+/).filter(w => w.length > 3).slice(0, 3);
         if (searchTerms.length > 0) {
@@ -633,12 +737,41 @@ export async function POST(request: Request) {
         siteHits.map(h => `[${h.title}] (${h.path}): ${h.content.slice(0, 300)}...`).join('\n');
     }
 
+    // A question that makes sense on its own (not "cheaper ones?" after a reply)
+    // can be answered from, and saved to, the answer library.
+    const standalone =
+      !messages.some((m) => m.role === 'user') || questionKey(userText).split(' ').filter(Boolean).length >= 3;
+    const isSmallTalk = SMALL_TALK.test(userText);
+
     let result: ChatReply;
-    if (groqKey) {
-      result = await handleWithAI(supabase, supabaseWriter, messages, userText, groqKey, userId, userEmail, profile, pagePath, aiMemories, kbContext, cartItems, clientIp);
+    const saved = !isSmallTalk && standalone ? await findLibraryAnswer(supabaseWriter, userText) : null;
+    if (saved) {
+      result = {
+        message: saved.answer,
+        products: saved.products.length ? saved.products : undefined,
+        actions: saved.products.length
+          ? saved.products.filter((p) => p.inStock).map((p) => ({ type: 'add_to_cart' as const, product: p }))
+          : undefined,
+        quickReplies: saved.quickReplies.length
+          ? saved.quickReplies
+          : generateQuickReplies(userText, saved.products),
+      };
+    } else if (hasAI && !isSmallTalk && takeAiBudget()) {
+      result = await handleWithAI(supabase, supabaseWriter, messages, userText, userId, userEmail, profile, pagePath, aiMemories, kbContext, cartItems, clientIp);
+      if (result._library && standalone && !cartItems.length) {
+        saveLibraryAnswer(supabaseWriter, {
+          question: userText,
+          answer: result.message || '',
+          products: result.products,
+          quickReplies: result.quickReplies,
+          toolsUsed: result._library.toolsUsed,
+          customerName: profile?.name,
+        }).catch((e) => console.warn('[Chat API] answer library save failed', e));
+      }
     } else {
-      result = await handleWithoutAI(supabase, supabaseWriter, userText, profile);
+      result = await handleWithoutAI(supabase, supabaseWriter, userText, profile, messages);
     }
+    delete result._library;
 
     if (sessionId) {
       persistConversation(supabaseWriter, sessionId, userId, userEmail, profile, messages, userText, result, pagePath).catch((e) =>
@@ -802,14 +935,54 @@ async function persistConversation(
 
 // ─── Rule-Based Fallback ────────────────────────────────────────────────────
 
-async function handleWithoutAI(supabase: SupabaseClient, _supabaseWriter: SupabaseClient, userText: string, profile: ChatCustomerProfile | null) {
+async function handleWithoutAI(
+  supabase: SupabaseClient,
+  _supabaseWriter: SupabaseClient,
+  userText: string,
+  profile: ChatCustomerProfile | null,
+  history: ChatMessage[] = [],
+) {
   const lower = userText.toLowerCase();
+
+  if (/how (do|should|can) i use|how to use|in what order|which (one )?first/.test(lower)) {
+    return {
+      message: ROUTINE_HOW_TO,
+      quickReplies: ['Build me a skincare routine', 'Talk to someone'],
+    };
+  }
+
+  // Skin advice: "I have oily skin", "something for dark spots", "build me a routine"
+  if (looksLikeSkincareQuestion(userText)) {
+    const now = detectSkinProfile(userText);
+    // Remember what the customer said earlier ("I have oily skin" … "I have dark spots too")
+    const earlier = detectSkinProfile(
+      history.filter((m) => m.role === 'user').map((m) => m.content).join(' \n '),
+    );
+    const skinType = now.skinType ?? earlier.skinType;
+    const concerns = [...new Set([...now.concerns, ...earlier.concerns])].slice(0, 3);
+    if (!skinType && concerns.length === 0) {
+      return {
+        message: `I'd love to put a routine together for you! What's your skin type?\n\n- **Oily** — shiny by midday, visible pores\n- **Dry** — feels tight or flaky\n- **Combination** — oily T-zone, dry cheeks\n- **Sensitive** — reacts or stings easily\n\nAnd tell me any concern, like acne or dark spots.`,
+        quickReplies: ['I have oily skin', 'I have dry skin', 'Combination skin', 'Sensitive skin'],
+      };
+    }
+    const routine = await buildSkincareRoutine(supabase, { skinType, concerns });
+    const products = [...routine.steps.flatMap((s) => s.products), ...routine.readySets];
+    if (products.length > 0) {
+      return {
+        message: formatRoutineMessage(routine, formatPrice),
+        products,
+        actions: products.filter((p) => p.inStock).map((p) => ({ type: 'add_to_cart' as const, product: p })),
+        quickReplies: ['How do I use these?', concerns.includes('dark_spots') ? 'I have acne too' : 'I have dark spots too', 'Talk to someone'],
+      };
+    }
+  }
 
   if (/\b(hi|hello|hey|good morning|good afternoon|good evening)\b/i.test(userText)) {
     const greeting = profile ? `Hi ${profile.name.split(' ')[0]}! ` : 'Hi there! ';
     return {
-      message: `${greeting}I'm your shopping assistant. I can help you find products, track orders, check stock, and more. What can I help you with?`,
-      quickReplies: ['Find a product', 'Track my order', 'What do you recommend?', 'Store info'],
+      message: `${greeting}I'm the ${BRAND_NAME} beauty assistant. Tell me about your skin and I'll put a routine together from what we have in stock, or I can find a product or track your order.`,
+      quickReplies: ['Build me a skincare routine', 'Find a product', 'Track my order', 'Store info'],
     };
   }
 
@@ -912,7 +1085,7 @@ async function handleWithoutAI(supabase: SupabaseClient, _supabaseWriter: Supaba
   if (popular.length > 0) {
     const actions: ChatAction[] = popular.filter((p) => p.inStock).map((p) => ({ type: 'add_to_cart' as const, product: p }));
     return {
-      message: `We don't have an exact match for that, but here are some of our popular products you might like:`,
+      message: `I couldn't find an exact match for that. Here are some favourites — or tell me your skin type and concern and I'll build you a routine.`,
       products: popular,
       actions,
       quickReplies: ['Search for something else', 'Track my order', 'Contact us'],
@@ -932,7 +1105,6 @@ async function handleWithAI(
   supabaseWriter: SupabaseClient,
   messages: ChatMessage[],
   userText: string,
-  apiKey: string,
   userId: string | null,
   userEmail: string | null,
   profile: ChatCustomerProfile | null,
@@ -968,13 +1140,9 @@ async function handleWithAI(
     systemPrompt += `\nWhen the customer wants to checkout, use these product IDs and quantities for the create_order tool.`;
   }
 
-  const truncatedHistory = messages.slice(-18);
-
-  const llmMessages: { role: MessageRole; content: string; tool_call_id?: string; name?: string }[] = [
-    { role: 'system', content: systemPrompt },
-    ...truncatedHistory.map((m) => ({ role: m.role as MessageRole, content: m.content })),
-    { role: 'user', content: userText },
-  ];
+  const truncatedHistory = messages
+    .slice(-18)
+    .filter((m) => m.content && m.content.trim());
 
   const allProducts: ChatProduct[] = [];
   let allActions: ChatAction[] = [];
@@ -985,80 +1153,48 @@ async function handleWithAI(
   let quickReplies: string[] = [];
   let paymentAction: ChatAction | undefined;
 
+  const resetCollected = () => {
+    allProducts.length = 0;
+    orderCard = undefined;
+    ticketCard = undefined;
+    returnCard = undefined;
+    couponCard = undefined;
+    quickReplies = [];
+    paymentAction = undefined;
+  };
+
+  const toolsUsed: string[] = [];
+  // Runs one tool for the model and keeps the cards/products for the reply.
+  const runTool = async (fnName: string, args: ToolArgs): Promise<string> => {
+    toolsUsed.push(fnName);
+    const toolResult = await executeToolCall(supabase, supabaseWriter, fnName, args, userId, userEmail, profile, cartItems, clientIp);
+    if (toolResult.products) allProducts.push(...toolResult.products);
+    if (toolResult.orderCard) orderCard = toolResult.orderCard;
+    if (toolResult.ticketCard) ticketCard = toolResult.ticketCard;
+    if (toolResult.returnCard) returnCard = toolResult.returnCard;
+    if (toolResult.couponCard) couponCard = toolResult.couponCard;
+    if (toolResult.quickReplies) quickReplies = toolResult.quickReplies;
+    if (toolResult.paymentAction) paymentAction = toolResult.paymentAction;
+    return JSON.stringify(toolResult.data);
+  };
+
+  const [stablePrompt, ...contextParts] = systemPrompt.split(PROMPT_CONTEXT_MARKER);
+  const contextPrompt = contextParts.join('\n\n');
+
   try {
-    const res = await fetchWithRetry(LLM_API_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
-      body: JSON.stringify({
-        model: LLM_MODEL,
-        messages: llmMessages,
-        tools: LLM_TOOLS,
-        tool_choice: 'auto',
-        max_completion_tokens: 1024,
-        temperature: 0.6,
-        top_p: 1,
-      }),
-    });
-
-    if (!res.ok) {
-      console.error('[Chat API] Groq error:', await res.text());
-      return await handleWithoutAI(supabase, supabaseWriter, userText, profile);
+    let reply: string | null = null;
+    if (claude) {
+      reply = await runClaude(stablePrompt, contextPrompt, truncatedHistory, userText, runTool);
+    }
+    if (reply === null && configuredProviders().length > 0) {
+      resetCollected();
+      reply = await runOpenAICompatible(`${stablePrompt}\n\n${contextPrompt}`, truncatedHistory, userText, runTool);
+    }
+    if (reply === null) {
+      return await handleWithoutAI(supabase, supabaseWriter, userText, profile, messages);
     }
 
-    let data = await res.json();
-    let choice = data.choices?.[0];
-    let toolCalls = choice?.message?.tool_calls;
-
-    // Handle tool calls (support up to 3 rounds of tool calling for multi-step tasks)
-    let rounds = 0;
-    while (Array.isArray(toolCalls) && toolCalls.length > 0 && rounds < 3) {
-      rounds++;
-
-      llmMessages.push(choice.message);
-
-      for (const tc of toolCalls) {
-        const fnName = tc.function?.name;
-        let args = {} as ToolArgs;
-        try { args = JSON.parse(tc.function?.arguments || '{}'); } catch {}
-
-        const toolResult = await executeToolCall(supabase, supabaseWriter, fnName, args, userId, userEmail, profile, cartItems, clientIp);
-
-        if (toolResult.products) allProducts.push(...toolResult.products);
-        if (toolResult.orderCard) orderCard = toolResult.orderCard;
-        if (toolResult.ticketCard) ticketCard = toolResult.ticketCard;
-        if (toolResult.returnCard) returnCard = toolResult.returnCard;
-        if (toolResult.couponCard) couponCard = toolResult.couponCard;
-        if (toolResult.quickReplies) quickReplies = toolResult.quickReplies;
-        if (toolResult.paymentAction) paymentAction = toolResult.paymentAction;
-
-        llmMessages.push({
-          role: 'tool',
-          content: JSON.stringify(toolResult.data),
-          tool_call_id: tc.id,
-        });
-      }
-
-      const followUpRes = await fetchWithRetry(LLM_API_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
-        body: JSON.stringify({
-          model: LLM_MODEL,
-          messages: llmMessages,
-          tools: LLM_TOOLS,
-          tool_choice: 'auto',
-          max_completion_tokens: 1024,
-          temperature: 0.6,
-          top_p: 1,
-        }),
-      });
-
-      if (!followUpRes.ok) break;
-      data = await followUpRes.json();
-      choice = data.choices?.[0];
-      toolCalls = choice?.message?.tool_calls;
-    }
-
-    let assistantContent = choice?.message?.content?.trim() || '';
+    let assistantContent = reply.trim();
 
     // Strip any leaked reasoning/thinking blocks from the response
     assistantContent = assistantContent
@@ -1068,6 +1204,9 @@ async function handleWithAI(
       .replace(/^Let's get started!?\s*/gm, '')
       .replace(/^#{1,6}\s+/gm, '')
       .trim();
+
+    // Only a real AI answer goes into the answer library, never a stand-in.
+    const aiWroteIt = assistantContent.length > 0;
 
     // If the AI returned empty content, generate a contextual fallback instead of a generic message
     if (!assistantContent) {
@@ -1100,11 +1239,167 @@ async function handleWithAI(
       returnCard,
       couponCard,
       quickReplies,
+      _library: aiWroteIt ? { toolsUsed } : undefined,
     };
   } catch (err: unknown) {
     console.error('[Chat API] AI handler error:', err);
-    return await handleWithoutAI(supabase, supabaseWriter, userText, profile);
+    return await handleWithoutAI(supabase, supabaseWriter, userText, profile, messages);
   }
+}
+
+// ─── Model loops ────────────────────────────────────────────────────────────
+
+type RunTool = (name: string, args: ToolArgs) => Promise<string>;
+
+/**
+ * Claude tool loop. Returns the reply text, or null when Claude can't answer
+ * (no key, API error, refusal) so the caller can fall back.
+ */
+async function runClaude(
+  stablePrompt: string,
+  contextPrompt: string,
+  history: ChatMessage[],
+  userText: string,
+  runTool: RunTool,
+): Promise<string | null> {
+  if (!claude) return null;
+
+  const msgs: Anthropic.MessageParam[] = [
+    ...history.map((m) => ({ role: m.role, content: m.content })),
+    { role: 'user', content: userText },
+  ];
+  // The conversation must start with the customer (drop the widget's greeting).
+  while (msgs.length > 1 && msgs[0].role !== 'user') msgs.shift();
+
+  const usage = { input: 0, cached: 0, output: 0 };
+
+  for (let round = 0; round < 5; round++) {
+    let res: Anthropic.Message;
+    try {
+      res = await claude.messages.create({
+        model: CLAUDE_MODEL,
+        max_tokens: 2048,
+        output_config: { effort: 'low' },
+        system: [
+          // Tools + this block are identical for every chat, so Claude caches
+          // them and later requests pay about a tenth for that part.
+          { type: 'text', text: stablePrompt, cache_control: { type: 'ephemeral' } },
+          { type: 'text', text: contextPrompt || 'No extra context.' },
+        ],
+        tools: CLAUDE_TOOLS,
+        messages: msgs,
+      });
+    } catch (err) {
+      if (err instanceof Anthropic.AuthenticationError) console.error('[Chat API] Claude key rejected — check ANTHROPIC_API_KEY');
+      else if (err instanceof Anthropic.RateLimitError) console.error('[Chat API] Claude rate limited');
+      else if (err instanceof Anthropic.APIError) console.error(`[Chat API] Claude error ${err.status}:`, err.message.slice(0, 300));
+      else console.error('[Chat API] Claude request failed:', err);
+      return null;
+    }
+
+    usage.input += res.usage.input_tokens;
+    usage.cached += res.usage.cache_read_input_tokens ?? 0;
+    usage.output += res.usage.output_tokens;
+
+    if (res.stop_reason === 'refusal') {
+      console.warn('[Chat API] Claude declined:', res.stop_details?.category ?? 'unknown');
+      return null;
+    }
+
+    if (res.stop_reason === 'tool_use') {
+      // Send the whole turn back unchanged (thinking blocks included).
+      msgs.push({ role: 'assistant', content: res.content });
+      const calls = res.content.filter((b): b is Anthropic.ToolUseBlock => b.type === 'tool_use');
+      const results: Anthropic.ToolResultBlockParam[] = await Promise.all(
+        calls.map(async (call) => {
+          try {
+            return { type: 'tool_result' as const, tool_use_id: call.id, content: await runTool(call.name, (call.input ?? {}) as ToolArgs) };
+          } catch (e) {
+            console.error(`[Chat API] tool ${call.name} failed:`, e);
+            return { type: 'tool_result' as const, tool_use_id: call.id, content: 'This lookup failed. Tell the customer briefly and offer WhatsApp.', is_error: true };
+          }
+        }),
+      );
+      msgs.push({ role: 'user', content: results });
+      continue;
+    }
+
+    const text = res.content
+      .filter((b): b is Anthropic.TextBlock => b.type === 'text')
+      .map((b) => b.text)
+      .join('\n')
+      .trim();
+    console.log(`[Chat API] claude ${CLAUDE_MODEL} rounds=${round + 1} in=${usage.input} cached=${usage.cached} out=${usage.output}`);
+    return text;
+  }
+  console.warn('[Chat API] Claude used every tool round without a final answer');
+  return '';
+}
+
+/** Groq / OpenAI fallback loop (OpenAI chat-completions format). */
+async function runOpenAICompatible(
+  systemPrompt: string,
+  history: ChatMessage[],
+  userText: string,
+  runTool: RunTool,
+): Promise<string | null> {
+  type LLMMessage = { role: MessageRole; content: string | null; tool_call_id?: string; tool_calls?: unknown };
+  const llmMessages: LLMMessage[] = [
+    { role: 'system', content: systemPrompt },
+    ...history.map((m) => ({ role: m.role as MessageRole, content: m.content })),
+    { role: 'user', content: userText },
+  ];
+
+  // Try each configured provider until one answers; later rounds stick with it.
+  let provider: LLMProvider | null = null;
+  const callLLM = async (): Promise<Response | null> => {
+    const candidates = provider ? [provider] : configuredProviders();
+    for (const p of candidates) {
+      const r = await fetchWithRetry(p.url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${p.key}` },
+        body: JSON.stringify({
+          model: p.model,
+          messages: llmMessages,
+          tools: LLM_TOOLS,
+          tool_choice: 'auto',
+          max_completion_tokens: 1400,
+          temperature: 0.5,
+        }),
+      });
+      if (r.ok) {
+        provider = p;
+        return r;
+      }
+      console.error(`[Chat API] ${p.name} error ${r.status}:`, (await r.text()).slice(0, 300));
+    }
+    return null;
+  };
+
+  const res = await callLLM();
+  if (!res) return null;
+
+  let data = await res.json();
+  let choice = data.choices?.[0];
+  let toolCalls = choice?.message?.tool_calls;
+
+  let rounds = 0;
+  while (Array.isArray(toolCalls) && toolCalls.length > 0 && rounds < 4) {
+    rounds++;
+    llmMessages.push(choice.message);
+    for (const tc of toolCalls) {
+      let args = {} as ToolArgs;
+      try { args = JSON.parse(tc.function?.arguments || '{}'); } catch {}
+      llmMessages.push({ role: 'tool', content: await runTool(tc.function?.name, args), tool_call_id: tc.id });
+    }
+    const followUpRes = await callLLM();
+    if (!followUpRes) break;
+    data = await followUpRes.json();
+    choice = data.choices?.[0];
+    toolCalls = choice?.message?.tool_calls;
+  }
+
+  return choice?.message?.content ?? '';
 }
 
 // ─── Tool Call Executor ─────────────────────────────────────────────────────
@@ -1130,6 +1425,39 @@ async function executeToolCall(
   quickReplies?: string[];
 }> {
   switch (fnName) {
+    case 'build_skincare_routine': {
+      const routine = await buildSkincareRoutine(supabase, {
+        skinType: args.skin_type,
+        concerns: Array.isArray(args.concerns) ? args.concerns : [],
+        maxPrice: args.max_price_per_item,
+      });
+      const products = [...routine.steps.flatMap((s) => s.products), ...routine.readySets];
+      if (products.length === 0) {
+        return {
+          data: { found: 0, instruction: 'We have no matching skincare in stock right now. Give general advice only, name no products, and suggest WhatsApp for help.' },
+          products: [],
+          quickReplies: ['Contact us', 'Browse skincare'],
+        };
+      }
+      return {
+        data: {
+          skin_type: routine.skinType,
+          concerns: routine.concerns,
+          steps: routine.steps.map((s) => ({
+            step: s.step,
+            when: s.when,
+            why: s.why,
+            options: s.products.map((p) => ({ name: p.name.trim(), price: p.price, slug: p.slug, about: p.summary })),
+          })),
+          ready_made_sets: routine.readySets.map((p) => ({ name: p.name.trim(), price: p.price, slug: p.slug, about: p.summary })),
+          tips: routine.tips,
+          instruction: 'Present this as a step-by-step routine (morning and night), one or two product options per step with exact names and GH₵ prices from here, a short reason each one suits this skin, the ready-made set as a simpler option if there is one, then 2-3 tips. Name no products that are not in this data.',
+        },
+        products,
+        quickReplies: ['How do I use these?', 'Show cheaper options', 'I have another concern'],
+      };
+    }
+
     case 'search_products': {
       const products = await searchProducts(supabase, args.query, 4);
       if (products.length === 0) {
@@ -1163,8 +1491,8 @@ async function executeToolCall(
       return {
         data: {
           found: products.length,
-          results: products.map((p) => ({ name: p.name, price: p.price, inStock: p.inStock, slug: p.slug })),
-          instruction: 'ONLY mention these products by their exact names and prices. Do NOT add any product that is not in this list.',
+          results: products.map((p) => ({ name: p.name, price: p.price, inStock: p.inStock, slug: p.slug, about: p.summary })),
+          instruction: 'ONLY mention these products by their exact names and prices. Do NOT add any product that is not in this list. Use "about" to explain why a product suits the customer.',
         },
         products,
         quickReplies: ['Show me more', 'Add to cart'],
@@ -1307,7 +1635,7 @@ async function executeToolCall(
       return {
         data: {
           found: products.length,
-          results: products.map((p) => ({ name: p.name, price: p.price, inStock: p.inStock, slug: p.slug })),
+          results: products.map((p) => ({ name: p.name, price: p.price, inStock: p.inStock, slug: p.slug, about: p.summary })),
           instruction: 'ONLY recommend products from this list. Do NOT add any product that is not listed here.',
         },
         products,

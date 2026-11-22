@@ -324,6 +324,13 @@ export default function AdminLayout({
       permissionKey: 'support',
     },
     {
+      title: 'Chat Answers',
+      icon: 'ri-chat-check-line',
+      path: '/admin/support/saved-answers',
+      group: 'Customers',
+      permissionKey: 'support',
+    },
+    {
       title: 'SMS Debugger',
       icon: 'ri-message-2-line',
       path: '/admin/test-sms',
@@ -394,7 +401,13 @@ export default function AdminLayout({
                   <p className="px-3 mb-1 text-[10px] font-bold uppercase tracking-[0.18em] text-gray-400">{group}</p>
                   <div className="space-y-0.5">
                     {items.map((item) => {
-                      const isActive = item.exact ? pathname === item.path : pathname.startsWith(item.path);
+                      // The most specific menu entry wins (Chat Answers, not also Support Hub).
+                      const isActive = item.exact
+                        ? pathname === item.path
+                        : pathname.startsWith(item.path) &&
+                          !visibleMenuItems.some(
+                            (other) => other.path.length > item.path.length && other.path.startsWith(item.path) && pathname.startsWith(other.path),
+                          );
                       return (
                         <Link
                           key={item.path}

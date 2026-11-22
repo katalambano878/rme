@@ -24,6 +24,8 @@ export type ChatProduct = {
   maxStock: number
   moq: number
   inStock: boolean
+  /** Short plain-text description, for the assistant to explain a pick. */
+  summary?: string
 }
 
 export type ChatOrder = {
@@ -89,6 +91,7 @@ type ChatProductRow = {
   sale_price?: number | string | null
   compare_at_price?: number | string | null
   quantity?: number | string | null
+  description?: string | null
   metadata?: Record<string, unknown> | null
   variants?: ChatVariantRow[] | null
   product_images?: { url: string; sort_order?: number | null }[] | null
@@ -150,6 +153,7 @@ function mapProduct(p: ChatProductRow, saleEnabled: StorePricing | boolean): Cha
     maxStock: stock,
     moq,
     inStock: stock >= moq,
+    summary: plainText(p.description).slice(0, 220) || undefined,
   }
 }
 
@@ -160,67 +164,452 @@ function paidFromPayments(payments: PaymentStatusRow[] | null | undefined) {
 
 // ─── 1. Search Products ───────────────────────────────────────────────────────
 
+// Words that carry no product meaning ("can you find me something for…").
+const SEARCH_STOPWORDS = new Set(
+  `a an and any are as at be best buy can could do does for from get give good have help how i i'm im in is it
+  its like looking me my need of on or please product products put recommend set show skin skincare so some
+  something suggest that the this to together use want what which with would you your yours really very also
+  get got one ones thing things type kind`.split(/\s+/),
+)
+
+/**
+ * Make free text safe to drop into a PostgREST `or()` filter: commas, brackets,
+ * wildcards and quotes would otherwise split or break the filter string.
+ */
+export function cleanSearchText(text: string): string {
+  return (text || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9\s'+&-]/g, " ")
+    .replace(/'/g, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 80)
+}
+
+function searchKeywords(term: string): string[] {
+  const words = cleanSearchText(term)
+    .split(" ")
+    .map((w) => w.replace(/^[-+&]+|[-+&]+$/g, ""))
+    .filter((w) => w.length > 2 && !SEARCH_STOPWORDS.has(w))
+  return [...new Set(words)].slice(0, 6)
+}
+
+function plainText(html: unknown): string {
+  return String(html ?? "")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/\s+/g, " ")
+    .trim()
+}
+
+function scoreRow(row: ChatProductRow, words: string[]): number {
+  const name = (row.name || "").toLowerCase()
+  const desc = plainText(row.description).toLowerCase()
+  let score = 0
+  for (const w of words) {
+    if (name.includes(w)) score += 3
+    else if (desc.includes(w)) score += 1
+  }
+  return score
+}
+
+/** Best matches first, in-stock items ahead of sold-out ones. */
+function rankProducts(rows: ChatProductRow[], words: string[], saleEnabled: StorePricing, limit: number) {
+  const seen = new Set<string>()
+  return rows
+    .filter((r) => (seen.has(r.id) ? false : (seen.add(r.id), true)))
+    .map((r) => ({ p: mapProduct(r, saleEnabled), score: scoreRow(r, words) }))
+    .sort((x, y) => Number(y.p.inStock) - Number(x.p.inStock) || y.score - x.score || x.p.name.localeCompare(y.p.name))
+    .slice(0, limit)
+    .map((x) => x.p)
+}
+
 export async function searchProducts(supabase: SupabaseClient, query: string, limit = 4): Promise<ChatProduct[]> {
-  const term = (query || "").trim()
+  const term = cleanSearchText(query)
   if (!term) return []
 
   const saleEnabled = await fetchSaleEnabled(supabase)
+  const words = searchKeywords(term)
 
-  // Try exact phrase match first
+  // 1. The whole phrase ("vitamin c serum")
   const { data, error } = await supabase
     .from("products")
     .select(PRODUCT_SELECT)
     .eq("status", "active")
     .or(`name.ilike.%${term}%,description.ilike.%${term}%`)
-    .order("name")
-    .limit(limit)
+    .limit(limit * 4)
 
-  if (error) {
-    console.error("[ChatTools] searchProducts error:", error)
-    return []
-  }
-
+  if (error) console.error("[ChatTools] searchProducts error:", error)
   if (data && data.length > 0) {
-    return data.map((p: ChatProductRow) => mapProduct(p, saleEnabled))
+    return rankProducts(data as ChatProductRow[], words.length ? words : [term], saleEnabled, limit)
   }
 
-  // No exact match — try individual keywords (e.g. "cerave moisturizer" → search "moisturizer")
-  const words = term.toLowerCase().split(/\s+/).filter((w) => w.length > 2)
-  for (const word of words) {
-    const { data: wordData } = await supabase
-      .from("products")
-      .select(PRODUCT_SELECT)
-      .eq("status", "active")
-      .or(`name.ilike.%${word}%,description.ilike.%${word}%,tags.cs.{${word}}`)
-      .order("name")
-      .limit(limit)
-    if (wordData && wordData.length > 0) {
-      return wordData.map((p: ChatProductRow) => mapProduct(p, saleEnabled))
+  // 2. Individual meaningful words ("I have oily skin, what cleanser?" → oily, cleanser),
+  //    ranked by how many of them each product matches.
+  if (words.length > 0) {
+    const results = await Promise.all(
+      words.map((w) =>
+        supabase
+          .from("products")
+          .select(PRODUCT_SELECT)
+          .eq("status", "active")
+          .or(`name.ilike.%${w}%,description.ilike.%${w}%`)
+          .limit(40),
+      ),
+    )
+    const rows = results.flatMap((r) => (r.data as ChatProductRow[] | null) ?? [])
+    if (rows.length > 0) {
+      const ranked = rankProducts(rows, words, saleEnabled, limit)
+      if (ranked.length > 0) return ranked
     }
   }
 
-  // Also try matching against category names
-  const { data: catMatch } = await supabase
-    .from("categories")
-    .select("id")
-    .eq("is_active", true)
-    .ilike("name", `%${term}%`)
-    .limit(1)
-
-  if (catMatch && catMatch.length > 0) {
-    const { data: catProducts } = await supabase
-      .from("products")
-      .select(PRODUCT_SELECT)
-      .eq("status", "active")
-      .eq("category_id", catMatch[0].id)
-      .order("name")
-      .limit(limit)
-    if (catProducts && catProducts.length > 0) {
-      return catProducts.map((p: ChatProductRow) => mapProduct(p, saleEnabled))
+  // 3. A category name ("lip care", "sunscreen")
+  for (const w of [term, ...words]) {
+    const { data: catMatch } = await supabase
+      .from("categories")
+      .select("id")
+      .eq("is_active", true)
+      .ilike("name", `%${w}%`)
+      .limit(1)
+    if (catMatch && catMatch.length > 0) {
+      const { data: catProducts } = await supabase
+        .from("products")
+        .select(PRODUCT_SELECT)
+        .eq("status", "active")
+        .eq("category_id", catMatch[0].id)
+        .limit(limit * 4)
+      if (catProducts && catProducts.length > 0) {
+        return rankProducts(catProducts as ChatProductRow[], words, saleEnabled, limit)
+      }
     }
   }
 
   return []
+}
+
+// ─── 1b. Skincare routine builder ─────────────────────────────────────────────
+
+export type SkinType = "oily" | "dry" | "combination" | "sensitive" | "normal"
+export type SkinConcern = "acne" | "dark_spots" | "dullness" | "aging" | "dryness" | "oiliness" | "sensitivity"
+
+export type RoutineStep = {
+  step: string
+  when: string
+  why: string
+  products: ChatProduct[]
+}
+
+export type SkinRoutine = {
+  skinType: SkinType
+  concerns: SkinConcern[]
+  steps: RoutineStep[]
+  readySets: ChatProduct[]
+  tips: string[]
+}
+
+const SKIN_TYPE_WORDS: Record<SkinType, string[]> = {
+  oily: ["oily", "oil control", "oil-control", "oil free", "mattif", "pore", "salicylic", "niacinamide", "tea tree", "foam", "gel", "clarif", "acne"],
+  dry: ["dry", "hydrat", "hyaluronic", "ceramide", "moistur", "nourish", "cream", "shea", "glycerin", "milk"],
+  combination: ["combination", "balanc", "niacinamide", "hydrat", "gel", "ceramide", "gentle"],
+  sensitive: ["sensitive", "gentle", "sooth", "calm", "centella", "cica", "aloe", "ceramide", "simple", "fragrance"],
+  normal: ["all skin", "hydrat", "gentle", "vitamin c", "glow", "ceramide"],
+}
+
+const CONCERN_WORDS: Record<SkinConcern, string[]> = {
+  acne: ["acne", "blemish", "salicylic", "tea tree", "breakout", "pimple", "spot treatment", "clear"],
+  dark_spots: ["dark spot", "hyperpig", "brighten", "vitamin c", "kojic", "arbutin", "niacinamide", "turmeric", "even tone", "tumeric"],
+  dullness: ["glow", "radian", "brighten", "vitamin c", "rice", "luminous"],
+  aging: ["collagen", "retinol", "peptide", "firm", "wrinkle", "anti-aging", "anti aging", "pdrn", "rejuven"],
+  dryness: ["dry", "hydrat", "hyaluronic", "ceramide", "moistur"],
+  oiliness: ["oil control", "oily", "mattif", "pore", "salicylic", "niacinamide"],
+  sensitivity: ["sensitive", "sooth", "calm", "centella", "cica", "gentle", "aloe"],
+}
+
+// Words that point at the opposite skin type — a dry-skin routine shouldn't
+// suggest an "oil control" set, and an oily one shouldn't suggest a rich cream.
+const SKIN_TYPE_AVOID: Record<SkinType, string[]> = {
+  oily: ["dry skin", "rich cream", "very dry", "butter"],
+  dry: ["oil control", "oil-control", "oily", "mattif", "acne control"],
+  combination: [],
+  sensitive: ["peel", "glycolic", "scrub", "exfoliat"],
+  normal: [],
+}
+
+// Words that mean a product is for a different job (kids, body, hair, lips…).
+const ROUTINE_EXCLUDE = ["kids", "baby", "body", "hair", "lip ", "lips", "eye patch", "underarm", "feminine"]
+
+const ROUTINE_STEPS: { key: string; step: string; category: string; when: string; why: Record<SkinType, string> }[] = [
+  {
+    key: "cleanser",
+    step: "Cleanser",
+    category: "facial cleansers",
+    when: "Morning and night",
+    why: {
+      oily: "A foaming or gel cleanser lifts excess oil and sweat without stripping your skin.",
+      dry: "A gentle, creamy cleanser cleans without leaving your skin tight.",
+      combination: "A gentle gel cleanser clears the oily T-zone without drying your cheeks.",
+      sensitive: "A mild, soothing cleanser keeps irritation down.",
+      normal: "A gentle daily cleanser keeps your skin clear and balanced.",
+    },
+  },
+  {
+    key: "toner",
+    step: "Toner",
+    category: "facial toners",
+    when: "After cleansing",
+    why: {
+      oily: "An oil-control or salicylic toner helps keep pores clear and shine down.",
+      dry: "A hydrating toner adds a first layer of moisture.",
+      combination: "A balancing toner evens out oily and dry areas.",
+      sensitive: "A soothing, alcohol-free toner calms the skin.",
+      normal: "A toner preps your skin so serums sink in better.",
+    },
+  },
+  {
+    key: "serum",
+    step: "Serum",
+    category: "facial serums",
+    when: "After toner",
+    why: {
+      oily: "Niacinamide-type serums help control oil and fade marks.",
+      dry: "A hyaluronic or hydrating serum pulls moisture into the skin.",
+      combination: "A light serum treats your main concern without heaviness.",
+      sensitive: "A calming serum strengthens the skin barrier.",
+      normal: "A serum targets glow and even tone.",
+    },
+  },
+  {
+    key: "moisturizer",
+    step: "Moisturiser",
+    category: "facial moisturizers",
+    when: "Morning and night",
+    why: {
+      oily: "Oily skin still needs moisture — a light, oil-free one stops your skin over-producing oil.",
+      dry: "A richer cream locks in moisture all day.",
+      combination: "A lightweight moisturiser hydrates without clogging the T-zone.",
+      sensitive: "A gentle, barrier-repair moisturiser keeps skin comfortable.",
+      normal: "A daily moisturiser keeps skin soft and protected.",
+    },
+  },
+  {
+    key: "sunscreen",
+    step: "Sunscreen",
+    category: "sunscreen",
+    when: "Every morning, last step",
+    why: {
+      oily: "A light, non-greasy SPF protects without the shine — and stops dark marks getting darker.",
+      dry: "SPF protects your skin and keeps dark spots from deepening.",
+      combination: "A light SPF protects without feeling heavy.",
+      sensitive: "Sun protection prevents irritation and dark spots.",
+      normal: "Daily SPF is the best way to keep skin even and healthy in the Accra sun.",
+    },
+  },
+]
+
+const ROUTINE_TIPS: Record<SkinType, string[]> = {
+  oily: [
+    "Don't skip moisturiser — drying oily skin out makes it produce more oil.",
+    "Wash your face twice a day, not more; over-washing triggers more oil.",
+    "Use sunscreen daily, even indoors near windows.",
+  ],
+  dry: [
+    "Apply moisturiser on slightly damp skin to lock in water.",
+    "Avoid very hot water when washing your face.",
+    "Use sunscreen daily.",
+  ],
+  combination: [
+    "You can use a lighter moisturiser on the T-zone and a little more on dry areas.",
+    "Introduce one new product at a time.",
+    "Use sunscreen daily.",
+  ],
+  sensitive: [
+    "Patch-test new products on your jaw or behind your ear for 24 hours first.",
+    "Introduce one new product a week.",
+    "Use sunscreen daily.",
+  ],
+  normal: [
+    "Consistency beats lots of products — keep it simple.",
+    "Use sunscreen daily.",
+  ],
+}
+
+const CONCERN_TIPS: Partial<Record<SkinConcern, string>> = {
+  acne: "Don't pick or squeeze spots — it leaves dark marks. Give acne products 4–6 weeks.",
+  dark_spots: "Dark spots fade slowly (6–8 weeks) and sunscreen is what keeps them from coming back.",
+  aging: "Use retinol-type products at night only, and start 2–3 nights a week.",
+  sensitivity: "Avoid scrubs and strong acids until your skin calms down.",
+}
+
+/** Spot a skin type and concerns in a customer's own words. */
+export function detectSkinProfile(text: string): { skinType: SkinType | null; concerns: SkinConcern[] } {
+  const t = (text || "").toLowerCase()
+  let skinType: SkinType | null = null
+  if (/combination|combo skin|oily t-?zone/.test(t)) skinType = "combination"
+  else if (/oily|greasy|shiny|too much oil/.test(t)) skinType = "oily"
+  else if (/\bdry\b|flaky|tight skin|dehydrated/.test(t)) skinType = "dry"
+  else if (/sensitive|irritat|reacts|redness|burns easily/.test(t)) skinType = "sensitive"
+  else if (/normal skin/.test(t)) skinType = "normal"
+
+  const concerns: SkinConcern[] = []
+  if (/acne|pimple|breakout|blemish|spots on my face|whitehead|blackhead/.test(t)) concerns.push("acne")
+  if (/dark spot|dark mark|hyperpig|uneven|discolou?r|patches|marks/.test(t)) concerns.push("dark_spots")
+  if (/dull|glow|radian|bright/.test(t)) concerns.push("dullness")
+  if (/wrinkle|fine line|aging|ageing|firm|sagg/.test(t)) concerns.push("aging")
+  if (skinType && skinType !== "sensitive" && /sensitive|irritat|redness/.test(t)) concerns.push("sensitivity")
+  if (skinType === "oily" && concerns.length === 0 && /shine|shiny|pores/.test(t)) concerns.push("oiliness")
+  return { skinType, concerns }
+}
+
+/** True when the message is asking for skincare advice or a routine. */
+export function looksLikeSkincareQuestion(text: string): boolean {
+  const t = (text || "").toLowerCase()
+  const profile = detectSkinProfile(t)
+  if (profile.skinType || profile.concerns.length) return true
+  if (/^\W*(skin ?care|routine|skin)\W*$/.test(t)) return true
+  return /routine|skin ?care (set|advice|help)|regimen|what should i (use|get|buy)|my skin|my face|face (care|products)/.test(t)
+}
+
+/**
+ * Build a full routine (cleanser → toner → serum → moisturiser → sunscreen)
+ * from what the store actually stocks, picking the best match for the skin
+ * type and concerns at each step, plus any ready-made sets that fit.
+ */
+export async function buildSkincareRoutine(
+  supabase: SupabaseClient,
+  input: { skinType?: string | null; concerns?: string[] | null; maxPrice?: number | null },
+): Promise<SkinRoutine> {
+  const skinType: SkinType = (Object.keys(SKIN_TYPE_WORDS) as SkinType[]).includes(input.skinType as SkinType)
+    ? (input.skinType as SkinType)
+    : "normal"
+  const concerns = (input.concerns || []).filter((c): c is SkinConcern => c in CONCERN_WORDS).slice(0, 3)
+  const maxPrice = Number(input.maxPrice) > 0 ? Number(input.maxPrice) : null
+
+  const words = [...SKIN_TYPE_WORDS[skinType], ...concerns.flatMap((c) => CONCERN_WORDS[c])]
+  // Concern words count double: they are what the customer is most worried about.
+  const concernWords = new Set(concerns.flatMap((c) => CONCERN_WORDS[c]))
+
+  const saleEnabled = await fetchSaleEnabled(supabase)
+  const { data: cats } = await supabase.from("categories").select("id, name").eq("is_active", true)
+  const catList = (cats || []) as { id: string; name: string }[]
+  const catId = (needle: string) => catList.find((c) => c.name.toLowerCase().includes(needle))?.id
+  const stepCats = ROUTINE_STEPS.map((s) => catId(s.category))
+  const setCat = catId("skin care set") || catId("skincare set")
+  const ids = [...stepCats, setCat].filter((x): x is string => !!x)
+
+  let rows: (ChatProductRow & { category_id?: string })[] = []
+  if (ids.length) {
+    const { data, error } = await supabase
+      .from("products")
+      .select(`category_id, ${PRODUCT_SELECT}`)
+      .eq("status", "active")
+      .in("category_id", ids)
+      .limit(600)
+    if (error) console.error("[ChatTools] buildSkincareRoutine error:", error)
+    rows = (data || []) as typeof rows
+  }
+
+  const score = (r: ChatProductRow) => {
+    const name = (r.name || "").toLowerCase()
+    const desc = plainText(r.description).toLowerCase()
+    if (ROUTINE_EXCLUDE.some((x) => name.includes(x))) return -100
+    let s = 0
+    for (const w of SKIN_TYPE_AVOID[skinType]) if (name.includes(w)) s -= 6
+    for (const w of words) {
+      const weight = concernWords.has(w) ? 2 : 1
+      if (name.includes(w)) s += 3 * weight
+      else if (desc.includes(w)) s += 1 * weight
+    }
+    return s
+  }
+
+  const pick = (categoryId: string | undefined, n: number) =>
+    rows
+      .filter((r) => r.category_id === categoryId)
+      .map((r) => ({ p: mapProduct(r, saleEnabled), s: score(r) }))
+      .filter((x) => x.p.inStock && x.s > -100 && (!maxPrice || x.p.price <= maxPrice))
+      .sort((a, b) => b.s - a.s || a.p.price - b.p.price)
+      .slice(0, n)
+      .map((x) => x.p)
+
+  const steps: RoutineStep[] = ROUTINE_STEPS.map((s, i) => ({
+    step: s.step,
+    when: s.when,
+    why: s.why[skinType],
+    products: pick(stepCats[i], 2),
+  })).filter((s) => s.products.length > 0)
+
+  const readySets = setCat
+    ? rows
+        .filter((r) => r.category_id === setCat)
+        .map((r) => ({ p: mapProduct(r, saleEnabled), s: score(r) }))
+        .filter((x) => x.p.inStock && x.s >= 4 && (!maxPrice || x.p.price <= maxPrice * 3))
+        .sort((a, b) => b.s - a.s)
+        .slice(0, 2)
+        .map((x) => x.p)
+    : []
+
+  const tips = [...ROUTINE_TIPS[skinType]]
+  for (const c of concerns) if (CONCERN_TIPS[c]) tips.unshift(CONCERN_TIPS[c]!)
+
+  return { skinType, concerns, steps, readySets, tips: tips.slice(0, 4) }
+}
+
+const CONCERN_LABEL: Record<SkinConcern, string> = {
+  acne: "acne",
+  dark_spots: "dark spots",
+  dullness: "dull skin",
+  aging: "fine lines",
+  dryness: "dryness",
+  oiliness: "oiliness",
+  sensitivity: "sensitivity",
+}
+
+/** How to use a routine — answers "How do I use these?" without an AI model. */
+export const ROUTINE_HOW_TO = [
+  "Here's how to use your routine:",
+  "",
+  "**Morning:** cleanser → toner → serum → moisturiser → sunscreen (last, every day).",
+  "**Night:** cleanser → toner → serum → moisturiser. No sunscreen at night.",
+  "",
+  "- Use a pea-sized amount of cream and 2–3 drops of serum.",
+  "- Wait about a minute between layers so each one sinks in.",
+  "- Start new products one at a time, a few days apart, so you can tell what suits you.",
+  "- Patch-test first if your skin is sensitive: a little on your jaw for 24 hours.",
+  "- Acids (salicylic, glycolic) and retinol: start every other night.",
+  "- Give it 4–6 weeks before judging results.",
+].join("\n")
+
+/** A readable routine for when no AI model is available. */
+export function formatRoutineMessage(r: SkinRoutine, money: (n: number) => string): string {
+  const who = `${r.skinType} skin${r.concerns.length ? ` with ${r.concerns.map((c) => CONCERN_LABEL[c]).join(" and ")}` : ""}`
+  const lines = [`Here's a simple routine for **${who}**, using products we have in stock:`, ""]
+  r.steps.forEach((s, i) => {
+    const names = s.products.map((p) => `${p.name.trim()} (${money(p.price)})`).join(" or ")
+    lines.push(`**${i + 1}. ${s.step}** — ${s.when}`)
+    lines.push(`${s.why} Try: ${names}.`)
+    lines.push("")
+  })
+  if (r.readySets.length) {
+    lines.push(`Prefer a ready-made set? ${r.readySets.map((p) => `**${p.name.trim()}** (${money(p.price)})`).join(" or ")}.`, "")
+  }
+  if (r.tips.length) {
+    lines.push("**Tips**")
+    r.tips.forEach((t) => lines.push(`- ${t}`))
+  }
+  return lines.join("\n").trim()
+}
+
+/** Products by id, live (current price and stock), in the order given. */
+export async function getProductsByIds(supabase: SupabaseClient, ids: string[]): Promise<ChatProduct[]> {
+  const clean = ids.filter((id) => /^[0-9a-f-]{36}$/i.test(id)).slice(0, 20)
+  if (!clean.length) return []
+  const { data, error } = await supabase.from("products").select(PRODUCT_SELECT).eq("status", "active").in("id", clean)
+  if (error || !data) return []
+  const saleEnabled = await fetchSaleEnabled(supabase)
+  const byId = new Map((data as ChatProductRow[]).map((r) => [r.id, mapProduct(r, saleEnabled)]))
+  return clean.map((id) => byId.get(id)).filter((p): p is ChatProduct => !!p)
 }
 
 // ─── 2. Get Product for Cart ────────────────────────────────────────────────
@@ -476,8 +865,9 @@ export async function initiateReturn(
 
 export async function getRecommendations(supabase: SupabaseClient, context?: string): Promise<ChatProduct[]> {
   let q = supabase.from("products").select(PRODUCT_SELECT).eq("status", "active")
-  if (context?.trim()) {
-    q = q.or(`name.ilike.%${context.trim()}%,description.ilike.%${context.trim()}%`)
+  const ctx = cleanSearchText(context || "")
+  if (ctx) {
+    q = q.or(`name.ilike.%${ctx}%,description.ilike.%${ctx}%`)
   }
   const { data, error } = await q.order("rating_avg", { ascending: false }).order("review_count", { ascending: false }).limit(8)
 

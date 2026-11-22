@@ -169,9 +169,12 @@ export default function SupportDashboard() {
           <h1 className="text-2xl font-bold text-gray-900">Support Hub</h1>
           <p className="text-sm text-gray-500 mt-1">AI-powered customer support intelligence center</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <Link href="/admin/support/knowledge-base" className="inline-flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50 text-sm font-medium transition-colors">
             <i className="ri-book-open-line" /> Knowledge Base
+          </Link>
+          <Link href="/admin/support/saved-answers" className="inline-flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50 text-sm font-medium transition-colors">
+            <i className="ri-chat-check-line" /> Saved answers
           </Link>
           <Link href="/admin/support/analytics" className="inline-flex items-center gap-2 px-4 py-2 bg-rose-500 text-white rounded-lg hover:bg-rose-600 text-sm font-medium transition-colors">
             <i className="ri-line-chart-line" /> Analytics

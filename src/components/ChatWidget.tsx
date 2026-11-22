@@ -246,8 +246,8 @@ export default function ChatWidget() {
       setMessages([
         {
           role: 'assistant',
-          content: "Hi! I'm your AI shopping assistant. I can help you find products, track orders, check discounts, and much more. What can I help you with?",
-          quickReplies: ['Find a product', 'Track my order', 'What do you recommend?', 'Store info'],
+          content: "Hi! I'm your beauty assistant. Tell me about your skin (oily, dry, acne, dark spots…) and I'll put a routine together from what we have in stock. I can also find a product or track your order.",
+          quickReplies: ['Build me a skincare routine', 'I have oily skin', 'Find a product', 'Track my order'],
           timestamp: Date.now(),
         },
       ]);
@@ -536,7 +536,7 @@ export default function ChatWidget() {
     const initial: ChatMessage[] = [{
       role: 'assistant',
       content: "Chat cleared! How can I help you today?",
-      quickReplies: ['Find a product', 'Track my order', 'What do you recommend?', 'Store info'],
+      quickReplies: ['Build me a skincare routine', 'I have oily skin', 'Find a product', 'Track my order'],
       timestamp: Date.now(),
     }];
     setMessages(initial);
@@ -612,7 +612,7 @@ export default function ChatWidget() {
                 <h3 className="font-semibold text-sm leading-tight truncate">{WIDGET_TITLE}</h3>
                 <p className="text-[11px] text-rose-700 flex items-center gap-1">
                   <span className="w-1.5 h-1.5 bg-rose-400 rounded-full inline-block animate-pulse flex-shrink-0" />
-                  AI Assistant &middot; Online
+                  Beauty assistant &middot; Online
                 </p>
               </div>
             </div>
@@ -736,7 +736,7 @@ export default function ChatWidget() {
                   type="text"
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
-                  placeholder="Type or use voice..."
+                  placeholder="Ask about your skin, a product, an order…"
                   className="flex-1 min-w-0 rounded-xl border border-gray-200 bg-gray-50 px-3 sm:px-4 py-2.5 text-[16px] sm:text-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-rose-400 focus:border-rose-400 transition-all"
                   disabled={loading}
                   aria-label="Message"
