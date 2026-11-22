@@ -880,12 +880,12 @@ export async function getRecommendations(supabase: SupabaseClient, context?: str
 // ─── 9. Get Store Info ───────────────────────────────────────────────────────
 
 const STORE_INFO: Record<string, string> = {
-  shipping: `We deliver across Ghana. Fees and timing are shown at checkout. See ${CONTACT_EMAIL} or our Shipping policy page for details.`,
+  shipping: `Doorstep delivery across Accra and beyond, usually 1–2 business days in Accra. After you order, we contact you with the delivery cost, and delivery is free on orders over GH₵2,000. Store pickup is free at Manet Ville Estates, East Airport Spintex, Accra.`,
   returns: `We accept returns in line with our Returns policy. Visit /policies/returns on the site or ask us to open a support ticket.`,
-  payment: `We accept Mobile Money (MTN, Telecel, AirtelTigo) through Moolre, in GHS.`,
+  payment: `We accept Mobile Money (MTN, Telecel, AirtelTigo) through a secure Moolre link, in GH₵.`,
   contact: `Reach ${BRAND_NAME}:\n- Email: ${CONTACT_EMAIL}\n- Phone: ${PHONE_DISPLAY_PRIMARY} (${PHONE_INTERNATIONAL_PRIMARY})\n- WhatsApp: ${WHATSAPP_URL}`,
   about: `${BRAND_NAME} — ${BRAND_TAGLINE}. We offer beauty, skincare, body care, makeup, hair, and baby essentials.`,
-  delivery_times: `Delivery estimates depend on your location and are confirmed at checkout.`,
+  delivery_times: `Usually 1–2 business days in Accra. Outside Accra the team confirms the timing with you after you order.`,
   hours: `Shop online anytime. For fastest help, use this chat or WhatsApp.`,
 }
 

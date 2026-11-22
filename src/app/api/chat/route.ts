@@ -177,6 +177,26 @@ interface RequestBody {
   cartItems?: { id: string; name: string; price: number; quantity: number; slug: string }[];
 }
 
+/**
+ * The browser sends back which product cards each assistant reply showed, so
+ * the model knows those came from the live catalogue (it can't see earlier
+ * tool calls). Names are capped and stripped of line breaks.
+ */
+function withShownProducts(m: ChatMessage): string {
+  const text = m.content.slice(0, MAX_CHAT_CHARS);
+  if (m.role !== 'assistant' || !Array.isArray(m.products) || m.products.length === 0) return text;
+  const shown = m.products
+    .slice(0, 12)
+    .filter((p) => p && typeof p.name === 'string')
+    .map((p) => {
+      const name = p.name.replace(/[\r\n\[\]]+/g, ' ').trim().slice(0, 80);
+      const price = Number(p.price);
+      const slug = typeof p.slug === 'string' ? p.slug.replace(/[^a-z0-9-]/gi, '').slice(0, 80) : '';
+      return `${name}${Number.isFinite(price) ? ` GH₵${price}` : ''}${slug ? ` (slug ${slug})` : ''}`;
+    });
+  return shown.length ? `${text}\n\n[Product cards shown: ${shown.join('; ')}]` : text;
+}
+
 // ─── Rate Limiting (in-memory) ──────────────────────────────────────────────
 
 // Per-route rate limiting is delegated to lib/rate-limit so we can also enforce
@@ -406,13 +426,13 @@ const LLM_TOOLS = [
           },
           delivery_method: {
             type: 'string',
-            enum: ['standard', 'express', 'pickup'],
-            description: 'Delivery method. Standard: GH₵20, Express: GH₵40, Pickup: Free',
+            enum: ['standard', 'pickup'],
+            description: 'standard = doorstep delivery (the store confirms the cost later; free over GH₵2,000), pickup = free store pickup at Spintex',
           },
           payment_method: {
             type: 'string',
-            enum: ['moolre', 'cod'],
-            description: 'moolre = Moolre Mobile Money link, cod = cash on delivery where offered',
+            enum: ['moolre'],
+            description: 'moolre = secure Moolre Mobile Money link (the only payment method)',
           },
         },
         required: ['items', 'shipping', 'delivery_method', 'payment_method'],
@@ -460,6 +480,9 @@ HOW TO HANDLE SKINCARE REQUESTS:
 3. For a single product question ("a good toner for acne", "vitamin C serum") use search_products with 1–3 focused keywords (e.g. "salicylic toner"), not the whole sentence.
 4. For a budget ("under GH₵100"), pass max_price_per_item.
 5. If we don't stock what they want, say so in one line and offer the closest thing the tools return.
+6. Product cards: every product the tools return is shown under your reply as a card with an **Add** button and a **View** button. Whenever you recommend a specific product, make sure it is in a tool result for THIS reply (call search_products with its name, or get_product_for_cart with its slug) so the customer gets its card, even if you mentioned it earlier.
+7. You cannot put items in the bag yourself. Never say "I'll add it" or "I've added it". Say "Tap **Add** on the card below" instead.
+8. Earlier assistant turns may end with "[Product cards shown: …]". Those cards really were shown from our live catalogue, so trust them; never tell the customer an earlier list was wrong or made up. Never write that bracketed note yourself.
 
 `;
   prompt += `CORE BEHAVIORS:
@@ -493,10 +516,11 @@ WHEN CREATING SUPPORT TICKETS:
 - Always include a clear subject and description based on the full conversation context.
 
 STORE POLICIES (quick reference):
-- Delivery: see /policies/shipping; estimates shown at checkout
+- Doorstep delivery across Accra and beyond: usually 1–2 business days in Accra. Outside Accra it depends on the location, so don't promise a number of days; say the team confirms it. There is no fixed delivery fee: after the order the store contacts the customer with the cost. Delivery is free on orders over GH₵2,000.
+- Store pickup: free, at Manet Ville Estates, East Airport Spintex, Accra. Give this address directly when asked.
 - Returns: see /policies/returns
-- Payment: Mobile Money via Moolre (GHS); COD only when explicitly offered
-- Contact: ${CONTACT_EMAIL}, ${PHONE_DISPLAY_PRIMARY}
+- Payment: Mobile Money (MTN, Telecel, AirtelTigo) through a secure Moolre link, in GH₵. No cash on delivery.
+- Contact: ${CONTACT_EMAIL}, ${PHONE_DISPLAY_PRIMARY}, WhatsApp ${WHATSAPP_URL}
 
 CAPABILITIES (what you CAN do):
 - Search and recommend products
@@ -521,16 +545,13 @@ You can help customers place orders directly in this chat. Here is how:
    - Email address
    - Phone number
    - Delivery address, city, and region
-3. Ask them to choose a delivery method:
-   - **Standard** — GH₵20 (1-3 business days in Accra, 3-7 days outside)
-   - **Express** — GH₵40 (same-day/next-day in Accra)
-   - **Pickup** — Free (collect from our location)
-4. Ask them to choose a payment method:
-   - **Moolre** — Mobile Money via Moolre secure link
-   - **Cash on Delivery** — only if your policies allow it
+3. Ask them to choose how to get it (pass delivery_method "standard" for doorstep delivery, "pickup" for pickup):
+   - **Doorstep delivery**: the store contacts them with the delivery cost after ordering; free on orders over GH₵2,000
+   - **Store pickup**: free, at Manet Ville Estates, East Airport Spintex, Accra
+4. Payment is **Mobile Money** through a secure Moolre link (payment_method "moolre"). Do not offer cash on delivery.
 5. Summarize the order (items, subtotal, total). Shipping is confirmed by the store later — do not quote a delivery fee. Ask the customer to confirm.
-6. Once confirmed, call the create_order tool with the cart items (product IDs and quantities from the cart context), shipping info, delivery method, and payment method (moolre or cod).
-7. Share the Moolre payment link from the tool. For COD, confirm the order is placed.
+6. Once confirmed, call the create_order tool with the cart items (product IDs and quantities from the cart context), shipping info, delivery method, and payment method (moolre).
+7. Share the Moolre payment link from the tool.
 IMPORTANT: Do NOT ask the customer to list their cart items — you already have them. Just reference what is in their cart and proceed. If the cart is empty, tell them to add products first.
 
 LIMITATIONS (what you CANNOT do directly):
@@ -646,7 +667,7 @@ export async function POST(request: Request) {
     const messages = (Array.isArray(body.messages) ? body.messages : [])
       .filter((m) => m && (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string')
       .slice(-18)
-      .map((m) => ({ ...m, content: m.content.slice(0, MAX_CHAT_CHARS) }));
+      .map((m) => ({ role: m.role, content: withShownProducts(m) }));
     const pagePath = typeof body.pagePath === 'string' ? body.pagePath.slice(0, 200) : undefined;
     const cartItems = (Array.isArray(body.cartItems) ? body.cartItems : [])
       .slice(0, 30)
@@ -1203,6 +1224,8 @@ async function handleWithAI(
       .replace(/^Step \d+:.*$/gm, '')
       .replace(/^Let's get started!?\s*/gm, '')
       .replace(/^#{1,6}\s+/gm, '')
+      // The history note about shown cards is for the model only.
+      .replace(/\[Product cards shown:[^\]]*\]?/gi, '')
       .trim();
 
     // Only a real AI answer goes into the answer library, never a stand-in.
@@ -1474,7 +1497,7 @@ async function executeToolCall(
               alternatives_instruction: 'ONLY mention products from the "alternatives" list above. Do NOT add any other product names.',
             },
             products: alternatives,
-            quickReplies: ['Show me more', 'Add to cart'],
+            quickReplies: ['Show cheaper options', 'How do I use these?', 'Build me a skincare routine'],
           };
         }
         return {
@@ -1495,7 +1518,7 @@ async function executeToolCall(
           instruction: 'ONLY mention these products by their exact names and prices. Do NOT add any product that is not in this list. Use "about" to explain why a product suits the customer.',
         },
         products,
-        quickReplies: ['Show me more', 'Add to cart'],
+        quickReplies: ['Show cheaper options', 'How do I use these?', 'Build me a skincare routine'],
       };
     }
 
@@ -1738,11 +1761,16 @@ function generateQuickReplies(
 ): string[] {
   if (ticketCard) return ['Continue shopping', 'Track my order'];
   if (orderCard) return ['I have an issue', 'Track another order', 'Continue shopping'];
-  if (products.length > 0) return ['Add to cart', 'Show me more', 'Something else'];
-
   const lower = userText.toLowerCase();
-  if (/\b(hi|hello|hey)\b/.test(lower)) return ['Find a product', 'Track my order', 'What do you recommend?'];
-  if (/\b(thank|bye)\b/.test(lower)) return ['Find a product', 'Track my order'];
+  if (/\b(order|track|parcel|package)\b/.test(lower)) return ['Track my order', 'Talk to someone'];
+  if (/\b(deliver|delivery|pickup|pick up|shipping|pay|momo|mobile money)\b/.test(lower)) {
+    return ['Build me a skincare routine', 'Find a product', 'Talk to someone'];
+  }
+  if (products.length > 0) return ['Show cheaper options', 'How do I use these?', 'Something else'];
+  if (looksLikeSkincareQuestion(userText) || /\b(skin|face|serum|cream|soap|lotion|spot|acne|routine)\b/.test(lower)) {
+    return ['Build me a skincare routine', 'Show cheaper options', 'Talk to someone'];
+  }
+  if (/\b(thank|bye)\b/.test(lower)) return ['Find a product', 'Build me a skincare routine'];
 
-  return ['Find a product', 'Track my order', 'Store info', 'What do you recommend?'];
+  return ['Build me a skincare routine', 'Find a product', 'Track my order'];
 }

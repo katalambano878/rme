@@ -295,7 +295,12 @@ export default function ChatWidget() {
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
         body: JSON.stringify({
-          messages: messages.slice(-18).map((m) => ({ role: m.role, content: m.content })),
+          messages: messages.slice(-18).map((m) => ({
+            role: m.role,
+            content: m.content,
+            // Lets the assistant know which product cards it already showed.
+            products: m.products?.slice(0, 12).map((p) => ({ id: p.id, name: p.name, price: p.price, slug: p.slug })),
+          })),
           newMessage: msgText,
           sessionId: getSessionId(),
           pagePath: pathname,
@@ -398,7 +403,11 @@ export default function ChatWidget() {
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
         body: JSON.stringify({
-          messages: messages.slice(-18).map(m => ({ role: m.role, content: m.content })),
+          messages: messages.slice(-18).map((m) => ({
+            role: m.role,
+            content: m.content,
+            products: m.products?.slice(0, 12).map((p) => ({ id: p.id, name: p.name, price: p.price, slug: p.slug })),
+          })),
           newMessage: transcribedText,
           sessionId: getSessionId(),
           pagePath: pathname,
