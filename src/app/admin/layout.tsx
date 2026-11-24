@@ -10,6 +10,7 @@ import { BRAND_LOGO_ALT, BRAND_LOGO_SRC } from '@/lib/brand';
 import { canAccessAdminPanel, canManageStaffRoles } from '@/lib/admin-role-access';
 import { firstAccessibleAdminPath, staffCanAccessPath } from '@/lib/staff-permissions';
 import AdminPlaceMemory from '@/components/admin/AdminPlaceMemory';
+import { SmsCreditDashboardCard } from '@/components/admin/SmsCreditDashboardCard';
 
 // Optional-module menu ids; all shown when store_modules can't be read.
 const ALL_MODULE_IDS = ['customer-insights', 'notifications', 'blog'];
@@ -505,6 +506,7 @@ export default function AdminLayout({
           </div>
         </header>
 
+        <SmsCreditDashboardCard />
         <main className="w-full max-w-[min(100%,1600px)] mx-auto px-4 sm:px-6 lg:px-8 py-5 lg:py-6">
           {children}
         </main>
