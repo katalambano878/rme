@@ -1,7 +1,6 @@
 'use client';
 
 import type { DashboardSmsCredit } from '@/lib/sms-credit-types';
-import { SmsCreditDashboardCard } from '@/components/admin/SmsCreditDashboardCard';
 import Link from 'next/link';
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
@@ -360,7 +359,6 @@ export default function AdminDashboardClient({ smsCredit }: { smsCredit: Dashboa
               <p className="text-gray-600 text-xs">{stat.title}</p>
             </div>
           ))}
-          <SmsCreditDashboardCard smsCredit={smsCredit} />
         </div>
 
         {/* Revenue Chart & Quick Actions */}

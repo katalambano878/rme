@@ -30,6 +30,7 @@ import {
 import { searchSiteKnowledge, getSiteMapSummary } from '@/lib/site-knowledge';
 import { formatPrice } from '@/lib/utils';
 import { findLibraryAnswer, saveLibraryAnswer, questionKey } from '@/lib/chat-answer-library';
+import { campaignState, parseCampaign, type Campaign } from '@/lib/effective-price';
 import {
   BRAND_NAME,
   BRAND_TAGLINE,
@@ -450,6 +451,20 @@ const CLAUDE_TOOLS: Anthropic.Tool[] = LLM_TOOLS.map((t) => ({
   input_schema: t.function.parameters as Anthropic.Tool.InputSchema,
 }));
 
+/** What the assistant should know about a scheduled sale right now. */
+function describeCampaign(c: Campaign | null, state: ReturnType<typeof campaignState>): string {
+  if (!c || (state !== 'live' && state !== 'upcoming')) return '';
+  const fmt = (iso: string) =>
+    new Date(iso).toLocaleString('en-GB', { timeZone: 'Africa/Accra', weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
+  const offer = c.discountPercent > 0
+    ? `${c.discountPercent}% off everything, applied automatically with no code; products that already have their own sale price get whichever price is lower`
+    : 'reduced prices on selected products, applied automatically with no code';
+  if (state === 'live') {
+    return `\n\n${c.name.toUpperCase()} IS ON NOW (until ${fmt(c.endsAt)}, Ghana time): ${offer}. Every price the tools return already includes the ${c.name} price, so quote those. Mention ${c.name} warmly when it helps (e.g. "it's part of our ${c.name} sale"), and when someone asks about deals, point them to the deals page /shop?sale=1.`;
+  }
+  return `\n\n${c.name.toUpperCase()} STARTS ${fmt(c.startsAt)} (Ghana time) and runs until ${fmt(c.endsAt)}: ${offer}. Prices are NOT reduced yet; the tools return today's prices. If someone asks about deals or Black Friday, tell them when it starts and suggest they come back then; they can browse and plan their order now.`;
+}
+
 const PROMPT_CONTEXT_MARKER = '\n\n<<request context>>\n\n';
 
 function buildSystemPrompt(profile: ChatCustomerProfile | null, pagePath?: string): string {
@@ -758,6 +773,13 @@ export async function POST(request: Request) {
         siteHits.map(h => `[${h.title}] (${h.path}): ${h.content.slice(0, 300)}...`).join('\n');
     }
 
+    // A scheduled sale (Black Friday etc.): tell the assistant what's on.
+    const { data: siteRow } = await supabaseWriter.from('site_settings').select('feature_flags').eq('id', 1).maybeSingle();
+    const campaign = parseCampaign(siteRow?.feature_flags);
+    const campaignNow = campaignState(campaign);
+    const campaignNote = describeCampaign(campaign, campaignNow);
+    if (campaignNote) kbContext += campaignNote;
+
     // A question that makes sense on its own (not "cheaper ones?" after a reply)
     // can be answered from, and saved to, the answer library.
     const standalone =
@@ -765,7 +787,13 @@ export async function POST(request: Request) {
     const isSmallTalk = SMALL_TALK.test(userText);
 
     let result: ChatReply;
-    const saved = !isSmallTalk && standalone ? await findLibraryAnswer(supabaseWriter, userText) : null;
+    // While a sale is on (or about to start), questions about deals get a fresh
+    // answer, never a saved one written before the sale.
+    const askingAboutDeals = /\b(sale|sales|discount|deal|deals|promo|promotion|offer|offers|black ?friday|cyber|cheap|reduced|% ?off|percent)\b/i.test(userText);
+    const campaignOn = campaignNow === 'live' || campaignNow === 'upcoming';
+    const saved = !isSmallTalk && standalone && !(campaignOn && askingAboutDeals)
+      ? await findLibraryAnswer(supabaseWriter, userText)
+      : null;
     if (saved) {
       result = {
         message: saved.answer,
@@ -779,7 +807,10 @@ export async function POST(request: Request) {
       };
     } else if (hasAI && !isSmallTalk && takeAiBudget()) {
       result = await handleWithAI(supabase, supabaseWriter, messages, userText, userId, userEmail, profile, pagePath, aiMemories, kbContext, cartItems, clientIp);
-      if (result._library && standalone && !cartItems.length) {
+      // Answers that mention the sale go stale when it ends, so they aren't saved.
+      const mentionsCampaign =
+        campaignOn && !!campaign && new RegExp(`${campaign.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}|black ?friday|% off`, 'i').test(result.message || '');
+      if (result._library && standalone && !cartItems.length && !(campaignOn && (askingAboutDeals || mentionsCampaign))) {
         saveLibraryAnswer(supabaseWriter, {
           question: userText,
           answer: result.message || '',

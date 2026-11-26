@@ -3,8 +3,9 @@
 import { Suspense, useCallback, useEffect, useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import ProductMarkdowns from '@/components/admin/ProductMarkdowns';
+import CampaignCard from '@/components/admin/CampaignCard';
 import { supabase } from '@/lib/supabase';
-import { parseStorePricing, storePricingToFlags } from '@/lib/effective-price';
+import { parseBaseStorePricing, storePricingToFlags } from '@/lib/effective-price';
 
 /**
  * Two mutually exclusive pricing modes, stored in site_settings.feature_flags:
@@ -55,7 +56,7 @@ function StoreWidePricing({ onShowProducts }: { onShowProducts: () => void }) {
         return;
       }
 
-      const parsed = parseStorePricing(data?.feature_flags);
+      const parsed = parseBaseStorePricing(data?.feature_flags);
       setSalesActive(parsed.salesActive);
       setDiscountPercent(parsed.discountPercent);
       setStrictDiscount(parsed.strictDiscount);
@@ -394,6 +395,9 @@ function SaleAndDiscounts() {
         </p>
       </div>
 
+      <CampaignCard />
+
+      <h2 className="text-lg font-semibold text-gray-900 pt-2">Everyday sale settings</h2>
       <div className="grid gap-3 sm:grid-cols-2 max-w-3xl" role="tablist">
         {TABS.map((t) => (
           <button

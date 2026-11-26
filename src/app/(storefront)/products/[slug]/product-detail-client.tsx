@@ -102,6 +102,7 @@ function buildCartProductSnapshot(
       salesActive: product.salePromotionEnabled ?? false,
       discountPercent: product.discountPercent ?? 0,
       strictDiscount: product.strictDiscount ?? false,
+      bestPrice: product.bestPrice ?? false,
     },
   )
 

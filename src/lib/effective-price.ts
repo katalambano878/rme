@@ -41,6 +41,11 @@ export type StorePricing = {
   salesActive: boolean
   discountPercent: number
   strictDiscount: boolean
+  /**
+   * Campaign mode (e.g. Black Friday): each item gets the cheaper of its own
+   * sale price and the store-wide percentage, so no one gets the smaller deal.
+   */
+  bestPrice?: boolean
 }
 
 export const DEFAULT_STORE_PRICING: StorePricing = {
@@ -61,11 +66,92 @@ export function asStorePricing(input: PricingInput): StorePricing {
     salesActive: Boolean(input.salesActive),
     discountPercent: Number(input.discountPercent) || 0,
     strictDiscount: Boolean(input.strictDiscount),
+    bestPrice: Boolean(input.bestPrice),
   }
 }
 
-/** Read store_pricing from site_settings.feature_flags. */
-export function parseStorePricing(flags: unknown): StorePricing {
+// ─── Scheduled campaigns (Black Friday etc.) ─────────────────────────────────
+
+/** A timed sale stored as feature_flags.campaign. */
+export type Campaign = {
+  enabled: boolean
+  name: string
+  /** ISO timestamps. */
+  startsAt: string
+  endsAt: string
+  /** % off items that have no better sale price of their own (0 = only her sale prices). */
+  discountPercent: number
+  /** Optional custom line for the notice bar. */
+  message: string
+}
+
+export type CampaignState = "off" | "upcoming" | "live" | "ended"
+
+export function parseCampaign(flags: unknown): Campaign | null {
+  if (!flags || typeof flags !== "object") return null
+  const raw = (flags as Record<string, unknown>).campaign
+  if (!raw || typeof raw !== "object") return null
+  const c = raw as Record<string, unknown>
+  const startsAt = typeof c.starts_at === "string" ? c.starts_at : ""
+  const endsAt = typeof c.ends_at === "string" ? c.ends_at : ""
+  if (!startsAt || !endsAt || Number.isNaN(Date.parse(startsAt)) || Number.isNaN(Date.parse(endsAt))) return null
+  const pct = Number(c.discount_percent)
+  return {
+    enabled: Boolean(c.enabled),
+    name: (typeof c.name === "string" && c.name.trim()) || "Black Friday",
+    startsAt,
+    endsAt,
+    discountPercent: Number.isFinite(pct) ? Math.min(90, Math.max(0, Math.round(pct))) : 0,
+    message: typeof c.message === "string" ? c.message.trim().slice(0, 160) : "",
+  }
+}
+
+export function campaignState(c: Campaign | null, now: number = Date.now()): CampaignState {
+  if (!c || !c.enabled) return "off"
+  const start = Date.parse(c.startsAt)
+  const end = Date.parse(c.endsAt)
+  if (!(end > start)) return "off"
+  if (now < start) return "upcoming"
+  if (now >= end) return "ended"
+  return "live"
+}
+
+export function campaignToFlags(c: Campaign | null, existing?: Record<string, unknown> | null) {
+  const next = { ...(existing ?? {}) }
+  if (!c) {
+    delete next.campaign
+    return next
+  }
+  next.campaign = {
+    enabled: c.enabled,
+    name: c.name,
+    starts_at: c.startsAt,
+    ends_at: c.endsAt,
+    discount_percent: c.discountPercent,
+    message: c.message,
+  }
+  return next
+}
+
+/**
+ * What customers are charged right now: a live campaign switches the sale on
+ * (her own sale prices plus the campaign percentage, cheapest wins); otherwise
+ * her everyday sale settings apply. Used by the storefront, bag, checkout,
+ * chatbot and till alike, so they always agree.
+ */
+export function parseStorePricing(flags: unknown, now: number = Date.now()): StorePricing {
+  const campaign = parseCampaign(flags)
+  if (campaignState(campaign, now) === "live" && campaign) {
+    return { salesActive: true, discountPercent: campaign.discountPercent, strictDiscount: false, bestPrice: true }
+  }
+  return parseBaseStorePricing(flags)
+}
+
+/**
+ * Her everyday sale settings only, ignoring any campaign. The Sale & discounts
+ * screen reads this so saving there never bakes Black Friday in permanently.
+ */
+export function parseBaseStorePricing(flags: unknown): StorePricing {
   if (!flags || typeof flags !== "object") return DEFAULT_STORE_PRICING
   const obj = flags as Record<string, unknown>
   const nested =
@@ -167,9 +253,20 @@ export function effectivePriceForVariant(
     return { effective: 0, original: 0, onSale: false }
   }
 
-  const { salesActive, discountPercent, strictDiscount } = asStorePricing(saleEnabled)
+  const { salesActive, discountPercent, strictDiscount, bestPrice } = asStorePricing(saleEnabled)
 
-  if (salesActive) {
+  if (salesActive && bestPrice) {
+    // Campaign: cheapest of her sale prices and the campaign percentage.
+    let best = variantPrice
+    const variantSale = num(variant.sale_price)
+    const productSale = num(product.sale_price)
+    if (isUsableSale(variantSale, variantPrice)) best = Math.min(best, variantSale)
+    else if (isUsableSale(productSale, variantPrice)) best = Math.min(best, productSale)
+    if (discountPercent > 0) best = Math.min(best, applyDiscount(variantPrice, discountPercent))
+    if (best < variantPrice) return { effective: best, original: variantPrice, onSale: true }
+  }
+
+  if (salesActive && !bestPrice) {
     const strictMode = strictDiscount && discountPercent > 0
     if (!strictMode) {
       const variantSale = num(variant.sale_price)

@@ -16,6 +16,7 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet"
 import { HeaderSearch } from "./header-search"
+import { useCampaign } from "@/components/campaign/campaign-context"
 import { cn } from "@/lib/utils"
 
 const mainLinks = [
@@ -46,6 +47,9 @@ export function Navbar() {
   const openCart = useCartStore((s) => s.openCart)
   const bagCount = hydrated ? storedCount : 0
   const onAccount = pathname.startsWith("/account")
+  const { campaign, state: campaignNow } = useCampaign()
+  // During Black Friday the Sale link becomes the campaign's own name.
+  const saleLabel = campaignNow === "live" && campaign ? campaign.name : "Sale"
 
   const bagButton = (
     <button
@@ -134,7 +138,7 @@ export function Navbar() {
                     link.sale ? "text-raspberry hover:text-raspberry-deep" : "text-ink hover:text-raspberry",
                   )}
                 >
-                  {link.label}
+                  {link.sale ? saleLabel : link.label}
                 </Link>
               ))}
               <span className="flex items-center gap-2">
@@ -168,7 +172,7 @@ export function Navbar() {
                 onClick={() => setMenuOpen(false)}
                 className="flex min-h-12 items-center rounded-xl px-3 text-[17px] font-semibold text-ink hover:bg-counter"
               >
-                {link.label}
+                {link.href === "/shop?sale=1" ? saleLabel : link.label}
               </Link>
             ))}
           </nav>

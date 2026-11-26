@@ -30,6 +30,8 @@ export type Product = {
   salePromotionEnabled?: boolean
   discountPercent?: number
   strictDiscount?: boolean
+  /** Campaign (Black Friday) rule: cheapest of own sale price and the % off. */
+  bestPrice?: boolean
   images: string[]
   badges: ProductBadge[]
   variants: Variant[]

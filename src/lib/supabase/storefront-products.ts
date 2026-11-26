@@ -193,6 +193,7 @@ export function mapProductRowToProduct(row: ProductRow, saleEnabled: StorePricin
     salePromotionEnabled: pricing.salesActive,
     discountPercent: pricing.discountPercent,
     strictDiscount: pricing.strictDiscount,
+    bestPrice: Boolean(pricing.bestPrice),
     images: imageUrlsFromRows(row.product_images ?? undefined),
     badges: (() => {
       const b = normalizeBadges(row.badges)

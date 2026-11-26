@@ -16,6 +16,8 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet"
 import { useListPositionMemory } from "@/lib/hooks/use-list-position-memory"
+import { useCampaign } from "@/components/campaign/campaign-context"
+import { CampaignBanner } from "@/components/campaign/campaign-banner"
 
 const ITEMS_PER_PAGE = 24
 const CATEGORY_PREVIEW = 10
@@ -65,6 +67,8 @@ export default function ShopPageClient({
   const [showAllCategories, setShowAllCategories] = useState(false)
   // /shop?sale=1 (navbar "Sale") shows only products with an active sale price.
   const saleOnly = searchParams.get("sale") === "1"
+  const { campaign, state: campaignStateNow } = useCampaign()
+  const campaignLive = campaignStateNow === "live"
   // /shop?q=term (search box Enter) narrows the list to matching names.
   const searchTerm = (searchParams.get("q") ?? "").trim().toLowerCase()
 
@@ -247,9 +251,10 @@ export default function ShopPageClient({
   const activeFilterCount =
     selectedCategories.length + (priceFiltered ? 1 : 0) + (inStockOnly ? 1 : 0) + (saleOnly ? 1 : 0)
   const queryLabel = searchParams.get("q")?.trim()
+  const saleTitle = campaignLive && campaign ? `${campaign.name} deals` : "On sale"
   const title = queryLabel
     ? `Results for “${queryLabel}”`
-    : activeCategoryName ?? (saleOnly ? "On sale" : "Shop all")
+    : activeCategoryName ?? (saleOnly ? saleTitle : "Shop all")
   const subtitle = queryLabel || activeCategoryName || saleOnly
     ? `${filteredProducts.length} ${filteredProducts.length === 1 ? "product" : "products"}`
     : `${totalCount} genuine products, delivered across Accra or ready at Spintex.`
@@ -371,6 +376,8 @@ export default function ShopPageClient({
   return (
     <>
       <div className="mx-auto max-w-[1440px] px-4 pt-6 pb-16 sm:px-6 lg:px-10">
+        <CampaignBanner compact className="mb-6" />
+
         <nav aria-label="Breadcrumb" className="text-sm text-mute">
           <Link href="/" className="text-mute hover:text-ink">
             Home

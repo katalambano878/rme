@@ -7,6 +7,11 @@ import {
   effectivePriceForVariant,
   liveLinePrice,
   parseStorePricing,
+  parseBaseStorePricing,
+  parseCampaign,
+  campaignState,
+  campaignToFlags,
+  storePricingToFlags,
   resolveCatalogSalePrice,
 } from "./effective-price"
 
@@ -160,5 +165,73 @@ describe("resolveCatalogSalePrice", () => {
     assert.equal(resolveCatalogSalePrice(12, { sales_price: 9 }), 12)
     assert.equal(resolveCatalogSalePrice(null, { sales_price: 9 }), 9)
     assert.equal(resolveCatalogSalePrice(null, {}), null)
+  })
+})
+
+describe("scheduled campaign (Black Friday)", () => {
+  const flags = {
+    sale_promotion_enabled: false,
+    store_pricing: { sales_active: false, discount_percent: 0, strict_discount: false },
+    campaign: {
+      enabled: true,
+      name: "Black Friday",
+      starts_at: "2026-11-27T00:00:00.000Z",
+      ends_at: "2026-11-30T00:00:00.000Z",
+      discount_percent: 20,
+      message: "",
+    },
+  }
+  const before = Date.parse("2026-11-26T23:59:00Z")
+  const during = Date.parse("2026-11-28T12:00:00Z")
+  const after = Date.parse("2026-11-30T00:00:01Z")
+
+  it("is upcoming, live and ended at the right times", () => {
+    const c = parseCampaign(flags)
+    assert.equal(campaignState(c, before), "upcoming")
+    assert.equal(campaignState(c, during), "live")
+    assert.equal(campaignState(c, after), "ended")
+    assert.equal(campaignState({ ...c!, enabled: false }, during), "off")
+  })
+
+  it("switches the sale on only while live, and leaves her everyday settings alone", () => {
+    assert.equal(parseStorePricing(flags, before).salesActive, false)
+    assert.deepEqual(parseStorePricing(flags, during), {
+      salesActive: true,
+      discountPercent: 20,
+      strictDiscount: false,
+      bestPrice: true,
+    })
+    assert.equal(parseStorePricing(flags, after).salesActive, false)
+    assert.equal(parseBaseStorePricing(flags).salesActive, false)
+  })
+
+  it("gives each item the cheaper of its own sale price and the campaign percent", () => {
+    const live = parseStorePricing(flags, during)
+    // own sale price 70 beats 20% off (80)
+    assert.equal(effectivePriceForVariant({ price: 100, sale_price: 70 }, {}, live).effective, 70)
+    // 20% off (80) beats a weak sale price of 95
+    assert.equal(effectivePriceForVariant({ price: 100, sale_price: 95 }, {}, live).effective, 80)
+    // no sale price: 20% off
+    const plain = effectivePriceForVariant({ price: 100 }, {}, live)
+    assert.equal(plain.effective, 80)
+    assert.equal(plain.original, 100)
+    assert.equal(plain.onSale, true)
+  })
+
+  it("with 0% only her own sale prices apply", () => {
+    const zero = { ...flags, campaign: { ...flags.campaign, discount_percent: 0 } }
+    const live = parseStorePricing(zero, during)
+    assert.equal(effectivePriceForVariant({ price: 100 }, {}, live).effective, 100)
+    assert.equal(effectivePriceForVariant({ price: 100, sale_price: 60 }, {}, live).effective, 60)
+  })
+
+  it("keeps her campaign when everyday settings are saved", () => {
+    const saved = storePricingToFlags(
+      { salesActive: true, discountPercent: 0, strictDiscount: false },
+      flags,
+    ) as Record<string, unknown>
+    assert.ok(saved.campaign)
+    const removed = campaignToFlags(null, saved) as Record<string, unknown>
+    assert.equal(removed.campaign, undefined)
   })
 })

@@ -1,6 +1,7 @@
 import type { Metadata } from "next"
 import { BRAND_NAME, BRAND_LEGAL_NAME, BRAND_TAGLINE, SITE_DOMAIN } from "@/lib/brand"
 import { HeroSection } from "@/components/home/hero-section"
+import { CampaignBanner } from "@/components/campaign/campaign-banner"
 
 const siteUrl = `https://${SITE_DOMAIN}`
 
@@ -64,6 +65,10 @@ export default async function HomePage() {
 
   return (
     <>
+      <Container className="py-5 empty:hidden">
+        <CampaignBanner />
+      </Container>
+
       <HeroSection />
 
       <CategoriesRow categories={categories} />
