@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createStorageClient, isValidBucketName } from "@/lib/db/storage"
 import { isPlainPostgres } from "@/lib/db/mode"
+import { guardStorageWrite } from "@/lib/db/rest-guard"
 import { resolveRequestAuth, isStaffAuth } from "@/lib/db/request-auth"
 import { normalizeUploadImage } from "@/lib/normalize-upload-image"
 import { extractUploadBody } from "@/lib/extract-upload-body"
@@ -34,7 +35,7 @@ function guessImageType(objectPath: string): string {
  *   POST /storage/v1/object/{bucket}/{path}
  *   body = raw file bytes
  */
-export async function POST(
+async function postUnguarded(
   req: NextRequest,
   ctx: { params: Promise<{ bucket: string; path: string[] }> },
 ) {
@@ -110,7 +111,7 @@ export async function POST(
   })
 }
 
-export async function DELETE(
+async function deleteUnguarded(
   req: NextRequest,
   ctx: { params: Promise<{ bucket: string; path: string[] }> },
 ) {
@@ -132,3 +133,6 @@ export async function DELETE(
   }
   return NextResponse.json({})
 }
+
+export const POST = guardStorageWrite(postUnguarded)
+export const DELETE = guardStorageWrite(deleteUnguarded)
