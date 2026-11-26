@@ -218,11 +218,14 @@ describe("scheduled campaign (Black Friday)", () => {
     assert.equal(plain.onSale, true)
   })
 
-  it("with 0% only her own sale prices apply", () => {
+  it("with 0% it is promotion only and prices stay exactly as they were", () => {
     const zero = { ...flags, campaign: { ...flags.campaign, discount_percent: 0 } }
     const live = parseStorePricing(zero, during)
+    assert.deepEqual(live, parseBaseStorePricing(zero))
+    assert.equal(live.salesActive, false)
     assert.equal(effectivePriceForVariant({ price: 100 }, {}, live).effective, 100)
-    assert.equal(effectivePriceForVariant({ price: 100, sale_price: 60 }, {}, live).effective, 60)
+    // her own sale price does not switch on just because Black Friday is live
+    assert.equal(effectivePriceForVariant({ price: 100, sale_price: 60 }, {}, live).effective, 100)
   })
 
   it("keeps her campaign when everyday settings are saved", () => {

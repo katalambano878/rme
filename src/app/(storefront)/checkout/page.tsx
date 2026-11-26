@@ -8,7 +8,7 @@ import {
   formatFreeShippingMinimumLabel,
   formatPrice,
 } from "@/lib/utils"
-import { WHATSAPP_URL } from "@/lib/brand"
+import { STORE_ADDRESS, STORE_HOURS_SHORT, WHATSAPP_URL } from "@/lib/brand"
 import { useCartStore } from "@/lib/store/cart-store"
 import { createClient } from "@/lib/supabase/client"
 import { useStorePricing } from "@/components/store-pricing-provider"
@@ -70,12 +70,12 @@ const shippingOptions = [
   {
     id: "pickup",
     name: "Store pickup · Free",
-    detail: "Manet Ville Estates, East Airport Spintex, Accra.",
+    detail: `${STORE_ADDRESS}. Open ${STORE_HOURS_SHORT}.`,
   },
   {
     id: "delivery",
     name: "Doorstep delivery",
-    detail: `We will contact you with the delivery cost. Free over ${formatFreeShippingMinimumLabel()}.`,
+    detail: `Anywhere in Ghana. The fee depends on your area: we call or WhatsApp you with the exact amount before we send your order. Free over ${formatFreeShippingMinimumLabel()}.`,
   },
 ]
 

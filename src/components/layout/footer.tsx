@@ -60,7 +60,6 @@ function LinkColumn({ title, links }: { title: string; links: { href: string; la
 export function Footer({ shopLinks }: { shopLinks: { href: string; label: string }[] }) {
   const newsletter = useNewsletterSignup("footer")
   const categoryLinks = shopLinks.filter((l) => l.href.startsWith("/shop?category=")).slice(0, 5)
-  const adminLink = shopLinks.find((l) => l.href === "/admin/login")
 
   return (
     <footer className="mt-auto bg-counter text-ink">
@@ -162,11 +161,6 @@ export function Footer({ shopLinks }: { shopLinks: { href: string; label: string
                 Doctor Barns Tech
               </a>
             </span>
-            {adminLink && (
-              <Link href={adminLink.href} className="text-mute hover:text-ink">
-                {adminLink.label}
-              </Link>
-            )}
           </p>
         </div>
       </div>

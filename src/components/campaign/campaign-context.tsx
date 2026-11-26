@@ -81,9 +81,14 @@ export function shopDay(iso: string): string {
   })
 }
 
-/** The headline offer, e.g. "20% off everything". */
+/** True when the campaign lowers prices; at 0% it is promotion only. */
+export function hasDiscount(c: Campaign): boolean {
+  return c.discountPercent > 0
+}
+
+/** The headline, e.g. "20% off everything", or a no-discount line at 0%. */
 export function offerLine(c: Campaign): string {
-  return c.discountPercent > 0 ? `${c.discountPercent}% off everything` : "Big savings across the store"
+  return hasDiscount(c) ? `${c.discountPercent}% off everything` : `Shop the ${c.name} edit`
 }
 
 /** The last full day of the sale (an end of Mon 00:00 means it runs through Sunday). */

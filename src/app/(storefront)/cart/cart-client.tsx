@@ -277,7 +277,11 @@ export default function CartPageClient({
                 </dd>
               </dl>
               <p className="text-sm leading-normal text-mute">
-                Pickup at Spintex is free. For doorstep delivery the store confirms the fee after you order.
+                Pickup at Spintex is free. Doorstep delivery goes anywhere in Ghana; the fee depends on your area,
+                and we tell you the exact amount before we send your order.{" "}
+                <Link href="/policies/shipping" className="font-semibold text-ink underline underline-offset-2">
+                  Delivery details
+                </Link>
               </p>
               <div className="flex items-baseline justify-between gap-3 border-t border-line pt-3.5">
                 <span className="text-lg font-bold">Total now</span>

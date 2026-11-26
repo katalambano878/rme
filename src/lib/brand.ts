@@ -31,3 +31,14 @@ export const TIKTOK_URL = "https://www.tiktok.com/@ronnyandm.e"
 export const TIKTOK_HANDLE = "ronnyandm.e"
 
 export const SNAPCHAT_URL = "https://snapchat.com/t/OMQUmo66"
+
+/** Shop and pickup-point opening hours (Ghana time). */
+export const STORE_ADDRESS = "Manet Ville Estates, East Airport Spintex, Accra"
+export const STORE_HOURS = [
+  { days: "Monday – Friday", hours: "9:00 AM – 6:00 PM" },
+  { days: "Saturday", hours: "10:00 AM – 4:00 PM" },
+  { days: "Sunday", hours: "Closed" },
+] as const
+export const STORE_HOURS_SHORT = "Mon–Fri 9am–6pm, Sat 10am–4pm, closed Sunday"
+/** The address customers should email (matches the Contact page). */
+export const SUPPORT_EMAIL = "ronnyandme25@gmail.com"

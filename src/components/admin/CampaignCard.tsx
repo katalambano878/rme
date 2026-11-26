@@ -63,7 +63,7 @@ export default function CampaignCard() {
   const [state, setState] = useState<CampaignState>('off');
 
   const [name, setName] = useState('Black Friday');
-  const [percent, setPercent] = useState('20');
+  const [percent, setPercent] = useState('0');
   const [start, setStart] = useState(PRESETS[1].start);
   const [end, setEnd] = useState(PRESETS[1].end);
   const [message, setMessage] = useState('');
@@ -108,7 +108,9 @@ export default function CampaignCard() {
         !enabled
           ? 'Paused. Customers see your normal prices.'
           : d.state === 'live'
-            ? `${name} is live. Customers see the sale prices now.`
+            ? pct > 0
+              ? `${name} is live. Customers see the sale prices now.`
+              : `${name} is live. Customers see it on the site; prices are unchanged.`
             : `Saved. ${name} starts on its own at ${prettyTime(d.campaign!.startsAt)}.`,
       );
     } catch (e) {
@@ -146,8 +148,9 @@ export default function CampaignCard() {
             Black Friday &amp; timed sales
           </h2>
           <p className="mt-1 text-sm text-gray-600 max-w-xl">
-            Set it once: the sale switches on and off by itself. While it runs, every customer sees a countdown bar, a
-            banner on the home and shop pages, the deals page and the chat assistant all telling them about it.
+            Set it once: it switches on and off by itself. While it runs, every customer sees a countdown bar, a banner on
+            the home and shop pages, and the chat assistant knows about it. Leave the discount at 0% to keep your prices
+            the same.
           </p>
         </div>
         {saved && (
@@ -179,7 +182,7 @@ export default function CampaignCard() {
               />
             </div>
             <div>
-              <label htmlFor="cmp-pct" className="block text-sm font-medium text-gray-700 mb-1">% off everything</label>
+              <label htmlFor="cmp-pct" className="block text-sm font-medium text-gray-700 mb-1">Discount on everything <span className="font-normal text-gray-400">(0% = prices stay the same)</span></label>
               <div className="relative">
                 <input
                   id="cmp-pct"
@@ -203,7 +206,10 @@ export default function CampaignCard() {
                 sale price get <strong>whichever is cheaper</strong>, so no one gets a smaller deal.
               </>
             ) : (
-              <>At 0%, only the products where you set your own sale price are reduced.</>
+              <>
+                <strong>No discount.</strong> Customers see {name || 'the campaign'} across the site, but every price stays exactly
+                as it is now.
+              </>
             )}
           </p>
 
@@ -263,7 +269,7 @@ export default function CampaignCard() {
               value={message}
               onChange={(e) => setMessage(e.target.value)}
               maxLength={160}
-              placeholder={pct > 0 ? `${name}: ${pct}% off everything` : `${name}: big savings across the store`}
+              placeholder={pct > 0 ? `${name}: ${pct}% off everything` : `Shop the ${name} edit`}
               className="w-full rounded-xl border-2 border-gray-200 px-4 py-3 text-[16px] sm:text-sm focus:border-rose-500 focus:outline-none"
             />
             <p className="mt-1 text-xs text-gray-500">The countdown is added automatically.</p>

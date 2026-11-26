@@ -141,7 +141,8 @@ export function campaignToFlags(c: Campaign | null, existing?: Record<string, un
  */
 export function parseStorePricing(flags: unknown, now: number = Date.now()): StorePricing {
   const campaign = parseCampaign(flags)
-  if (campaignState(campaign, now) === "live" && campaign) {
+  // A campaign at 0% is promotion only: prices stay exactly as they are.
+  if (campaignState(campaign, now) === "live" && campaign && campaign.discountPercent > 0) {
     return { salesActive: true, discountPercent: campaign.discountPercent, strictDiscount: false, bestPrice: true }
   }
   return parseBaseStorePricing(flags)

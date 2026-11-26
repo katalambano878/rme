@@ -1,7 +1,8 @@
 "use client"
 
 import Link from "next/link"
-import { formatCountdown, lastDay, offerLine, shopDay, useCampaign } from "./campaign-context"
+import { formatCountdown, hasDiscount, lastDay, offerLine, shopDay, useCampaign } from "./campaign-context"
+import { formatFreeShippingMinimumLabel } from "@/lib/utils"
 import { cn } from "@/lib/utils"
 
 /**
@@ -12,6 +13,7 @@ export function CampaignBanner({ className, compact = false }: { className?: str
   const { campaign, state, remainingMs } = useCampaign()
   if (!campaign || (state !== "live" && state !== "upcoming")) return null
   const live = state === "live"
+  const discount = hasDiscount(campaign)
 
   return (
     <section
@@ -37,9 +39,9 @@ export function CampaignBanner({ className, compact = false }: { className?: str
             {campaign.message || offerLine(campaign)}
           </h2>
           <p className="mt-2 max-w-xl text-[15px] text-mute">
-            {campaign.discountPercent > 0
+            {discount
               ? "Applied automatically, no code needed. Items already on sale get whichever price is lower."
-              : "Applied automatically, no code needed."}{" "}
+              : `Stock up on your favourites and gift sets. Delivery anywhere in Ghana, free over ${formatFreeShippingMinimumLabel()}.`}{" "}
             {live ? `Ends ${lastDay(campaign)}.` : ""}
           </p>
         </div>
@@ -52,17 +54,17 @@ export function CampaignBanner({ className, compact = false }: { className?: str
           </p>
           {live ? (
             <Link
-              href="/shop?sale=1"
+              href={discount ? "/shop?sale=1" : "/shop"}
               className="inline-flex min-h-12 items-center rounded-xl bg-brand px-6 text-base font-bold text-white transition-colors hover:bg-brand-deep"
             >
-              Shop the deals
+              {discount ? "Shop the deals" : "Shop now"}
             </Link>
           ) : (
             <Link
               href="/shop"
               className="inline-flex min-h-12 items-center rounded-xl border-2 border-brand bg-white px-6 text-base font-bold text-ink transition-colors hover:bg-brand hover:text-white"
             >
-              Browse now, buy on the day
+              {discount ? "Browse now, buy on the day" : "Browse the shop"}
             </Link>
           )}
         </div>

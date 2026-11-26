@@ -458,7 +458,13 @@ function describeCampaign(c: Campaign | null, state: ReturnType<typeof campaignS
     new Date(iso).toLocaleString('en-GB', { timeZone: 'Africa/Accra', weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
   const offer = c.discountPercent > 0
     ? `${c.discountPercent}% off everything, applied automatically with no code; products that already have their own sale price get whichever price is lower`
-    : 'reduced prices on selected products, applied automatically with no code';
+    : '';
+  if (!offer) {
+    // Promotion only: Black Friday branding, prices unchanged.
+    return state === 'live'
+      ? `\n\n${c.name.toUpperCase()} IS ON NOW (until ${fmt(c.endsAt)}, Ghana time). There is NO ${c.name} discount: prices are the normal prices the tools return. You may mention ${c.name} warmly, but NEVER promise a discount, sale price, deal or savings for ${c.name}. If someone asks about ${c.name} discounts, say kindly that prices stay the same and help them find great products and gift sets.`
+      : `\n\n${c.name.toUpperCase()} STARTS ${fmt(c.startsAt)} (Ghana time). There is NO ${c.name} discount: prices stay the same. NEVER promise a discount, deal or savings for ${c.name}.`;
+  }
   if (state === 'live') {
     return `\n\n${c.name.toUpperCase()} IS ON NOW (until ${fmt(c.endsAt)}, Ghana time): ${offer}. Every price the tools return already includes the ${c.name} price, so quote those. Mention ${c.name} warmly when it helps (e.g. "it's part of our ${c.name} sale"), and when someone asks about deals, point them to the deals page /shop?sale=1.`;
   }

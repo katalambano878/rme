@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import type { ReactNode } from "react"
-import { formatCountdown, offerLine, shopDay, useCampaign } from "./campaign-context"
+import { formatCountdown, hasDiscount, offerLine, shopDay, useCampaign } from "./campaign-context"
 
 /**
  * The notice bar. While a campaign is live (or starting within a week) it
@@ -15,11 +15,12 @@ export function CampaignBar({ children }: { children: ReactNode }) {
   if (!campaign || (state !== "live" && state !== "upcoming")) return <>{children}</>
 
   const live = state === "live"
+  const discount = hasDiscount(campaign)
   const line = live ? campaign.message || offerLine(campaign) : `Starts ${shopDay(campaign.startsAt)} · ${offerLine(campaign)}`
 
   return (
     <Link
-      href="/shop?sale=1"
+      href={discount ? "/shop?sale=1" : "/shop"}
       className="flex flex-wrap items-center justify-center gap-x-2.5 gap-y-1 bg-brand-deep px-4 py-2 text-center text-[13px] leading-snug text-white transition-colors hover:bg-brand sm:text-sm"
     >
       <span className="rounded-md bg-ink px-2 py-0.5 text-[12px] font-extrabold tracking-[0.08em] uppercase sm:text-[13px]">
@@ -32,7 +33,9 @@ export function CampaignBar({ children }: { children: ReactNode }) {
           {formatCountdown(remainingMs)}
         </span>
       </span>
-      {live && <span className="hidden font-bold underline underline-offset-2 sm:inline">Shop the deals</span>}
+      {live && (
+        <span className="hidden font-bold underline underline-offset-2 sm:inline">{discount ? "Shop the deals" : "Shop now"}</span>
+      )}
     </Link>
   )
 }

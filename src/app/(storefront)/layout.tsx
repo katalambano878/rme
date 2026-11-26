@@ -22,7 +22,6 @@ export default async function StorefrontLayout({
   let campaign: Campaign | null = null
   let shopLinks: { href: string; label: string }[] = [
     { href: "/shop", label: "Shop All" },
-    { href: "/admin/login", label: "RME" },
   ]
   try {
     const supabase = await createClient()
@@ -40,12 +39,11 @@ export default async function StorefrontLayout({
     shopLinks = [
       { href: "/shop", label: "Shop All" },
       ...categories
-        .filter((category) => category.parentId == null && category.name && category.slug)
+        .filter((category) => category.parentId == null && category.name && category.slug && category.productCount > 0)
         .map((category) => ({
           href: `/shop?category=${encodeURIComponent(category.slug)}`,
           label: category.name,
         })),
-      { href: "/admin/login", label: "RME" },
     ]
   } catch {
     announcement = null

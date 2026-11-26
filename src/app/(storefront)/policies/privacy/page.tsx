@@ -1,16 +1,17 @@
-"use client"
+import { PolicyPage, policyMetadata, type PolicySection } from "@/components/policies/policy-page"
+import { BRAND_NAME, PHONE_INTERNATIONAL_PRIMARY, SUPPORT_EMAIL } from "@/lib/brand"
 
-import { motion } from "framer-motion"
-import { Container } from "@/components/shared/container"
-import { Section } from "@/components/shared/section"
-import { Heading } from "@/components/shared/heading"
-import { Separator } from "@/components/ui/separator"
+export const metadata = policyMetadata(
+  "Privacy Policy",
+  `How ${BRAND_NAME} collects, uses and protects your personal data under Ghana's Data Protection Act (Act 843).`,
+  "/policies/privacy",
+)
 
-const sections = [
+const sections: PolicySection[] = [
   {
     title: "1. Information We Collect",
     paragraphs: [
-      "At RONNY&ME, we value your privacy and are committed to protecting your personal information. This Privacy Policy explains how we collect, use, and safeguard your data when you visit our website or make a purchase.",
+      "At RonnyandMe, we value your privacy and are committed to protecting your personal information. This Privacy Policy explains how we collect, use, and safeguard your data when you visit our website or make a purchase.",
       "We may collect details such as your name, email, phone number, delivery address, billing details, order history, and records of your communication with us.",
       "We also collect technical information like IP address, browser type, device type, and on-site activity to help secure and improve the website.",
     ],
@@ -36,7 +37,7 @@ const sections = [
     paragraphs: [
       "We do not sell your personal information. We may share limited data with trusted providers that help us run the store, including payment processors, delivery partners, analytics providers, and communication tools.",
       "These providers only receive data needed to perform their services and are expected to handle your information securely.",
-      "We may also disclose information where required by law, court order, or to protect the rights, safety, and operations of RONNY&ME.",
+      "We may also disclose information where required by law, court order, or to protect the rights, safety, and operations of RonnyandMe.",
     ],
   },
   {
@@ -48,98 +49,39 @@ const sections = [
     ],
   },
   {
-    title: "6. Your Rights & Contact",
+    title: "6. Ghana's Data Protection Act",
+    paragraphs: [
+      "We collect and use personal data in line with Ghana's **Data Protection Act, 2012 (Act 843)**: only for clear purposes, kept accurate, kept secure and not kept longer than needed.",
+      "Under Act 843 you have the right to ask what personal data we hold about you, to have it corrected or deleted, and to object to its use for marketing.",
+      "If you are not happy with how we handle your data, you can complain to the **Data Protection Commission of Ghana** (dataprotection.org.gh).",
+    ],
+  },
+  {
+    title: "7. Your Rights & Contact",
     paragraphs: [
       "You may contact us to request access, correction, or deletion of your personal data, subject to applicable legal requirements.",
-      "For privacy-related questions or requests, contact us at ronnyandme25@gmail.com or +233 59 270 7791.",
+      `For privacy-related questions or requests, contact us at ${SUPPORT_EMAIL} or ${PHONE_INTERNATIONAL_PRIMARY}.`,
       "We may update this Privacy Policy from time to time, and changes will be posted on this page with an updated date.",
     ],
   },
 ]
 
-const fadeUp = {
-  hidden: { opacity: 0, y: 16 },
-  visible: (i: number) => ({
-    opacity: 1,
-    y: 0,
-    transition: { delay: i * 0.06, duration: 0.5, ease: [0.22, 1, 0.36, 1] as const },
-  }),
-}
-
 export default function PrivacyPolicyPage() {
   return (
-    <Section className="bg-gradient-to-b from-rose-light/50 to-white">
-      <Container>
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] as const }}
-          className="mx-auto max-w-3xl"
-        >
-          <Heading
-            as="h1"
-            align="center"
-            subtitle="At RONNY&ME, we value your privacy and are committed to protecting your personal information."
-          >
-            Privacy Policy
-          </Heading>
-
-          <p className="mt-6 text-center text-sm text-muted-foreground">
-            Effective Date: 1 January 2026 · Last Updated: March 2026
-          </p>
-
-          <div className="mt-12 space-y-0">
-            {sections.map((section, i) => (
-              <motion.div
-                key={section.title}
-                custom={i}
-                variants={fadeUp}
-                initial="hidden"
-                whileInView="visible"
-                viewport={{ once: true, margin: "-40px" }}
-              >
-                <div className="py-8 first:pt-0">
-                  <h2 className="font-heading text-lg font-semibold text-navy">
-                    {section.title}
-                  </h2>
-                  <div className="mt-4 space-y-3">
-                    {section.paragraphs.map((para, j) => (
-                      <p
-                        key={j}
-                        className="text-sm leading-relaxed text-muted-foreground"
-                      >
-                        {para}
-                      </p>
-                    ))}
-                  </div>
-                </div>
-                {i < sections.length - 1 && (
-                  <Separator className="bg-rose-border/40" />
-                )}
-              </motion.div>
-            ))}
-          </div>
-
-          <Separator className="mt-8 bg-rose-border/40" />
-
-          <motion.div
-            initial={{ opacity: 0 }}
-            whileInView={{ opacity: 1 }}
-            viewport={{ once: true }}
-            className="mt-8 text-center"
-          >
-            <p className="text-sm text-muted-foreground">
-              If you have questions about this Privacy Policy, contact us at{" "}
-              <a
-                href="mailto:ronnyandme25@gmail.com"
-                className="font-medium text-rose-primary hover:underline"
-              >
-                ronnyandme25@gmail.com
-              </a>
-            </p>
-          </motion.div>
-        </motion.div>
-      </Container>
-    </Section>
+    <PolicyPage
+      title="Privacy Policy"
+      subtitle={`At ${BRAND_NAME}, we value your privacy and are committed to protecting your personal information.`}
+      updated="November 2026 (effective 1 January 2026)"
+      sections={sections}
+      footer={
+        <p>
+          If you have questions about this Privacy Policy, contact us at{" "}
+          <a href={`mailto:${SUPPORT_EMAIL}`} className="font-medium text-rose-primary hover:underline">
+            {SUPPORT_EMAIL}
+          </a>
+          .
+        </p>
+      }
+    />
   )
 }

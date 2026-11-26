@@ -1,146 +1,88 @@
-"use client"
+import Link from "next/link"
+import { AlertCircle, ArrowRightLeft, CheckCircle2, Clock, RotateCcw, Truck } from "lucide-react"
+import { PolicyPage, policyMetadata, type PolicySection } from "@/components/policies/policy-page"
+import { BRAND_NAME, PHONE_INTERNATIONAL_PRIMARY, SUPPORT_EMAIL, WHATSAPP_URL } from "@/lib/brand"
 
-import { motion } from "framer-motion"
-import {
-  RotateCcw,
-  CheckCircle2,
-  AlertCircle,
-  Clock,
-  ArrowRightLeft,
-  ShieldCheck,
-} from "lucide-react"
-import { Container } from "@/components/shared/container"
-import { Section } from "@/components/shared/section"
-import { Heading } from "@/components/shared/heading"
-import { Separator } from "@/components/ui/separator"
+export const metadata = policyMetadata(
+  "Returns & Refunds",
+  `${BRAND_NAME} returns and refunds: report a damaged or wrong item within 48 hours and we will put it right.`,
+  "/policies/returns",
+)
 
-const sections = [
+const sections: PolicySection[] = [
   {
-    icon: AlertCircle,
-    title: "1. No Refunds on Used or Opened Products",
-    content: [
-      "For hygiene and safety reasons, beauty and skincare items cannot be returned if opened or used.",
+    icon: Clock,
+    title: "1. Tell us within 48 hours",
+    paragraphs: [
+      "Contact us **within 48 hours of receiving your order** if something is wrong. After 48 hours we can no longer accept a return or exchange.",
     ],
   },
   {
     icon: CheckCircle2,
-    title: "2. Eligible Returns",
-    content: [
-      "You may request a return or exchange if you received a damaged item, received the wrong product, or the item is unused, unopened, and in its original packaging.",
+    title: "2. What you can return or exchange",
+    paragraphs: [
+      "**Damaged or wrong items:** always covered, including items bought on sale or during Black Friday.",
+      "**Unopened items you changed your mind about:** can be exchanged if they are unused, sealed and in their original packaging, depending on stock.",
     ],
   },
   {
-    icon: ShieldCheck,
-    title: "3. Non-Returnable Items",
-    content: [
-      "Lip glosses, skincare, or beauty products that have been opened; sale or discounted items; and items damaged due to customer misuse are not returnable.",
+    icon: AlertCircle,
+    title: "3. What we cannot take back",
+    paragraphs: [
+      "For hygiene and safety reasons, beauty, skincare and lip products **cannot be returned once opened or used**, unless they arrived damaged or were the wrong item.",
+      "We also cannot take back sale items you changed your mind about, or items damaged after delivery.",
     ],
   },
   {
     icon: RotateCcw,
-    title: "4. Return Process",
-    content: [
-      "Contact us via email at ronnyandme25@gmail.com with your order number and clear photos.",
-      "Requests are reviewed within 24–48 hours. If approved, return instructions will be provided.",
+    title: "4. How to return something",
+    paragraphs: [
+      `WhatsApp us on ${PHONE_INTERNATIONAL_PRIMARY} or email ${SUPPORT_EMAIL} with your **order number** and **clear photos** of the item and packaging.`,
+      "We reply within 24–48 hours. If approved, we tell you how to send it back.",
     ],
   },
   {
-    icon: Clock,
-    title: "5. Refunds",
-    content: [
-      "Approved refunds are issued as store credit or replacement. Cash refunds are only available in special cases.",
+    icon: Truck,
+    title: "5. Who pays for return delivery",
+    paragraphs: [
+      "**If it was our mistake** (damaged or wrong item), we pay for the return and for sending the replacement.",
+      "**For any other exchange**, the customer pays the delivery costs.",
     ],
   },
   {
     icon: ArrowRightLeft,
-    title: "6. Exchanges",
-    content: [
-      "Unused items can be exchanged depending on stock availability.",
+    title: "6. Refunds",
+    paragraphs: [
+      "Approved returns are settled with a **replacement** or **store credit**.",
+      "**Cash refunds** go back to your Mobile Money number when we cannot replace a damaged or wrong item, for example because it is out of stock.",
     ],
   },
 ]
 
-const fadeUp = {
-  hidden: { opacity: 0, y: 20 },
-  visible: (i: number) => ({
-    opacity: 1,
-    y: 0,
-    transition: { delay: i * 0.08, duration: 0.5, ease: [0.22, 1, 0.36, 1] as const },
-  }),
-}
-
 export default function ReturnsPolicyPage() {
   return (
-    <Section className="bg-gradient-to-b from-rose-light/50 to-white">
-      <Container>
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] as const }}
-          className="mx-auto max-w-3xl"
-        >
-          <Heading
-            as="h1"
-            align="center"
-            subtitle="At RONNY&ME, we want you to love your purchase. Please read our refund and return guidelines below."
-          >
-            Refund Policy
-          </Heading>
-
-          <div className="mt-12 space-y-0">
-            {sections.map((section, i) => (
-              <motion.div
-                key={section.title}
-                custom={i}
-                variants={fadeUp}
-                initial="hidden"
-                whileInView="visible"
-                viewport={{ once: true, margin: "-40px" }}
-              >
-                <div className="py-8 first:pt-0">
-                  <div className="flex items-center gap-3">
-                    <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-rose-light">
-                      <section.icon className="size-5 text-rose-primary" />
-                    </div>
-                    <h2 className="font-heading text-lg font-semibold text-navy">
-                      {section.title}
-                    </h2>
-                  </div>
-                  <div className="mt-4 space-y-3 pl-[52px]">
-                    {section.content.map((para, j) => (
-                      <p
-                        key={j}
-                        className="text-sm leading-relaxed text-muted-foreground"
-                      >
-                        {para}
-                      </p>
-                    ))}
-                  </div>
-                </div>
-                {i < sections.length - 1 && (
-                  <Separator className="bg-rose-border/40" />
-                )}
-              </motion.div>
-            ))}
-          </div>
-
-          <motion.p
-            initial={{ opacity: 0 }}
-            whileInView={{ opacity: 1 }}
-            viewport={{ once: true }}
-            className="mt-10 text-center text-sm text-muted-foreground"
-          >
-            Last updated: March 2026. For return inquiries, contact us at{" "}
-            <a
-              href="mailto:ronnyandme25@gmail.com"
-              className="font-medium text-rose-primary hover:underline"
-            >
-              ronnyandme25@gmail.com
-            </a>{" "}
-            or WhatsApp +233 59 270 7791.
-          </motion.p>
-        </motion.div>
-      </Container>
-    </Section>
+    <PolicyPage
+      title="Returns & Refunds"
+      subtitle={`At ${BRAND_NAME} we want you to love your order. If something is wrong, here is how we put it right.`}
+      updated="November 2026"
+      sections={sections}
+      footer={
+        <p>
+          Questions about a return?{" "}
+          <a href={WHATSAPP_URL} className="font-medium text-rose-primary hover:underline">
+            WhatsApp us
+          </a>{" "}
+          or email{" "}
+          <a href={`mailto:${SUPPORT_EMAIL}`} className="font-medium text-rose-primary hover:underline">
+            {SUPPORT_EMAIL}
+          </a>
+          . See also{" "}
+          <Link href="/policies/shipping" className="font-medium text-rose-primary hover:underline">
+            delivery &amp; pickup
+          </Link>
+          .
+        </p>
+      }
+    />
   )
 }

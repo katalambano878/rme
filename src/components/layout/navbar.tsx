@@ -49,7 +49,8 @@ export function Navbar() {
   const onAccount = pathname.startsWith("/account")
   const { campaign, state: campaignNow } = useCampaign()
   // During Black Friday the Sale link becomes the campaign's own name.
-  const saleLabel = campaignNow === "live" && campaign ? campaign.name : "Sale"
+  // At 0% (promotion only) the Sale link keeps its everyday name.
+  const saleLabel = campaignNow === "live" && campaign && campaign.discountPercent > 0 ? campaign.name : "Sale"
 
   const bagButton = (
     <button

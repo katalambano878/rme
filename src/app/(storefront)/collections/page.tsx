@@ -3,5 +3,5 @@ import { fetchStorefrontCategoriesWithCounts } from "@/lib/supabase/storefront-p
 
 export default async function CollectionsPage() {
   const categories = await fetchStorefrontCategoriesWithCounts()
-  return <CollectionsPageClient categories={categories} />
+  return <CollectionsPageClient categories={categories.filter((c) => c.productCount > 0)} />
 }

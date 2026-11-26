@@ -54,12 +54,12 @@ const trustPoints = [
   {
     icon: Truck,
     title: "Nationwide Delivery",
-    description: "Fast, reliable delivery in your region and beyond.",
+    description: "Delivery to every region of Ghana, free on orders over GH₵2,000, or free pickup at our Spintex shop.",
   },
   {
     icon: RefreshCw,
     title: "Secure Payments",
-    description: "Safe and trusted payment options including mobile money and card.",
+    description: "Pay safely with Mobile Money on a secure payment page.",
   },
   {
     icon: Heart,
@@ -98,7 +98,7 @@ export default function AboutPage() {
             </h1>
             <p className="mx-auto mt-6 max-w-2xl text-lg text-muted-foreground">
               Born from a passion for beauty and skincare, we make trusted personal
-              care products accessible to everyone in your region and beyond.
+              care products easy to get, anywhere in Ghana.
             </p>
           </motion.div>
         </Container>
@@ -144,7 +144,7 @@ export default function AboutPage() {
                   feels intentional and effective.
                 </p>
                 <p>
-                  Today we serve customers across cities and regions. From first
+                  Today we deliver to customers in every region of Ghana. From first
                   orders to restocks, we are glad to be part of the moments
                   that matter to you.
                 </p>

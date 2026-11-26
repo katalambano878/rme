@@ -7,9 +7,11 @@ import { MOCK_PRODUCT_IMAGE, optimizedImageUrl } from "@/lib/product-image"
 
 export type CategoriesRowProps = {
   categories: StorefrontCategory[]
+  /** Categories not shown in the grid; adds a "See all" link when above 0. */
+  moreCount?: number
 }
 
-export function CategoriesRow({ categories }: CategoriesRowProps) {
+export function CategoriesRow({ categories, moreCount = 0 }: CategoriesRowProps) {
   return (
     <Section className="bg-white pb-24 pt-20 sm:pb-32 sm:pt-28">
       <Container>
@@ -82,6 +84,18 @@ export function CategoriesRow({ categories }: CategoriesRowProps) {
                 </Link>
               )
             })}
+          </div>
+        )}
+
+        {moreCount > 0 && (
+          <div className="mt-10 flex justify-center">
+            <Link
+              href="/collections"
+              className="inline-flex min-h-12 items-center gap-2 rounded-xl border-2 border-brand bg-white px-6 text-base font-bold text-ink transition-colors hover:bg-brand hover:text-white"
+            >
+              See all categories ({categories.length + moreCount})
+              <ArrowRight className="size-4" strokeWidth={2.25} aria-hidden />
+            </Link>
           </div>
         )}
       </Container>

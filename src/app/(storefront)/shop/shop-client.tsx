@@ -251,7 +251,7 @@ export default function ShopPageClient({
   const activeFilterCount =
     selectedCategories.length + (priceFiltered ? 1 : 0) + (inStockOnly ? 1 : 0) + (saleOnly ? 1 : 0)
   const queryLabel = searchParams.get("q")?.trim()
-  const saleTitle = campaignLive && campaign ? `${campaign.name} deals` : "On sale"
+  const saleTitle = campaignLive && campaign && campaign.discountPercent > 0 ? `${campaign.name} deals` : "On sale"
   const title = queryLabel
     ? `Results for “${queryLabel}”`
     : activeCategoryName ?? (saleOnly ? saleTitle : "Shop all")
