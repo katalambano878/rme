@@ -20,6 +20,7 @@ import {
   type StorePricing,
 } from "@/lib/effective-price"
 import { fetchStorePricing } from "@/lib/store-pricing"
+import { campaignState, parseCampaign } from "@/lib/effective-price"
 import { findOption, sortSizeOptions } from "@/lib/variant-options"
 
 const PRODUCT_SELECT = `
@@ -439,4 +440,18 @@ export async function fetchStorefrontCategoriesWithCounts(): Promise<
       featuredOnHome: c.featured_on_home === true,
     }
   })
+}
+
+/**
+ * True while a campaign (Black Friday etc.) is live or in its 7-day teaser,
+ * so the home page only loads the campaign product rows when they will show.
+ */
+export async function isCampaignShowing(now: number = Date.now()): Promise<boolean> {
+  const supabase = await getClient()
+  const { data } = await supabase.from("site_settings").select("feature_flags").eq("id", 1).maybeSingle()
+  const campaign = parseCampaign(data?.feature_flags)
+  if (!campaign) return false
+  const state = campaignState(campaign, now)
+  if (state === "live") return true
+  return state === "upcoming" && Date.parse(campaign.startsAt) - now <= 7 * 86_400_000
 }

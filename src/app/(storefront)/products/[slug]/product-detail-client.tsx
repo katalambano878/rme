@@ -1,5 +1,6 @@
 "use client"
 
+import { CampaignProductNote } from "@/components/campaign/campaign-notes"
 import { useState, useMemo } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
@@ -638,6 +639,8 @@ function ProductDetailInner({
                   </button>
                 </div>
               </div>
+
+              <CampaignProductNote />
 
               <ul className="m-0 list-none rounded-2xl bg-counter p-0">
                 <li className="flex gap-3.5 border-b border-line px-[18px] py-4">

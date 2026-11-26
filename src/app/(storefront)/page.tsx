@@ -1,7 +1,8 @@
 import type { Metadata } from "next"
 import { BRAND_NAME, BRAND_LEGAL_NAME, BRAND_TAGLINE, SITE_DOMAIN } from "@/lib/brand"
 import { HeroSection } from "@/components/home/hero-section"
-import { CampaignBanner } from "@/components/campaign/campaign-banner"
+import { CampaignHero } from "@/components/campaign/campaign-hero"
+import { CampaignEdit, type CampaignEditTab } from "@/components/campaign/campaign-edit"
 
 const siteUrl = `https://${SITE_DOMAIN}`
 
@@ -41,18 +42,43 @@ import {
   fetchTrendingProducts,
   fetchHomepageCategoryLimit,
   fetchStorefrontCategoriesWithCounts,
+  fetchProductsByCategorySlug,
+  isCampaignShowing,
 } from "@/lib/supabase/storefront-products"
+import type { Product } from "@/types/product"
 
-const HOME_CATEGORY_DEFAULT = 12
+/** Gift-friendly rows for the Black Friday edit, loaded only while it shows. */
+async function loadCampaignEdit(): Promise<CampaignEditTab[]> {
+  if (!(await isCampaignShowing())) return []
+  const [sets, packages, scents, serums, makeup, lips] = await Promise.all([
+    fetchProductsByCategorySlug("skin-care-set", 8),
+    fetchProductsByCategorySlug("gift-packages", 4),
+    fetchProductsByCategorySlug("scents", 8),
+    fetchProductsByCategorySlug("facial-serums", 8),
+    fetchProductsByCategorySlug("makeup", 8),
+    fetchProductsByCategorySlug("lip-care-lip-glosses", 8),
+  ])
+  const gifts: Product[] = [...packages, ...sets].slice(0, 8)
+  return [
+    { label: "Gift sets", href: "/shop?category=skin-care-set", products: gifts },
+    { label: "Scents", href: "/shop?category=scents", products: scents },
+    { label: "Skincare", href: "/shop?category=facial-serums", products: serums },
+    { label: "Makeup", href: "/shop?category=makeup", products: makeup },
+    { label: "Lip care", href: "/shop?category=lip-care-lip-glosses", products: lips },
+  ]
+}
+
+const HOME_CATEGORY_DEFAULT = 8
 
 export default async function HomePage() {
-  const [newArrivals, curatedPicks, featuredProducts, allCategories, homeCategoryLimit] =
+  const [newArrivals, curatedPicks, featuredProducts, allCategories, homeCategoryLimit, editTabs] =
     await Promise.all([
-      fetchNewArrivals(4),
-      fetchBestSellers(4),
+      fetchNewArrivals(8),
+      fetchBestSellers(8),
       fetchTrendingProducts(6),
       fetchStorefrontCategoriesWithCounts(),
       fetchHomepageCategoryLimit(),
+      loadCampaignEdit(),
     ])
   // Empty categories stay off the home page; they come back once stocked.
   const stocked = allCategories.filter((category) => category.productCount > 0)
@@ -68,11 +94,11 @@ export default async function HomePage() {
 
   return (
     <>
-      <Container className="py-5 empty:hidden">
-        <CampaignBanner />
-      </Container>
+      <CampaignHero products={editTabs[0]?.products ?? []}>
+        <HeroSection />
+      </CampaignHero>
 
-      <HeroSection />
+      <CampaignEdit tabs={editTabs} />
 
       <CategoriesRow categories={categories} moreCount={moreCategories} />
 
@@ -80,7 +106,7 @@ export default async function HomePage() {
         <TrendingCarousel products={featuredProducts} />
       )}
 
-      <Section className="bg-[#FFF5F5]">
+      <Section className="border-t border-line bg-white">
         <Container>
           <FeaturedCollections
             newArrivals={newArrivals}

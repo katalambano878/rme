@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo } from "react"
 import Link from "next/link"
+import { CampaignCartNote } from "@/components/campaign/campaign-notes"
 import { Minus, Plus, Smartphone } from "lucide-react"
 import { formatPrice, FREE_SHIPPING_THRESHOLD_GHS } from "@/lib/utils"
 import type { Product } from "@/types/product"
@@ -283,6 +284,7 @@ export default function CartPageClient({
                   Delivery details
                 </Link>
               </p>
+              <CampaignCartNote />
               <div className="flex items-baseline justify-between gap-3 border-t border-line pt-3.5">
                 <span className="text-lg font-bold">Total now</span>
                 <span className="text-[26px] font-extrabold tabular-nums sm:text-[30px]">

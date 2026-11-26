@@ -21,15 +21,15 @@ export function CampaignBar({ children }: { children: ReactNode }) {
   return (
     <Link
       href={discount ? "/shop?sale=1" : "/shop"}
-      className="flex flex-wrap items-center justify-center gap-x-2.5 gap-y-1 bg-brand-deep px-4 py-2 text-center text-[13px] leading-snug text-white transition-colors hover:bg-brand sm:text-sm"
+      className="flex flex-wrap items-center justify-center gap-x-2.5 gap-y-1 bg-ink px-4 py-2 text-center text-[13px] leading-snug text-white transition-colors hover:bg-[#23262D] sm:text-sm"
     >
-      <span className="rounded-md bg-ink px-2 py-0.5 text-[12px] font-extrabold tracking-[0.08em] uppercase sm:text-[13px]">
+      <span className="rounded-md bg-brand px-2 py-0.5 text-[12px] font-extrabold tracking-[0.08em] uppercase sm:text-[13px]">
         {campaign.name}
       </span>
       <span className="font-semibold">{line}</span>
       <span className="whitespace-nowrap">
         {live ? "Ends in " : "Starts in "}
-        <span className="rounded bg-white/20 px-1.5 py-0.5 font-bold tabular-nums" suppressHydrationWarning>
+        <span className="rounded bg-white/15 px-1.5 py-0.5 font-bold tabular-nums" suppressHydrationWarning>
           {formatCountdown(remainingMs)}
         </span>
       </span>
